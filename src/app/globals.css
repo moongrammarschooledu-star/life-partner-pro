@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #fbf8f4;
+  --foreground: #2b1d1f;
+  --surface: #ffffff;
+  --surface-muted: #f4ede7;
+  --border: #e7dcd1;
+
+  --primary: #7a1f34;
+  --primary-foreground: #ffffff;
+  --primary-hover: #611829;
+
+  --accent: #b8872b;
+  --accent-foreground: #2b1d1f;
+
+  --muted: #8a7a72;
+
+  --success: #2f7a4f;
+  --warning: #b8872b;
+  --danger: #b3261e;
+  --info: #2b6ca3;
+}
+
+.dark {
+  --background: #16100f;
+  --foreground: #f1e9e2;
+  --surface: #211816;
+  --surface-muted: #2a1f1c;
+  --border: #3a2d29;
+
+  --primary: #d4536a;
+  --primary-foreground: #16100f;
+  --primary-hover: #e26b80;
+
+  --accent: #d9a94a;
+  --accent-foreground: #16100f;
+
+  --muted: #b7a89f;
+
+  --success: #4caf7d;
+  --warning: #d9a94a;
+  --danger: #e5675f;
+  --info: #6fa8d6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+}

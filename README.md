@@ -1,0 +1,142 @@
+# Life Partner Pro
+
+**Finding the Right Life Partner, With Trust.**
+
+A private, admin-managed matrimonial matchmaking platform. Applicants submit a detailed profile through a secure
+multi-step registration form; nothing they submit is ever publicly visible or searchable. Authorized administrators
+review, verify, and manually match profiles using a transparent, weighted compatibility score, then manage the full
+proposal → contact-sharing → meeting → finalization workflow.
+
+This build implements the platform's core matchmaking workflow end-to-end (see "What's implemented" below). Several
+items from the original specification are intentionally deferred — see "Deferred / extension points."
+
+## Tech stack
+
+- **Next.js 16 (App Router) + React 19 + TypeScript**
+- **Tailwind CSS v4** (light/dark mode via a `dark` class, toggleable and persisted per-browser)
+- **Prisma ORM + SQLite** for local development — schema is Postgres-compatible; see "Moving to Postgres" below
+- **NextAuth.js v5 (Auth.js)**, credentials provider, JWT sessions, role claims
+- **bcryptjs** for password hashing, **sharp** for server-side image re-encoding, **zod** for validation
+
+## Getting started
+
+```bash
+npm install
+cp .env.example .env      # then edit NEXTAUTH_SECRET to a real random value
+npx prisma migrate dev    # creates prisma/dev.db and applies the schema
+npm run db:seed           # creates the super admin login + 20 demo profiles
+npm run dev
+```
+
+Visit `http://localhost:3000` for the public site, or `http://localhost:3000/admin/login` for the admin dashboard.
+
+### Seeded admin login
+
+The seed script prints a generated admin login to the console. By default:
+
+- **Email:** `admin@lifepartnerpro.local`
+- **Password:** `ChangeMe123!` (or the value of `SEED_ADMIN_PASSWORD` in your `.env`)
+
+**Change this password before using the app with real data.** There is no first-run forced password change flow in
+this build — create a new `AdminUser` with a strong password via Prisma Studio (`npm run db:studio`) or a short
+script, then deactivate or delete the seeded account.
+
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Prisma connection string. Defaults to a local SQLite file. |
+| `NEXTAUTH_SECRET` | Signs admin session JWTs. Generate with `openssl rand -base64 32`. |
+| `SEED_ADMIN_PASSWORD` | Optional — overrides the seeded super admin's password. |
+
+No third-party API keys are required or referenced anywhere in the codebase (see "Notifications" below).
+
+## What's implemented
+
+- **Public site:** landing page, privacy policy, terms, an 8-step registration wizard (basic info → contact →
+  education/profession → family → lifestyle → partner preferences → photo → review & consent), and a self-service
+  "request an update" flow that requires admin approval before changes go live.
+- **Privacy by design:** contact information (phone/WhatsApp/email) is never included in any list or detail
+  response by default. It is only ever returned by one explicit "reveal contact" endpoint, which is permission-gated
+  and writes an audit log entry every time it's called. Photos are stored outside `public/` in `private-uploads/`
+  and are only ever served through an authenticated route.
+- **Admin dashboard:** live counts (total/new/verified/by gender/by status), and distribution breakdowns by age,
+  city, profession, education, plus monthly registrations and a matching success rate — all computed from the
+  database, no mock data.
+- **Profile management:** server-side paginated/filterable table (collapses to cards on mobile), full detail view
+  with edit, verify, status lifecycle, soft-delete/restore, internal notes, and a per-profile audit trail.
+- **Matching engine** (`src/lib/matching.ts`): a pure, unit-testable weighted scoring function (age 15% / location
+  15% / education 10% / profession 10% / income 10% / marital status 10% / height 5% / family 10% / religious 10% /
+  lifestyle 5%), producing a ranked "Find Matches" list with tier labels, a transparent "why this match" /
+  "potential differences" breakdown, and a side-by-side comparison view with an admin recommendation.
+- **Proposals:** create a proposal between two profiles from the comparison view, then move it through
+  Draft → Sent → Interested/Not Interested → Waiting → Meeting → Finalized → Closed, with a visible timeline.
+- **Communications & follow-ups:** log calls/WhatsApp/SMS/email/meetings per profile, with optional follow-up
+  dates that populate a Today / Upcoming / Overdue follow-ups dashboard.
+- **Audit log:** every sensitive action (login, profile view/edit/delete, status changes, contact reveal/share,
+  match creation, proposal creation/status changes, note additions, update-request decisions) is recorded and
+  browsable by an admin.
+- **Role-based access control:** `SUPER_ADMIN` / `ADMIN` / `STAFF` / `VIEWER`, enforced both in `middleware.ts`
+  (redirects unauthenticated requests) and again in every API route handler via `requireAdmin()` (the actual
+  permission check — middleware alone is not sufficient authorization).
+- **Demo data:** 20 fictional profiles (10 male, 10 female) with varied cities, education, professions, and partner
+  preferences — see `prisma/seed.ts`. Clearly fictional; no real photos are included.
+
+## Deferred / extension points
+
+Per the original spec's own "Future Features" section, these are intentionally *not* implemented, but the code is
+structured so they can be added without restructuring anything else:
+
+- **Two-factor admin authentication** — `AdminUser.twoFactorEnabled` exists in the schema and a toggle appears in
+  Settings, but it is not enforced at login.
+- **CSV / Excel / PDF export** — no export logic is wired up.
+- **Real email / SMS / WhatsApp delivery** — `src/lib/notifications.ts` defines a `NotificationService` interface
+  with a console-only implementation. Swap in a real provider by implementing that interface; nothing else in the
+  app should ever import a provider SDK directly.
+- **Multi-language UI, native mobile apps, payments/subscriptions, CNIC/document verification** — not started.
+
+## Security notes
+
+- Contact info, income, and other sensitive fields are never sent to the browser unless an admin explicitly
+  requests them through a permission-checked, audited endpoint.
+- Passwords are hashed with bcrypt; sessions are signed JWTs (`NEXTAUTH_SECRET`).
+- Every admin API route re-validates the session and the specific permission required for that action
+  (`src/lib/route-guard.ts` + `src/lib/permissions.ts`) — this is a deliberate defense-in-depth layer independent of
+  `middleware.ts`.
+- Registration and self-service update-request endpoints are rate-limited (in-memory token bucket —
+  `src/lib/rate-limit.ts`; swap for a Redis-backed limiter before running more than one server instance).
+- Uploaded photos are validated by MIME type and size, then re-encoded with `sharp` (which also strips EXIF/GPS
+  metadata) before being written to disk outside the public web root.
+- Prisma parameterizes all queries; React escapes all rendered output — standard protection against SQL injection
+  and XSS. No raw HTML is ever rendered from user input.
+
+## Moving to Postgres
+
+1. In `prisma/schema.prisma`, change `datasource db { provider = "sqlite" ... }` to `provider = "postgresql"`.
+2. Point `DATABASE_URL` at your Postgres instance.
+3. Run `npx prisma migrate dev` again to regenerate migrations against Postgres.
+
+No application code depends on SQLite-specific behavior.
+
+## Moving photo storage to cloud object storage
+
+Photos are written/read through `src/lib/storage.ts` (`savePhoto` / `readPhoto` / `deletePhoto`). Replace the
+implementations in that one file with calls to S3/Cloudinary/etc. — nothing else in the app touches the filesystem
+directly.
+
+## Project structure
+
+```
+prisma/schema.prisma       Database schema (see inline comments for Postgres migration notes)
+prisma/seed.ts             Demo admin + 20 demo profiles
+src/lib/matching.ts        The matching/scoring engine (pure functions, no DB access)
+src/lib/permissions.ts     Role → permission matrix
+src/lib/route-guard.ts     Server-side auth/permission check used by every admin API route
+src/lib/audit.ts           writeAudit() helper used throughout
+src/lib/storage.ts         Photo upload/read/delete (local disk — swap for cloud storage here)
+src/lib/notifications.ts   NotificationService interface (console-only implementation)
+src/app/(public)/          Landing page, registration wizard, update-request, legal pages
+src/app/admin/(shell)/     Authenticated admin dashboard, profiles, proposals, follow-ups, audit log, settings
+src/app/api/admin/         All admin-only API routes (protected by middleware.ts + requireAdmin())
+src/app/api/register/      Public profile submission endpoint
+```

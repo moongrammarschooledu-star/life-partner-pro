@@ -1,0 +1,468 @@
+// Life Partner Pro — database schema
+// Dev datasource is SQLite for zero-setup local running.
+// To move to Postgres later: change provider to "postgresql", set DATABASE_URL
+// to a postgres connection string, then re-run `npx prisma migrate dev`.
+// Nothing in the application code depends on the SQLite provider.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+  VIEWER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum MaritalStatus {
+  NEVER_MARRIED
+  DIVORCED
+  WIDOWED
+  ANNULLED
+}
+
+enum ProfileStatus {
+  NEW
+  UNDER_REVIEW
+  VERIFIED
+  ACTIVE
+  MATCHING
+  PROPOSAL_SENT
+  WAITING_FOR_RESPONSE
+  INTERESTED
+  NOT_INTERESTED
+  MEETING_ARRANGED
+  FINALIZED
+  MARRIED
+  REJECTED
+  ARCHIVED
+}
+
+enum ContactMethod {
+  PHONE
+  WHATSAPP
+  EMAIL
+}
+
+enum FamilyType {
+  NUCLEAR
+  JOINT
+  EXTENDED
+}
+
+enum FamilyStatus {
+  MIDDLE_CLASS
+  UPPER_MIDDLE_CLASS
+  UPPER_CLASS
+  WELL_SETTLED
+}
+
+enum EmploymentType {
+  GOVERNMENT
+  PRIVATE
+  BUSINESS_OWNER
+  SELF_EMPLOYED
+  FREELANCE
+  NOT_WORKING
+  STUDENT
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  INTERESTED
+  NOT_INTERESTED
+  WAITING
+  MEETING
+  FINALIZED
+  CLOSED
+}
+
+enum CommunicationType {
+  PHONE_CALL
+  WHATSAPP
+  SMS
+  EMAIL
+  MEETING
+  FOLLOW_UP
+}
+
+enum AuditAction {
+  ADMIN_LOGIN
+  ADMIN_LOGOUT
+  PROFILE_CREATED
+  PROFILE_VIEWED
+  PROFILE_EDITED
+  PROFILE_DELETED
+  PROFILE_RESTORED
+  PROFILE_STATUS_CHANGED
+  PROFILE_VERIFIED
+  CONTACT_VIEWED
+  CONTACT_SHARED
+  MATCH_CREATED
+  PROPOSAL_CREATED
+  PROPOSAL_STATUS_CHANGED
+  NOTE_ADDED
+  COMMUNICATION_LOGGED
+  UPDATE_REQUEST_SUBMITTED
+  UPDATE_REQUEST_APPROVED
+  UPDATE_REQUEST_REJECTED
+}
+
+// ---------- Admin ----------
+
+model AdminUser {
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  passwordHash      String
+  role              AdminRole @default(STAFF)
+  twoFactorEnabled  Boolean   @default(false)
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  notes             ProfileNote[]
+  communications    Communication[]
+  auditLogs         AuditLog[]
+  contactShares     ContactShareLog[]
+  proposalsCreated  Proposal[]
+}
+
+// ---------- Core profile ----------
+
+model Profile {
+  id            String        @id @default(cuid())
+  profileCode   String        @unique // e.g. LPP-000001, cosmetic display id only
+
+  fullName      String
+  gender        Gender
+  dateOfBirth   DateTime
+  maritalStatus MaritalStatus
+  heightCm      Int
+
+  city          String
+  area          String?
+  country       String
+  nationality   String?
+
+  status        ProfileStatus @default(NEW)
+  verified      Boolean       @default(false)
+  softDeleted   Boolean       @default(false)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  contact             ContactInfo?
+  education           EducationInfo?
+  profession          ProfessionInfo?
+  family              FamilyInfo?
+  lifestyle           LifestyleInfo?
+  preference          PartnerPreference?
+  photos              ProfilePhoto[]
+  notes               ProfileNote[]
+  consent             ConsentRecord?
+  communications      Communication[]
+  followUps           FollowUp[]
+  pendingUpdate       PendingUpdate?
+
+  matchesAsA          Match[]    @relation("MatchProfileA")
+  matchesAsB          Match[]    @relation("MatchProfileB")
+  proposalsAsA        Proposal[] @relation("ProposalProfileA")
+  proposalsAsB        Proposal[] @relation("ProposalProfileB")
+
+  auditLogs           AuditLog[]
+  contactSharesAsA    ContactShareLog[] @relation("ShareProfileA")
+  contactSharesAsB    ContactShareLog[] @relation("ShareProfileB")
+
+  @@index([gender, status])
+  @@index([city])
+  @@index([status])
+}
+
+model ContactInfo {
+  id                    String        @id @default(cuid())
+  profile               Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId             String        @unique
+
+  mobileNumber          String
+  whatsappNumber        String?
+  email                 String
+  preferredContactMethod ContactMethod @default(PHONE)
+}
+
+model EducationInfo {
+  id            String  @id @default(cuid())
+  profile       Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId     String  @unique
+
+  level         String  // e.g. Bachelor's, Master's, PhD
+  degree        String?
+  institution   String?
+}
+
+model ProfessionInfo {
+  id                String          @id @default(cuid())
+  profile           Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId         String          @unique
+
+  profession        String
+  jobTitle          String?
+  companyName       String?
+  employmentType    EmploymentType  @default(PRIVATE)
+  monthlyIncome     Int?            // stored in smallest currency unit-agnostic integer (e.g. USD)
+  annualIncome      Int?
+  workLocation      String?
+  businessDetails   String?
+}
+
+model FamilyInfo {
+  id                    String        @id @default(cuid())
+  profile               Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId             String        @unique
+
+  fatherOccupation      String?
+  motherOccupation      String?
+  numberOfBrothers      Int           @default(0)
+  numberOfSisters       Int           @default(0)
+  familyType            FamilyType    @default(NUCLEAR)
+  familyStatus          FamilyStatus  @default(MIDDLE_CLASS)
+  familyLocation        String?
+  familyBackground      String?
+  additionalInfo        String?
+}
+
+model LifestyleInfo {
+  id                    String  @id @default(cuid())
+  profile               Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId             String  @unique
+
+  religion              String?
+  sect                  String?
+  religiousPractice     String?  // e.g. Practicing, Moderate, Liberal
+  languages             String?  // comma separated
+  smoking               Boolean  @default(false)
+  drinking              Boolean  @default(false)
+  otherPreferences      String?
+}
+
+model PartnerPreference {
+  id                    String   @id @default(cuid())
+  profile               Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId             String   @unique
+
+  minAge                Int?
+  maxAge                Int?
+
+  preferredCountry      String?
+  preferredCity         String?
+  preferredArea         String?
+
+  minEducation           String?
+  preferredEducation     String?
+
+  professionPreference   String? // free text or "ANY"
+
+  minIncome              Int?
+  maxIncome              Int?
+  incomeFlexible         Boolean  @default(true)
+
+  maritalStatusPreference String? // comma-separated MaritalStatus values or "ANY"
+
+  minHeightCm            Int?
+  maxHeightCm            Int?
+
+  familyTypePreference    String?
+  familyBackgroundPreference String?
+  otherFamilyRequirements String?
+
+  additionalExpectations  String? // large free text
+}
+
+model ProfilePhoto {
+  id            String   @id @default(cuid())
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId     String
+  storageKey    String   // relative path under the private uploads dir
+  mimeType      String
+  sizeBytes     Int
+  isPrimary     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([profileId])
+}
+
+model ConsentRecord {
+  id          String   @id @default(cuid())
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId   String   @unique
+  agreedAt    DateTime @default(now())
+  ipHash      String?
+}
+
+// Pending, admin-reviewable edits to sensitive fields submitted by the applicant.
+model PendingUpdate {
+  id          String   @id @default(cuid())
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId   String   @unique
+  payload     String   // JSON blob of the proposed changes
+  submittedAt DateTime @default(now())
+}
+
+model ProfileNote {
+  id          String    @id @default(cuid())
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId   String
+  admin       AdminUser @relation(fields: [adminId], references: [id])
+  adminId     String
+  text        String
+  createdAt   DateTime  @default(now())
+
+  @@index([profileId])
+}
+
+// ---------- Matching & proposals ----------
+
+model Match {
+  id            String   @id @default(cuid())
+  profileA      Profile  @relation("MatchProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileAId    String
+  profileB      Profile  @relation("MatchProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
+  profileBId    String
+  score         Int
+  breakdown     String   // JSON: [{category, weight, score, reason}]
+  createdAt     DateTime @default(now())
+
+  @@unique([profileAId, profileBId])
+  @@index([profileAId])
+}
+
+model Proposal {
+  id            String         @id @default(cuid())
+  profileA      Profile        @relation("ProposalProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileAId    String
+  profileB      Profile        @relation("ProposalProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
+  profileBId    String
+  status        ProposalStatus @default(DRAFT)
+  createdBy     AdminUser      @relation(fields: [createdById], references: [id])
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  events        ProposalEvent[]
+
+  @@index([profileAId])
+  @@index([profileBId])
+}
+
+model ProposalEvent {
+  id            String    @id @default(cuid())
+  proposal      Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId    String
+  status        ProposalStatus
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  @@index([proposalId])
+}
+
+model Communication {
+  id            String            @id @default(cuid())
+  profile       Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId     String
+  admin         AdminUser         @relation(fields: [adminId], references: [id])
+  adminId       String
+  type          CommunicationType
+  notes         String?
+  occurredAt    DateTime          @default(now())
+  followUpDate  DateTime?
+  createdAt     DateTime          @default(now())
+
+  @@index([profileId])
+}
+
+model FollowUp {
+  id            String    @id @default(cuid())
+  profile       Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId     String
+  dueDate       DateTime
+  note          String?
+  done          Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  @@index([dueDate, done])
+  @@index([profileId])
+}
+
+// ---------- Contact sharing ----------
+
+model ContactShareLog {
+  id              String    @id @default(cuid())
+  profileA        Profile   @relation("ShareProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileAId      String
+  profileB        Profile   @relation("ShareProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
+  profileBId      String
+  approvedBy      AdminUser @relation(fields: [approvedById], references: [id])
+  approvedById    String
+  sharedAt        DateTime  @default(now())
+
+  @@index([profileAId])
+  @@index([profileBId])
+}
+
+// ---------- Audit ----------
+
+model AuditLog {
+  id            String      @id @default(cuid())
+  admin         AdminUser?  @relation(fields: [adminId], references: [id])
+  adminId       String?
+  action        AuditAction
+  targetProfile Profile?    @relation(fields: [targetProfileId], references: [id])
+  targetProfileId String?
+  meta          String?     // JSON blob of extra context
+  createdAt     DateTime    @default(now())
+
+  @@index([targetProfileId])
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+// ---------- App-wide settings (single row) ----------
+
+model AppSettings {
+  id                    Int      @id @default(1)
+  appName               String   @default("Life Partner Pro")
+  contactEmail          String?
+  contactWhatsapp       String?
+  contactAddress        String?
+  weightAge             Int      @default(15)
+  weightLocation        Int      @default(15)
+  weightEducation       Int      @default(10)
+  weightProfession      Int      @default(10)
+  weightIncome          Int      @default(10)
+  weightMaritalStatus   Int      @default(10)
+  weightHeight          Int      @default(5)
+  weightFamily          Int      @default(10)
+  weightReligious       Int      @default(10)
+  weightLifestyle       Int      @default(5)
+  updatedAt             DateTime @updatedAt
+}
+
+// Running counter backing the human-readable LPP-###### profile codes.
+model ProfileCodeCounter {
+  id      Int @id @default(1)
+  lastSeq Int @default(0)
+}
