@@ -14,16 +14,20 @@ items from the original specification are intentionally deferred — see "Deferr
 
 - **Next.js 16 (App Router) + React 19 + TypeScript**
 - **Tailwind CSS v4** (light/dark mode via a `dark` class, toggleable and persisted per-browser)
-- **Prisma ORM + SQLite** for local development — schema is Postgres-compatible; see "Moving to Postgres" below
+- **Prisma ORM + PostgreSQL** (works with any Postgres — Neon, Vercel Postgres, Supabase, RDS, or local)
 - **NextAuth.js v5 (Auth.js)**, credentials provider, JWT sessions, role claims
 - **bcryptjs** for password hashing, **sharp** for server-side image re-encoding, **zod** for validation
 
 ## Getting started
 
+Requires a reachable Postgres database (a free [Neon](https://neon.tech) branch or `docker run postgres` both work
+fine for local dev).
+
 ```bash
 npm install
-cp .env.example .env      # then edit NEXTAUTH_SECRET to a real random value
-npx prisma migrate dev    # creates prisma/dev.db and applies the schema
+cp .env.example .env      # then set DATABASE_URL to your postgres connection string,
+                           # and NEXTAUTH_SECRET to a real random value
+npm run db:push           # creates the schema in that database
 npm run db:seed           # creates the super admin login + 20 demo profiles
 npm run dev
 ```
@@ -45,7 +49,7 @@ script, then deactivate or delete the seeded account.
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Prisma connection string. Defaults to a local SQLite file. |
+| `DATABASE_URL` | Postgres connection string. |
 | `NEXTAUTH_SECRET` | Signs admin session JWTs. Generate with `openssl rand -base64 32`. |
 | `SEED_ADMIN_PASSWORD` | Optional — overrides the seeded super admin's password. |
 
@@ -110,19 +114,28 @@ structured so they can be added without restructuring anything else:
 - Prisma parameterizes all queries; React escapes all rendered output — standard protection against SQL injection
   and XSS. No raw HTML is ever rendered from user input.
 
-## Moving to Postgres
+## Deploying to Vercel
 
-1. In `prisma/schema.prisma`, change `datasource db { provider = "sqlite" ... }` to `provider = "postgresql"`.
-2. Point `DATABASE_URL` at your Postgres instance.
-3. Run `npx prisma migrate dev` again to regenerate migrations against Postgres.
+1. Push this repo to GitHub, then import it in Vercel (or `vercel link`).
+2. Under the project's **Storage** tab, add a Postgres database (Vercel's own integration, backed by Neon) — this
+   sets `DATABASE_URL` for you automatically. Any other Postgres provider works too; just add `DATABASE_URL`
+   manually under **Settings → Environment Variables**.
+3. Add `NEXTAUTH_SECRET` under **Settings → Environment Variables** (`openssl rand -base64 32`).
+4. Deploy. The build runs `prisma db push` before `next build`, so the schema is created in that database on first
+   deploy — no separate migration step needed.
+5. Once it's live, run the seed **once** against that same database to get the super admin login and demo data:
+   `vercel env pull .env.production.local && npm run db:seed` (uses whichever `.env*` file is present — see
+   `SEED_ADMIN_PASSWORD` above to set a real password rather than the default).
 
-No application code depends on SQLite-specific behavior.
+**Known limitation:** photo uploads use local disk (`src/lib/storage.ts`), which doesn't persist on Vercel's
+serverless functions — see the next section. Everything else (registration, matching, proposals, admin dashboard)
+works fully once `DATABASE_URL` and `NEXTAUTH_SECRET` are set.
 
 ## Moving photo storage to cloud object storage
 
 Photos are written/read through `src/lib/storage.ts` (`savePhoto` / `readPhoto` / `deletePhoto`). Replace the
-implementations in that one file with calls to S3/Cloudinary/etc. — nothing else in the app touches the filesystem
-directly.
+implementations in that one file with calls to S3/Cloudinary/Vercel Blob/etc. — nothing else in the app touches the
+filesystem directly. This is required for photo uploads to work correctly on Vercel (or any serverless host).
 
 ## Project structure
 

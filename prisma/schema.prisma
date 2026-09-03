@@ -1,15 +1,15 @@
 // Life Partner Pro — database schema
-// Dev datasource is SQLite for zero-setup local running.
-// To move to Postgres later: change provider to "postgresql", set DATABASE_URL
-// to a postgres connection string, then re-run `npx prisma migrate dev`.
-// Nothing in the application code depends on the SQLite provider.
+// Production (Vercel) runs Postgres — serverless functions have no
+// persistent writable disk, so SQLite doesn't work there. Local dev can
+// point DATABASE_URL at any reachable Postgres instance (a free Neon/Vercel
+// Postgres branch, or a local Postgres install) via `prisma db push`.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
