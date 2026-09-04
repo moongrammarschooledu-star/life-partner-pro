@@ -47,8 +47,12 @@ export function formatEnumLabel(value: string): string {
     .join(" ");
 }
 
+// Date-only values (dueDate, createdAt-as-a-calendar-date, etc.) are stored
+// as UTC midnight (see parseDateOnly) — rendering must pin to UTC too, or a
+// viewer behind UTC sees the previous day (the exact bug parseDateOnly was
+// introduced to fix on the write side).
 export function formatDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  return new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 export function formatDateTime(date: Date | string): string {
