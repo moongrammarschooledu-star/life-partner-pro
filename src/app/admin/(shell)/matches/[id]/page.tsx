@@ -240,14 +240,16 @@ export default function MatchAnalysisPage({ params }: { params: Promise<{ id: st
           <CardTitle className="text-base">Compatibility Breakdown</CardTitle>
         </CardHeader>
         <CardContent className="divide-y divide-border">
-          {data.breakdown.map((row) => (
+          {data.breakdown.map((row) => {
+            const pct = Math.round(row.score * 100);
+            return (
             <div key={row.category} className="py-2.5">
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-1.5 font-medium">
                   <CompatIndicator status={row.status} /> {row.label}
                   {row.hardRequirementFailed && <span className="text-xs text-danger">(Must Have not met)</span>}
                 </span>
-                <span className="text-muted">{row.status === "unknown" ? "—" : `${row.score}%`}</span>
+                <span className="text-muted">{row.status === "unknown" ? "—" : `${pct}%`}</span>
               </div>
               <div className="mt-1.5 h-2 rounded-full bg-surface-muted">
                 <div
@@ -261,12 +263,13 @@ export default function MatchAnalysisPage({ params }: { params: Promise<{ id: st
                           ? "bg-danger"
                           : "bg-muted")
                   }
-                  style={{ width: row.status === "unknown" ? "0%" : `${Math.max(4, row.score)}%` }}
+                  style={{ width: row.status === "unknown" ? "0%" : `${Math.max(4, pct)}%` }}
                 />
               </div>
               <p className="mt-1 text-xs text-muted">{row.reason}</p>
             </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
 
