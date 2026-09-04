@@ -14,6 +14,7 @@ export interface ProfileFilters {
   education: string;
   profession: string;
   maritalStatus: string;
+  verified: string;
 }
 
 export const emptyFilters: ProfileFilters = {
@@ -26,6 +27,7 @@ export const emptyFilters: ProfileFilters = {
   education: "",
   profession: "",
   maritalStatus: "",
+  verified: "",
 };
 
 const STATUS_OPTIONS = [
@@ -33,6 +35,8 @@ const STATUS_OPTIONS = [
   "WAITING_FOR_RESPONSE", "INTERESTED", "NOT_INTERESTED", "MEETING_ARRANGED",
   "FINALIZED", "MARRIED", "REJECTED", "ARCHIVED",
 ];
+
+const MARITAL_STATUS_OPTIONS = ["NEVER_MARRIED", "DIVORCED", "WIDOWED", "ANNULLED"];
 
 export function FilterPanel({
   filters,
@@ -87,6 +91,23 @@ export function FilterPanel({
         </Field>
         <Field label="Profession" htmlFor="profession">
           <Input id="profession" value={filters.profession} onChange={(e) => set("profession", e.target.value)} />
+        </Field>
+        <Field label="Marital Status" htmlFor="maritalStatus">
+          <Select id="maritalStatus" value={filters.maritalStatus} onChange={(e) => set("maritalStatus", e.target.value)}>
+            <option value="">Any</option>
+            {MARITAL_STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s.replaceAll("_", " ")}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Verification Status" htmlFor="verified">
+          <Select id="verified" value={filters.verified} onChange={(e) => set("verified", e.target.value)}>
+            <option value="">Any</option>
+            <option value="true">Verified</option>
+            <option value="false">Not Verified</option>
+          </Select>
         </Field>
       </div>
       <div className="mt-3 flex justify-end">

@@ -11,7 +11,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const admin = await requireAdmin("match:run");
     const { id } = await params;
-    const { status, recommendation } = await req.json();
+    const { status, recommendation, note } = await req.json();
 
     if (status && !VALID_STATUSES.includes(status)) throw new ApiError(400, "Invalid status");
     if (recommendation && !VALID_RECOMMENDATIONS.includes(recommendation)) throw new ApiError(400, "Invalid recommendation");
@@ -23,6 +23,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         ...(recommendation !== undefined ? { recommendation } : {}),
       },
     });
+
+    if (typeof note === "string" && note.trim()) {
+      await prisma.profileNote.create({
+        data: { profileId: match.profileAId, matchId: match.id, adminId: admin.id, text: note.trim() },
+      });
+    }
 
     await writeAudit({
       action: "MATCH_STATUS_CHANGED",

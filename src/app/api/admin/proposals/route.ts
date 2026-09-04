@@ -18,6 +18,7 @@ export async function GET(req: Request) {
       include: {
         profileA: { select: { id: true, profileCode: true, fullName: true, gender: true } },
         profileB: { select: { id: true, profileCode: true, fullName: true, gender: true } },
+        createdBy: { select: { name: true } },
         events: { orderBy: { createdAt: "asc" } },
       },
       orderBy: { createdAt: "desc" },
@@ -32,11 +33,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const admin = await requireAdmin("proposal:create");
-    const { profileAId, profileBId, matchId } = await req.json();
+    const { profileAId, profileBId, matchId, priority, note } = await req.json();
 
     if (!profileAId || !profileBId || profileAId === profileBId) {
       throw new ApiError(400, "Two distinct profiles are required");
     }
+    const VALID_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
+    if (priority && !VALID_PRIORITIES.includes(priority)) throw new ApiError(400, "Invalid priority");
 
     // Match creation never implies contact sharing (spec §35) — this only
     // records the proposal + a snapshot of the match score it came from.
@@ -52,6 +55,7 @@ export async function POST(req: Request) {
         profileBId,
         matchId: matchId || undefined,
         matchScore,
+        priority: priority || undefined,
         createdById: admin.id,
         events: { create: { status: "DRAFT" } },
       },
@@ -62,6 +66,9 @@ export async function POST(req: Request) {
       prisma.profile.update({ where: { id: profileAId }, data: { status: "MATCHING" } }),
       prisma.profile.update({ where: { id: profileBId }, data: { status: "MATCHING" } }),
       matchId ? prisma.match.update({ where: { id: matchId }, data: { status: "PROPOSAL_CREATED" } }) : Promise.resolve(),
+      note && note.trim()
+        ? prisma.profileNote.create({ data: { profileId: profileAId, proposalId: proposal.id, adminId: admin.id, text: note.trim() } })
+        : Promise.resolve(),
     ]);
 
     await writeAudit({ action: "PROPOSAL_CREATED", adminId: admin.id, targetProfileId: profileAId, meta: { profileBId, proposalId: proposal.id, matchId } });

@@ -65,11 +65,28 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   response by default. It is only ever returned by one explicit "reveal contact" endpoint, which is permission-gated
   and writes an audit log entry every time it's called. Photos are stored in Vercel Blob; the raw blob URL is never
   sent to the browser — it's only ever fetched server-side and streamed back through an authenticated route.
-- **Admin dashboard:** live counts (total/new/verified/by gender/by status), and distribution breakdowns by age,
-  city, profession, education, plus monthly registrations and a matching success rate — all computed from the
-  database, no mock data.
-- **Profile management:** server-side paginated/filterable table (collapses to cards on mobile), full detail view
-  with edit, verify, status lifecycle, soft-delete/restore, internal notes, and a per-profile audit trail.
+- **Admin dashboard:** a greeting header with the live date, KPI cards (Total/New/Verified/Active Profiles, Pending
+  Review, Active Proposals, Meetings, Successful Matches) with real week-over-week trend arrows computed from
+  registration and verification event counts (never fabricated — metrics with no defensible historical basis show a
+  plain number instead of a misleading trend), a period-selectable (Today/7D/30D/3M/6M/1Y) male/female registration
+  chart, a Matching Center summary row with a shortcut into the Matching Center, a "Today's Priorities" action list,
+  and distribution breakdowns by gender, age, city, profession, and education — all computed from the database, no
+  mock data.
+- **Matching Center** (`/admin/matching`): the primary matchmaking workspace — search/select any profile, "Find Best
+  Matches" against admin-configurable weights/thresholds/hard-requirements, sort (highest/lowest/newest/same
+  city/age·education·profession-closest) and filter (minimum score, city, education, profession, verified/active
+  only) the ranked results, then open a full comparison panel per candidate showing the mutual **A→B / B→A /
+  blended** compatibility, a per-category breakdown (percentage bar **and** a ✓ compatible / ⚠ partial / ✕
+  incompatible / — unknown indicator — missing data is never shown as a penalty), an admin recommendation + private
+  note ("Save Match Decision"), and proposal creation with a priority level.
+- **Global search & notifications:** a topbar search (name / Profile ID / phone / city / profession) and a
+  computed notifications panel (profiles awaiting verification, follow-ups due, new high-compatibility matches,
+  recent proposal responses) — the notifications are assembled live from existing tables on every request, not a
+  persisted/event-sourced notification log.
+- **Profile management:** server-side paginated/filterable table (collapses to cards on mobile, filterable by
+  gender/status/city/age/education/profession/marital status/verification), full detail view with edit, verify,
+  status lifecycle, soft-delete/restore, internal notes, a browsable communication history, and a per-profile audit
+  trail.
 - **Matching engine** (`src/lib/matching.ts`): compatibility is scored as *mutual* — every preference-based category
   (age, location, education, profession, income, marital status, height, family) checks both directions (does the
   candidate meet the seeker's stated preference, **and** does the seeker meet the candidate's), taking the weaker of
@@ -84,14 +101,18 @@ No third-party API keys are required or referenced anywhere in the codebase (see
 - **Match workflow:** viewing a candidate in the comparison view persists a `Match` record (with per-category score
   columns and the full breakdown) carrying its own status (`Suggested → Reviewed → Approved/Rejected →
   Proposal Created → Closed`) and an optional admin recommendation, independent of any proposal created from it.
-- **Proposals:** create a proposal between two profiles from the comparison view (optionally linked back to the
-  `Match` it came from, snapshotting its score), then move it through
-  Draft → Sent → Interested/Not Interested → Waiting → Meeting → Finalized → Closed, with a visible timeline.
+- **Proposals:** create a proposal (with a Low/Medium/High priority) between two profiles from the Matching Center
+  or a profile's Matches tab (linked back to the `Match` it came from, snapshotting its score), then move it through
+  Draft → Sent → Interested/Not Interested → Waiting → Meeting → Finalized → Closed, with a visible timeline. The
+  proposal list is tabbed by status and shows match %, priority, and the creating admin.
+- **Contact sharing:** approving contact sharing on a proposal requires picking which channels (phone/WhatsApp/email)
+  are being shared and confirming that consent was received from both parties — never a single blanket checkbox —
+  and every share records exactly which channels were approved.
 - **Consent:** registration records four distinct, versioned consent flags (privacy, matchmaking use, contact
   sharing, terms) rather than one blanket checkbox. A profile cannot be moved to `ACTIVE` status until all four are
   on record.
-- **Communications & follow-ups:** log calls/WhatsApp/SMS/email/meetings per profile, with optional follow-up
-  dates/priority that populate a Today / Upcoming / Overdue follow-ups dashboard.
+- **Follow-up Center:** a tabbed view (Today / Upcoming / Overdue / Completed / Cancelled) with a direct "Add
+  Follow-up" action (date, priority, notes) from any profile, independent of logging a communication.
 - **Audit log:** every sensitive action (login, profile view/edit/delete, status changes, contact reveal/share,
   match creation/status change, proposal creation/status changes, note additions, update-request decisions) is
   recorded and browsable by an admin.
@@ -113,6 +134,19 @@ structured so they can be added without restructuring anything else:
   with a console-only implementation. Swap in a real provider by implementing that interface; nothing else in the
   app should ever import a provider SDK directly.
 - **Multi-language UI, native mobile apps, payments/subscriptions, CNIC/document verification** — not started.
+- **Persisted/event-sourced notifications** — the topbar notifications panel is computed live from existing tables
+  on every request rather than backed by a `Notification` table with write hooks on every triggering action.
+- **Admin-side manual "Add Profile"** — profiles are still only created through the public registration wizard;
+  there's no admin-facing manual-entry form.
+- **Global search beyond profiles** — the topbar/Matching Center search covers profiles only (name / Profile ID /
+  phone / city / profession), not proposals, matches, or follow-ups.
+- **Full per-category Matching Center filters** — the filter bar covers minimum score, city, education, profession,
+  and verified/active-only; the spec's full list (income, marital status, height, family, religion, lifestyle) isn't
+  each broken out as its own filter control yet.
+- **Standalone cross-profile "Admin Notes" / "Communications" pages** — notes and communication history are
+  per-profile (and per-match/per-proposal for notes), which already surfaces the same information without a
+  separate aggregated view.
+- **Saved filter presets and CSV import** — not implemented; CSV *export* already exists on the Reports page.
 
 ## Security notes
 

@@ -1,15 +1,25 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Users } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Users } from "lucide-react";
 import { FilterPanel, emptyFilters, type ProfileFilters } from "@/components/admin/filter-panel";
 import { ProfileTable } from "@/components/admin/profile-table";
 import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ProfileListDto } from "@/lib/serializers";
 
 export default function ProfilesPage() {
-  const [filters, setFilters] = useState<ProfileFilters>(emptyFilters);
+  const searchParams = useSearchParams();
+  // Seeds from the nav's "New Profiles" / "Verified Profiles" preset links
+  // (?status=NEW, ?verified=true) — only read once on first mount so the
+  // filter panel remains the source of truth afterwards.
+  const [filters, setFilters] = useState<ProfileFilters>(() => ({
+    ...emptyFilters,
+    status: searchParams.get("status") ?? "",
+    verified: searchParams.get("verified") ?? "",
+  }));
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ProfileListDto[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -57,8 +67,10 @@ export default function ProfilesPage() {
       />
 
       {loading ? (
-        <div className="flex h-48 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-muted" />
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-14" />
+          ))}
         </div>
       ) : items.length === 0 ? (
         <EmptyState icon={Users} title="No profiles found" description="Try adjusting your filters or search terms." />

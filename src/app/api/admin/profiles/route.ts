@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     const education = searchParams.get("education")?.trim();
     const profession = searchParams.get("profession")?.trim();
     const maritalStatus = searchParams.get("maritalStatus");
+    const verified = searchParams.get("verified");
     const includeArchived = searchParams.get("includeArchived") === "true";
 
     const where: Prisma.ProfileWhereInput = {
@@ -29,6 +30,7 @@ export async function GET(req: Request) {
       ...(gender ? { gender: gender as Prisma.EnumGenderFilter["equals"] } : {}),
       ...(status ? { status: status as never } : {}),
       ...(maritalStatus ? { maritalStatus: maritalStatus as never } : {}),
+      ...(verified ? { verified: verified === "true" } : {}),
       ...(city ? { city: { contains: city } } : {}),
       ...(q
         ? {

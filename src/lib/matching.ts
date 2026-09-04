@@ -148,7 +148,7 @@ export interface CategoryResult {
 }
 
 export interface MatchResult {
-  total: number; // 0..100
+  total: number; // 0..100 — the mutual (weaker-direction) blended score
   tier: "EXCELLENT" | "VERY_GOOD" | "GOOD" | "POSSIBLE" | "LOW";
   tierLabel: string;
   breakdown: CategoryResult[];
@@ -156,6 +156,11 @@ export interface MatchResult {
   differences: string[]; // "Potential differences" — isDifference true
   excludedByHardRequirement: boolean; // caller should drop this candidate from results if true
   failedHardRequirements: string[];
+  // How well each side's stated preferences are met by the other's actual
+  // attributes, computed independently per direction (spec §24) — `total`
+  // above is the mutual (weaker-of-both) blend used for ranking/filtering,
+  // this is purely for the "A→B / B→A" transparency display.
+  direction: { aToB: number; bToA: number };
 }
 
 export interface MatchableProfile {
@@ -412,6 +417,12 @@ export function scoreMatch(
   const aToB = a.preference;
   const bToA = b.preference;
 
+  // Accumulated separately from `parts[].points` so the transparency display
+  // can show "how well does B satisfy A's stated preference" independently
+  // of the mutual (weaker-of-both) score used for ranking/filtering.
+  let aToBPoints = 0;
+  let bToAPoints = 0;
+
   function mutual(
     category: MatchCategory,
     label: string,
@@ -426,6 +437,8 @@ export function scoreMatch(
     const weight = weights[category];
     const isHard = !!hardRequirements[category];
     const hardFailed = isHard && status === "incompatible";
+    aToBPoints += weight * dirAtoB.score;
+    bToAPoints += weight * dirBtoA.score;
     return {
       category,
       label,
@@ -564,6 +577,11 @@ export function scoreMatch(
   const religious = scoreReligious(a, b);
   const religiousWeight = weights.religious;
   const religiousStatus = statusFor(religious.score, religious.hasData);
+  // Symmetric category — both profiles' actual attributes are compared
+  // directly rather than one side's stated preference, so it contributes the
+  // same amount to both directional totals below.
+  aToBPoints += religiousWeight * religious.score;
+  bToAPoints += religiousWeight * religious.score;
   parts.push({
     category: "religious",
     label: "Religious Compatibility",
@@ -584,6 +602,8 @@ export function scoreMatch(
   const lifestyle = scoreLifestyle(a, b);
   const lifestyleWeight = weights.lifestyle;
   const lifestyleStatus = statusFor(lifestyle.score, lifestyle.hasData);
+  aToBPoints += lifestyleWeight * lifestyle.score;
+  bToAPoints += lifestyleWeight * lifestyle.score;
   parts.push({
     category: "lifestyle",
     label: "Lifestyle",
@@ -611,6 +631,10 @@ export function scoreMatch(
     differences: parts.filter((p) => p.isDifference).map((p) => `${p.label}: ${p.reason}`),
     excludedByHardRequirement: failedHard.length > 0,
     failedHardRequirements: failedHard.map((p) => p.label),
+    direction: {
+      aToB: Math.round(clamp01(aToBPoints / 100) * 100),
+      bToA: Math.round(clamp01(bToAPoints / 100) * 100),
+    },
   };
 }
 

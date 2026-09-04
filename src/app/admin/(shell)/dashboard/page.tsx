@@ -5,74 +5,199 @@ import {
   Users,
   Sparkles,
   ShieldCheck,
-  UserRound,
   UserRoundCheck,
-  Handshake,
+  ClipboardList,
   MessageCircleHeart,
   CalendarCheck2,
   Award,
-  Archive,
-  Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/stat-card";
 import { BarChart } from "@/components/admin/bar-chart";
+import { RegistrationTrendChart, type TrendPoint } from "@/components/admin/registration-trend-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonClass } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
 
 interface DashboardData {
   counts: Record<string, number>;
+  trends: Record<string, number | null>;
   byCity: { label: string; count: number }[];
   byEducation: { label: string; count: number }[];
   byProfession: { label: string; count: number }[];
   byAge: { label: string; count: number }[];
+  byGender: { label: string; count: number }[];
   monthlyRegistrations: { month: string; count: number }[];
+  registrationTrend: TrendPoint[];
   matchingSuccessRate: number;
+  matchingOverview: {
+    potentialMatches: number;
+    highCompatibilityMatches: number;
+    proposalsPending: number;
+    interested: number;
+    meetingsScheduled: number;
+    finalized: number;
+  };
+  priorities: {
+    profilesAwaitingVerification: number;
+    followUpsDueToday: number;
+    newHighCompatMatches: number;
+    recentProposalResponses: number;
+  };
+}
+
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good Morning";
+  if (hour < 17) return "Good Afternoon";
+  return "Good Evening";
 }
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [period, setPeriod] = useState("6m");
 
   useEffect(() => {
-    fetch("/api/admin/dashboard")
+    fetch(`/api/admin/dashboard?period=${period}`)
       .then((r) => r.json())
       .then(setData);
-  }, []);
+  }, [period]);
+
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   if (!data) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted" />
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-20" />
+          ))}
+        </div>
+        <Skeleton className="h-64" />
       </div>
     );
   }
 
-  const { counts } = data;
+  const { counts, trends } = data;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted">Overview of all matrimonial profiles and matchmaking activity.</p>
+        <h1 className="font-heading text-2xl font-semibold">{greeting()}, Admin</h1>
+        <p className="text-sm text-muted">Here is today&apos;s matchmaking activity. · {today}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        <StatCard icon={Users} label="Total Profiles" value={counts.total} />
-        <StatCard icon={Sparkles} label="New Profiles" value={counts.new} accent="info" />
-        <StatCard icon={ShieldCheck} label="Verified Profiles" value={counts.verified} accent="success" />
-        <StatCard icon={UserRound} label="Male Profiles" value={counts.male} accent="muted" />
-        <StatCard icon={UserRoundCheck} label="Female Profiles" value={counts.female} accent="muted" />
+        <StatCard icon={Users} label="Total Profiles" value={counts.total} trendPercent={trends.total} />
+        <StatCard icon={Sparkles} label="New Profiles" value={counts.new} accent="info" trendPercent={trends.new} />
+        <StatCard icon={ShieldCheck} label="Verified Profiles" value={counts.verified} accent="success" trendPercent={trends.verified} />
         <StatCard icon={UserRoundCheck} label="Active Profiles" value={counts.active} accent="success" />
-        <StatCard icon={Handshake} label="Matching Profiles" value={counts.matching} />
-        <StatCard icon={MessageCircleHeart} label="Proposals Sent" value={counts.proposalsSent} accent="warning" />
-        <StatCard icon={MessageCircleHeart} label="Interested" value={counts.interested} accent="success" />
+        <StatCard icon={ClipboardList} label="Pending Review" value={counts.pendingReview} accent="warning" />
+        <StatCard icon={MessageCircleHeart} label="Active Proposals" value={counts.activeProposals} accent="info" />
         <StatCard icon={CalendarCheck2} label="Meetings" value={counts.meetings} accent="info" />
-        <StatCard icon={Award} label="Finalized Rishtas" value={counts.finalized} accent="success" />
-        <StatCard icon={Archive} label="Archived Profiles" value={counts.archived} accent="muted" />
+        <StatCard icon={Award} label="Successful Matches" value={counts.successfulMatches} accent="success" />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile Registrations</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RegistrationTrendChart data={data.registrationTrend} period={period} onPeriodChange={setPeriod} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" /> Matching Center Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              { label: "Potential Matches", value: data.matchingOverview.potentialMatches },
+              { label: "High Compatibility", value: data.matchingOverview.highCompatibilityMatches },
+              { label: "Proposals Pending", value: data.matchingOverview.proposalsPending },
+              { label: "Interested", value: data.matchingOverview.interested },
+              { label: "Meetings Scheduled", value: data.matchingOverview.meetingsScheduled },
+              { label: "Finalized", value: data.matchingOverview.finalized },
+            ].map((m) => (
+              <div key={m.label} className="rounded-lg border border-border p-3 text-center">
+                <p className="text-xl font-semibold">{m.value}</p>
+                <p className="mt-1 text-xs text-muted">{m.label}</p>
+              </div>
+            ))}
+          </div>
+          <Link href="/admin/matching" className={buttonClass({ className: "mt-4" })}>
+            Open Matching Center <ArrowRight className="h-4 w-4" />
+          </Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Today&apos;s Priorities</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {[
+            {
+              show: data.priorities.profilesAwaitingVerification > 0,
+              text: `${data.priorities.profilesAwaitingVerification} Profiles Awaiting Verification`,
+              action: "Review Now",
+              href: "/admin/profiles?status=UNDER_REVIEW",
+            },
+            {
+              show: data.priorities.followUpsDueToday > 0,
+              text: `${data.priorities.followUpsDueToday} Follow-ups Due Today`,
+              action: "View Follow-ups",
+              href: "/admin/follow-ups",
+            },
+            {
+              show: data.priorities.newHighCompatMatches > 0,
+              text: `${data.priorities.newHighCompatMatches} New High-Compatibility Matches`,
+              action: "Review Matches",
+              href: "/admin/matching",
+            },
+            {
+              show: data.priorities.recentProposalResponses > 0,
+              text: `${data.priorities.recentProposalResponses} Proposal Responses`,
+              action: "View Responses",
+              href: "/admin/proposals",
+            },
+          ]
+            .filter((p) => p.show)
+            .map((p) => (
+              <div key={p.text} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
+                <span>{p.text}</span>
+                <Link href={p.href} className={buttonClass({ variant: "outline", size: "sm" })}>
+                  {p.action}
+                </Link>
+              </div>
+            ))}
+          {![
+            data.priorities.profilesAwaitingVerification,
+            data.priorities.followUpsDueToday,
+            data.priorities.newHighCompatMatches,
+            data.priorities.recentProposalResponses,
+          ].some(Boolean) && <p className="text-sm text-muted">Nothing needs your attention right now.</p>}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Profiles by Age</CardTitle>
+            <CardTitle>Gender Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BarChart data={data.byGender} title="" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Age Distribution</CardTitle>
           </CardHeader>
           <CardContent>
             <BarChart data={data.byAge} title="" />
@@ -80,7 +205,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Profiles by City</CardTitle>
+            <CardTitle>City Distribution</CardTitle>
           </CardHeader>
           <CardContent>
             <BarChart data={data.byCity} title="" />
@@ -100,14 +225,6 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <BarChart data={data.byEducation} title="" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Registrations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={data.monthlyRegistrations.map((m) => ({ label: m.month, count: m.count }))} title="" />
           </CardContent>
         </Card>
         <Card>

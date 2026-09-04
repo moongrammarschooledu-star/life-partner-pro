@@ -1,15 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Send, Loader2, Pin, PinOff, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea, Select, Input } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Timeline } from "@/components/ui/timeline";
 import { useToast } from "@/components/ui/toast";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime, formatEnumLabel } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
-import { StickyNote } from "lucide-react";
+import { StickyNote, MessageCircleHeart } from "lucide-react";
+
+interface CommunicationEntry {
+  id: string;
+  type: string;
+  notes: string | null;
+  occurredAt: string;
+  followUpDate: string | null;
+  adminName: string;
+}
 
 interface Note {
   id: string;
@@ -30,6 +40,18 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
   const [commNotes, setCommNotes] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [submittingComm, setSubmittingComm] = useState(false);
+  const [history, setHistory] = useState<CommunicationEntry[] | null>(null);
+
+  function loadHistory() {
+    fetch(`/api/admin/communications?profileId=${profileId}`)
+      .then((r) => r.json())
+      .then((data) => setHistory(data.items ?? []));
+  }
+
+  useEffect(() => {
+    loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId]);
 
   async function addNote() {
     if (!text.trim()) return;
@@ -90,6 +112,7 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
       show("Communication logged", "success");
       setCommNotes("");
       setFollowUpDate("");
+      loadHistory();
     } catch {
       show("Could not log communication.", "error");
     } finally {
@@ -163,6 +186,30 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
           <Button size="sm" onClick={logCommunication} disabled={submittingComm}>
             {submittingComm && <Loader2 className="h-4 w-4 animate-spin" />} Save Communication
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-base">Communication History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {history === null ? (
+            <div className="flex h-24 items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted" />
+            </div>
+          ) : history.length === 0 ? (
+            <EmptyState icon={MessageCircleHeart} title="No communication history" description="Logged calls, messages, and meetings will appear here." />
+          ) : (
+            <Timeline
+              items={history.map((c) => ({
+                id: c.id,
+                label: formatEnumLabel(c.type),
+                description: [c.notes, c.adminName ? `by ${c.adminName}` : null].filter(Boolean).join(" — ") || undefined,
+                date: c.occurredAt,
+              }))}
+            />
+          )}
         </CardContent>
       </Card>
 

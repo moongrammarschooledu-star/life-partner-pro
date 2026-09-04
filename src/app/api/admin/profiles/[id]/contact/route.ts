@@ -32,21 +32,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const admin = await requireAdmin("contact:reveal");
     const { id } = await params;
-    const { otherProfileId } = await req.json();
+    const { otherProfileId, phoneShared, whatsappShared, emailShared } = await req.json();
 
     if (!otherProfileId) throw new ApiError(400, "otherProfileId is required");
+    if (!phoneShared && !whatsappShared && !emailShared) {
+      throw new ApiError(400, "At least one contact channel must be selected");
+    }
 
     const [profileAId, profileBId] = [id, otherProfileId].sort();
 
     const share = await prisma.contactShareLog.create({
-      data: { profileAId, profileBId, approvedById: admin.id },
+      data: {
+        profileAId,
+        profileBId,
+        approvedById: admin.id,
+        phoneShared: !!phoneShared,
+        whatsappShared: !!whatsappShared,
+        emailShared: !!emailShared,
+      },
     });
 
     await writeAudit({
       action: "CONTACT_SHARED",
       adminId: admin.id,
       targetProfileId: id,
-      meta: { otherProfileId, shareId: share.id },
+      meta: { otherProfileId, shareId: share.id, phoneShared: !!phoneShared, whatsappShared: !!whatsappShared, emailShared: !!emailShared },
     });
 
     return NextResponse.json({ ok: true, sharedAt: share.sharedAt });

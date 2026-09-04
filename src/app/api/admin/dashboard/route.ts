@@ -1,50 +1,91 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
-import { subMonths, startOfMonth, format } from "date-fns";
+import { subMonths, subDays, subWeeks, startOfMonth, startOfDay, endOfDay, format } from "date-fns";
 
-export async function GET() {
+// Percentage change is only ever computed from a real, immutable event count
+// (registrations by createdAt, or a specific AuditLog action) comparing this
+// week to the prior week — never fabricated. Metrics with no clean
+// event-based basis (point-in-time snapshots like "currently Active") are
+// returned as a plain count with `trendPercent: null`, and the UI shows no
+// arrow rather than a misleading number.
+function trendPercent(current: number, previous: number): number | null {
+  if (previous === 0) return current > 0 ? 100 : null;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+const PERIOD_DAYS: Record<string, number> = {
+  today: 1,
+  "7d": 7,
+  "30d": 30,
+  "3m": 90,
+  "6m": 182,
+  "1y": 365,
+};
+
+export async function GET(req: Request) {
   try {
     await requireAdmin("profile:view");
+    const { searchParams } = new URL(req.url);
+    const period = searchParams.get("period") ?? "6m";
+    const days = PERIOD_DAYS[period] ?? 182;
+
+    const now = new Date();
+    const weekAgo = subWeeks(now, 1);
+    const twoWeeksAgo = subWeeks(now, 2);
 
     const [
       total,
       newCount,
       verified,
+      active,
+      pendingReview,
       male,
       female,
-      active,
-      matching,
-      proposalsSent,
-      interested,
-      meetings,
-      finalized,
-      archived,
       byCityRaw,
       byEducationRaw,
       byProfessionRaw,
       profiles,
+      registrationsThisWeek,
+      registrationsLastWeek,
+      verifiedEventsThisWeek,
+      verifiedEventsLastWeek,
+      proposalStats,
+      matchCounts,
+      profilesAwaitingVerification,
+      followUpsDueToday,
+      newHighCompatMatches,
+      recentProposalResponses,
+      periodProfiles,
     ] = await Promise.all([
       prisma.profile.count({ where: { softDeleted: false } }),
       prisma.profile.count({ where: { status: "NEW", softDeleted: false } }),
       prisma.profile.count({ where: { verified: true, softDeleted: false } }),
+      prisma.profile.count({ where: { status: "ACTIVE", softDeleted: false } }),
+      prisma.profile.count({ where: { status: "UNDER_REVIEW", softDeleted: false } }),
       prisma.profile.count({ where: { gender: "MALE", softDeleted: false } }),
       prisma.profile.count({ where: { gender: "FEMALE", softDeleted: false } }),
-      prisma.profile.count({ where: { status: "ACTIVE", softDeleted: false } }),
-      prisma.profile.count({ where: { status: "MATCHING", softDeleted: false } }),
-      prisma.profile.count({ where: { status: "PROPOSAL_SENT", softDeleted: false } }),
-      prisma.profile.count({ where: { status: "INTERESTED", softDeleted: false } }),
-      prisma.profile.count({ where: { status: "MEETING_ARRANGED", softDeleted: false } }),
-      prisma.profile.count({ where: { status: "FINALIZED", softDeleted: false } }),
-      prisma.profile.count({ where: { status: "ARCHIVED", softDeleted: false } }),
       prisma.profile.groupBy({ by: ["city"], _count: { city: true }, where: { softDeleted: false }, orderBy: { _count: { city: "desc" } }, take: 8 }),
       prisma.educationInfo.groupBy({ by: ["level"], _count: { level: true }, orderBy: { _count: { level: "desc" } }, take: 8 }),
       prisma.professionInfo.groupBy({ by: ["profession"], _count: { profession: true }, orderBy: { _count: { profession: "desc" } }, take: 8 }),
       prisma.profile.findMany({ where: { softDeleted: false }, select: { dateOfBirth: true, createdAt: true } }),
+      prisma.profile.count({ where: { softDeleted: false, createdAt: { gte: weekAgo } } }),
+      prisma.profile.count({ where: { softDeleted: false, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+      prisma.auditLog.count({ where: { action: "PROFILE_VERIFIED", createdAt: { gte: weekAgo } } }),
+      prisma.auditLog.count({ where: { action: "PROFILE_VERIFIED", createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+      prisma.proposal.groupBy({ by: ["status"], _count: { status: true } }),
+      prisma.match.groupBy({ by: ["status"], _count: { status: true } }),
+      prisma.profile.count({ where: { softDeleted: false, verified: false, status: { in: ["NEW", "UNDER_REVIEW"] } } }),
+      prisma.followUp.count({ where: { status: "PENDING", dueDate: { gte: startOfDay(now), lte: endOfDay(now) } } }),
+      prisma.match.count({ where: { status: "SUGGESTED", createdAt: { gte: subDays(now, 2) }, score: { gte: 80 } } }),
+      prisma.proposal.count({ where: { updatedAt: { gte: subDays(now, 1) }, status: { in: ["INTERESTED", "NOT_INTERESTED"] } } }),
+      prisma.profile.findMany({
+        where: { softDeleted: false, createdAt: { gte: subDays(now, days) } },
+        select: { createdAt: true, gender: true },
+      }),
     ]);
 
     const ageBuckets: Record<string, number> = { "18-24": 0, "25-30": 0, "31-36": 0, "37-45": 0, "46+": 0 };
-    const now = new Date();
     for (const p of profiles) {
       const age = now.getFullYear() - p.dateOfBirth.getFullYear();
       if (age <= 24) ageBuckets["18-24"]++;
@@ -63,18 +104,76 @@ export async function GET() {
       monthly.push({ month: monthLabel, count });
     }
 
-    const proposalStats = await prisma.proposal.groupBy({ by: ["status"], _count: { status: true } });
+    // Registration trend: bucket the selected period into up to ~12 buckets,
+    // each carrying a separate male/female count, for the two-series chart.
+    const bucketCount = period === "today" ? 24 : Math.min(12, days);
+    const bucketMs = (days * 24 * 60 * 60 * 1000) / bucketCount;
+    const trend: { label: string; male: number; female: number }[] = [];
+    for (let i = bucketCount - 1; i >= 0; i--) {
+      const bucketEnd = new Date(now.getTime() - i * bucketMs);
+      const bucketStart = new Date(bucketEnd.getTime() - bucketMs);
+      const inBucket = periodProfiles.filter((p) => p.createdAt >= bucketStart && p.createdAt < bucketEnd);
+      trend.push({
+        label: period === "today" ? format(bucketEnd, "ha") : format(bucketEnd, days > 60 ? "MMM d" : "MMM d"),
+        male: inBucket.filter((p) => p.gender === "MALE").length,
+        female: inBucket.filter((p) => p.gender === "FEMALE").length,
+      });
+    }
+
+    const proposalCountByStatus = Object.fromEntries(proposalStats.map((p) => [p.status, p._count.status]));
     const totalProposals = proposalStats.reduce((sum, p) => sum + p._count.status, 0);
-    const finalizedProposals = proposalStats.find((p) => p.status === "FINALIZED")?._count.status ?? 0;
+    const finalizedProposals = proposalCountByStatus.FINALIZED ?? 0;
+    const activeProposals =
+      (proposalCountByStatus.SENT ?? 0) + (proposalCountByStatus.WAITING ?? 0) + (proposalCountByStatus.INTERESTED ?? 0);
+    const meetingsScheduled = proposalCountByStatus.MEETING ?? 0;
+
+    const matchCountByStatus = Object.fromEntries(matchCounts.map((m) => [m.status, m._count.status]));
+    const potentialMatches = matchCountByStatus.SUGGESTED ?? 0;
+    const highCompatibilityMatches = await prisma.match.count({ where: { score: { gte: 80 }, status: { not: "REJECTED" } } });
 
     return NextResponse.json({
-      counts: { total, new: newCount, verified, male, female, active, matching, proposalsSent, interested, meetings, finalized, archived },
+      counts: {
+        total,
+        new: newCount,
+        verified,
+        active,
+        pendingReview,
+        activeProposals,
+        meetings: meetingsScheduled,
+        successfulMatches: finalizedProposals,
+        male,
+        female,
+      },
+      trends: {
+        total: trendPercent(registrationsThisWeek, registrationsLastWeek),
+        new: trendPercent(registrationsThisWeek, registrationsLastWeek),
+        verified: trendPercent(verifiedEventsThisWeek, verifiedEventsLastWeek),
+      },
       byCity: byCityRaw.map((c) => ({ label: c.city, count: c._count.city })),
       byEducation: byEducationRaw.map((c) => ({ label: c.level, count: c._count.level })),
       byProfession: byProfessionRaw.map((c) => ({ label: c.profession, count: c._count.profession })),
       byAge: Object.entries(ageBuckets).map(([label, count]) => ({ label, count })),
+      byGender: [
+        { label: "Male", count: male },
+        { label: "Female", count: female },
+      ],
       monthlyRegistrations: monthly,
+      registrationTrend: trend,
       matchingSuccessRate: totalProposals > 0 ? Math.round((finalizedProposals / totalProposals) * 100) : 0,
+      matchingOverview: {
+        potentialMatches,
+        highCompatibilityMatches,
+        proposalsPending: (proposalCountByStatus.DRAFT ?? 0) + (proposalCountByStatus.SENT ?? 0) + (proposalCountByStatus.WAITING ?? 0),
+        interested: proposalCountByStatus.INTERESTED ?? 0,
+        meetingsScheduled,
+        finalized: finalizedProposals,
+      },
+      priorities: {
+        profilesAwaitingVerification,
+        followUpsDueToday,
+        newHighCompatMatches,
+        recentProposalResponses,
+      },
     });
   } catch (error) {
     return handleApiError(error);

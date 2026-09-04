@@ -43,6 +43,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     await requireAdmin("match:run");
     const { id } = await params;
+    const { searchParams } = new URL(req.url);
+    const minScore = Number(searchParams.get("minScore") ?? 40);
+    const verifiedOnly = searchParams.get("verifiedOnly") === "true";
+    const activeOnly = searchParams.get("activeOnly") === "true";
+    const city = searchParams.get("city");
+    const education = searchParams.get("education");
+    const profession = searchParams.get("profession");
+    const limit = Math.min(Number(searchParams.get("limit") ?? 20), 100);
 
     const seekerRecord = await prisma.profile.findUnique({ where: { id }, include: matchableInclude });
     if (!seekerRecord) throw new ApiError(404, "Profile not found");
@@ -54,7 +62,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         id: { not: id },
         gender: oppositeGender,
         softDeleted: false,
-        status: { notIn: ["ARCHIVED", "REJECTED", "MARRIED"] },
+        status: activeOnly ? "ACTIVE" : { notIn: ["ARCHIVED", "REJECTED", "MARRIED"] },
+        ...(verifiedOnly ? { verified: true } : {}),
+        ...(city ? { city: { equals: city, mode: "insensitive" } } : {}),
+        ...(education ? { education: { level: { equals: education, mode: "insensitive" } } } : {}),
+        ...(profession ? { profession: { profession: { contains: profession, mode: "insensitive" } } } : {}),
       },
       include: matchableInclude,
     });
@@ -77,17 +89,31 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             education: candidateRecord.education?.level ?? null,
             profession: candidateRecord.profession?.profession ?? null,
             status: candidateRecord.status,
+            verified: candidateRecord.verified,
+            createdAt: candidateRecord.createdAt,
           },
           ...result,
         };
       })
       // A candidate failing an admin-marked hard requirement is excluded
       // entirely (spec §27) rather than just scored low.
-      .filter((r) => !r.excludedByHardRequirement && r.total >= 40)
+      .filter((r) => !r.excludedByHardRequirement && r.total >= minScore)
       .sort((a, b) => b.total - a.total)
-      .slice(0, 20);
+      .slice(0, limit);
 
-    return NextResponse.json({ results, isCompatibilitySuggestion: true });
+    return NextResponse.json({
+      results,
+      isCompatibilitySuggestion: true,
+      seeker: {
+        id: seekerRecord.id,
+        profileCode: seekerRecord.profileCode,
+        fullName: seekerRecord.fullName,
+        age: calculateAge(seekerRecord.dateOfBirth),
+        gender: seekerRecord.gender,
+        city: seekerRecord.city,
+        country: seekerRecord.country,
+      },
+    });
   } catch (error) {
     return handleApiError(error);
   }

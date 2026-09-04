@@ -2,18 +2,25 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck, Sparkles, CalendarPlus } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { cn, formatEnumLabel } from "@/lib/utils";
+import { Tabs } from "@/components/ui/tabs";
+import { Button, buttonClass } from "@/components/ui/button";
+import { formatEnumLabel } from "@/lib/utils";
 import { StatusControl } from "@/components/admin/profile-detail/status-control";
 import { ContactPanel } from "@/components/admin/profile-detail/contact-panel";
 import { PendingUpdateCard } from "@/components/admin/profile-detail/pending-update-card";
 import { OverviewTab } from "@/components/admin/profile-detail/overview-tab";
 import { MatchesTab } from "@/components/admin/profile-detail/matches-tab";
 import { NotesTab } from "@/components/admin/profile-detail/notes-tab";
+import { AddFollowUpModal } from "@/components/admin/add-follow-up-modal";
 import type { ProfileDetailDto } from "@/lib/serializers";
 
-const TABS = ["Overview", "Matches", "Notes & Communication"] as const;
+const TABS = [
+  { value: "overview", label: "Overview" },
+  { value: "matches", label: "Matches" },
+  { value: "notes", label: "Notes & Communication" },
+];
 
 function Avatar({ profile }: { profile: ProfileDetailDto }) {
   const primaryPhoto = profile.photos.find((p) => p.isPrimary) ?? profile.photos[0];
@@ -32,7 +39,8 @@ function Avatar({ profile }: { profile: ProfileDetailDto }) {
 
 export function ProfileDetailClient({ profileId }: { profileId: string }) {
   const [profile, setProfile] = useState<ProfileDetailDto | null>(null);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
+  const [tab, setTab] = useState("overview");
+  const [addFollowUpOpen, setAddFollowUpOpen] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/admin/profiles/${profileId}`)
@@ -74,35 +82,32 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
             </div>
           </div>
         </div>
-        <StatusControl
-          profileId={profile.id}
-          status={profile.status}
-          verified={profile.verified}
-          softDeleted={profile.softDeleted}
-          onChanged={load}
-        />
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <StatusControl
+            profileId={profile.id}
+            status={profile.status}
+            verified={profile.verified}
+            softDeleted={profile.softDeleted}
+            onChanged={load}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/admin/matching?seekerId=${profile.id}`} className={buttonClass({ variant: "outline", size: "sm" })}>
+              <Sparkles className="h-4 w-4" /> Find Match
+            </Link>
+            <Button variant="outline" size="sm" onClick={() => setAddFollowUpOpen(true)}>
+              <CalendarPlus className="h-4 w-4" /> Add Follow-up
+            </Button>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
         <div>
-          <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-border bg-surface p-1">
-            {TABS.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={cn(
-                  "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  tab === t ? "bg-primary text-primary-foreground" : "text-muted hover:bg-surface-muted"
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          <Tabs tabs={TABS} value={tab} onChange={setTab} className="mb-4" />
 
-          {tab === "Overview" && <OverviewTab profile={profile} />}
-          {tab === "Matches" && <MatchesTab profileId={profile.id} />}
-          {tab === "Notes & Communication" && <NotesTab profileId={profile.id} notes={profile.notes} />}
+          {tab === "overview" && <OverviewTab profile={profile} />}
+          {tab === "matches" && <MatchesTab profileId={profile.id} />}
+          {tab === "notes" && <NotesTab profileId={profile.id} notes={profile.notes} />}
         </div>
 
         <div className="space-y-4">
@@ -112,6 +117,8 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
           <ContactPanel profileId={profile.id} />
         </div>
       </div>
+
+      <AddFollowUpModal open={addFollowUpOpen} onClose={() => setAddFollowUpOpen(false)} profileId={profile.id} />
     </div>
   );
 }

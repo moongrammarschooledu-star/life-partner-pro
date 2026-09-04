@@ -3,11 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Users,
+  UserPlus,
+  ShieldCheck,
+  Sparkles,
   Handshake,
   CalendarClock,
   ScrollText,
@@ -23,16 +26,22 @@ import {
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
+import { hasPermission, type Permission, type AdminRole } from "@/lib/permissions";
+import { GlobalSearch } from "@/components/admin/global-search";
+import { NotificationsPanel } from "@/components/admin/notifications-panel";
 
-const NAV = [
+const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permission?: Permission }[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/profiles", label: "Profiles", icon: Users },
-  { href: "/admin/proposals", label: "Proposals", icon: Handshake },
+  { href: "/admin/profiles?status=NEW", label: "New Profiles", icon: UserPlus },
+  { href: "/admin/profiles", label: "All Profiles", icon: Users },
+  { href: "/admin/profiles?verified=true", label: "Verified Profiles", icon: ShieldCheck },
+  { href: "/admin/matching", label: "Matching Center", icon: Sparkles, permission: "match:run" },
+  { href: "/admin/proposals", label: "Proposals", icon: Handshake, permission: "proposal:create" },
   { href: "/admin/follow-ups", label: "Follow-ups", icon: CalendarClock },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin/support", label: "Support", icon: Inbox },
-  { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, permission: "audit:view" },
+  { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:edit" },
 ];
 
 const SUPER_ADMIN_NAV = [{ href: "/admin/admin-users", label: "Admin Users", icon: UserCog }];
@@ -45,15 +54,29 @@ export function AdminShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { theme, toggle } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const role = user.role as AdminRole;
 
-  const navItems = user.role === "SUPER_ADMIN" ? [...NAV, ...SUPER_ADMIN_NAV] : NAV;
+  const navItems = [
+    ...NAV.filter((item) => !item.permission || hasPermission(role, item.permission)),
+    ...(role === "SUPER_ADMIN" ? SUPER_ADMIN_NAV : []),
+  ];
 
   const NavLinks = (
     <nav className="flex flex-1 flex-col gap-1 p-3">
       {navItems.map((item) => {
-        const active = pathname.startsWith(item.href);
+        const [basePath, query] = item.href.split("?");
+        let active: boolean;
+        if (query) {
+          active = pathname === basePath && searchParams.toString() === query;
+        } else if (basePath === "/admin/profiles") {
+          // "All Profiles" — active on the bare list (no filter) or any profile detail subpage.
+          active = pathname === basePath ? searchParams.toString() === "" : pathname.startsWith(`${basePath}/`);
+        } else {
+          active = pathname === basePath || pathname.startsWith(`${basePath}/`);
+        }
         return (
           <Link
             key={item.href}
@@ -105,12 +128,15 @@ export function AdminShell({
       )}
 
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-4 sm:px-6">
+        <header className="flex h-16 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
           <button className="text-muted md:hidden" onClick={() => setMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </button>
-          <span className="hidden text-sm text-muted md:inline">Admin Dashboard</span>
+          <div className="hidden min-w-0 flex-1 md:block md:max-w-md">
+            <GlobalSearch />
+          </div>
           <div className="flex items-center gap-2">
+            <NotificationsPanel />
             <button
               onClick={toggle}
               aria-label="Toggle dark mode"
@@ -126,6 +152,9 @@ export function AdminShell({
             </button>
           </div>
         </header>
+        <div className="border-b border-border bg-surface px-4 py-2 md:hidden">
+          <GlobalSearch />
+        </div>
         <main className="flex-1 bg-background p-4 sm:p-6">{children}</main>
       </div>
     </div>

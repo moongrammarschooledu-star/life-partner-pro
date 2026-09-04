@@ -122,6 +122,12 @@ enum FollowUpPriority {
   HIGH
 }
 
+enum ProposalPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum FollowUpStatus {
   PENDING
   COMPLETED
@@ -146,6 +152,7 @@ enum AuditAction {
   PROPOSAL_STATUS_CHANGED
   NOTE_ADDED
   COMMUNICATION_LOGGED
+  FOLLOW_UP_SCHEDULED
   UPDATE_REQUEST_SUBMITTED
   UPDATE_REQUEST_APPROVED
   UPDATE_REQUEST_REJECTED
@@ -441,7 +448,8 @@ model Proposal {
   match         Match?         @relation(fields: [matchId], references: [id])
   matchId       String?
   matchScore    Int? // snapshot of Match.score at proposal-creation time
-  status        ProposalStatus @default(DRAFT)
+  status        ProposalStatus   @default(DRAFT)
+  priority      ProposalPriority @default(MEDIUM)
   createdBy     AdminUser      @relation(fields: [createdById], references: [id])
   createdById   String
   createdAt     DateTime       @default(now())
@@ -515,6 +523,9 @@ model ContactShareLog {
   profileAId      String
   profileB        Profile   @relation("ShareProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
   profileBId      String
+  phoneShared     Boolean   @default(false)
+  whatsappShared  Boolean   @default(false)
+  emailShared     Boolean   @default(false)
   approvedBy      AdminUser @relation(fields: [approvedById], references: [id])
   approvedById    String
   sharedAt        DateTime  @default(now())
