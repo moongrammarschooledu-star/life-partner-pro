@@ -93,33 +93,52 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   mock data.
 - **Matching Center** (`/admin/matching`): the primary matchmaking workspace — search/select any profile, "Find Best
   Matches" against admin-configurable weights/thresholds/hard-requirements, sort (highest/lowest/newest/same
-  city/age·education·profession-closest) and filter (minimum score, city, education, profession, verified/active
-  only) the ranked results, then open a full comparison panel per candidate showing the mutual **A→B / B→A /
-  blended** compatibility, a per-category breakdown (percentage bar **and** a ✓ compatible / ⚠ partial / ✕
-  incompatible / — unknown indicator — missing data is never shown as a penalty), an admin recommendation + private
-  note ("Save Match Decision"), and proposal creation with a priority level.
+  city/area/age·education·profession-closest/most-complete/recently-active) and filter (minimum score, city,
+  education, profession, age range, marital status, family type, religion, minimum profile completeness,
+  verified/active-only) the ranked results, then open a full comparison panel per candidate showing the mutual
+  **A→B / B→A / blended** compatibility, a per-category breakdown (percentage bar **and** a ✓ compatible / ⚠ partial
+  / ✕ incompatible / — unknown indicator — missing data is never shown as a penalty), an admin recommendation +
+  private note ("Save Match Decision"), and proposal creation with a priority level. By default only Verified +
+  Active profiles are eligible candidates (an "include all eligible statuses" toggle widens this); the default
+  ranking order is mutual score → verification → recent activity → profile completeness, matching a documented
+  ranking priority rather than raw score alone.
 - **Global search & notifications:** a topbar search (name / Profile ID / phone / city / profession) and a
-  computed notifications panel (profiles awaiting verification, follow-ups due, new high-compatibility matches,
-  recent proposal responses) — the notifications are assembled live from existing tables on every request, not a
-  persisted/event-sourced notification log.
+  computed notifications panel (profiles awaiting verification, follow-ups due, new high-compatibility matches —
+  named with the actual profile-ID pairs and scores, linking straight to Match Analysis, not just a count —, recent
+  proposal responses) — the notifications are assembled live from existing tables on every request, not a
+  persisted/event-sourced notification log. The dashboard also shows a "Today's Best Matches" table, and Reports has
+  a Matching Performance section (average match score, matches generated/reviewed, proposal conversion rates)
+  explicit that a score is a suggestion for admin review, never a predictor of marriage success.
 - **Profile management:** server-side paginated/filterable table (collapses to cards on mobile, filterable by
   gender/status/city/age/education/profession/marital status/verification), full detail view with edit, verify,
   status lifecycle, soft-delete/restore, internal notes, a browsable communication history, and a per-profile audit
   trail.
-- **Matching engine** (`src/lib/matching.ts`): compatibility is scored as *mutual* — every preference-based category
-  (age, location, education, profession, income, marital status, height, family) checks both directions (does the
-  candidate meet the seeker's stated preference, **and** does the seeker meet the candidate's), taking the weaker of
-  the two, so a one-sided mismatch pulls the score down. Religious and lifestyle compatibility compare both
-  profiles' actual attributes directly. Default weights (age 15% / location 15% / education 10% / profession 10% /
-  income 10% / marital status 10% / height 5% / family 10% / religious 10% / lifestyle 5%), match-tier thresholds,
-  and a per-category hard-requirement toggle are all admin-configurable from Settings. Each category is classified
-  as Compatible / Partially Compatible / Incompatible / **Unknown** — missing data is never silently treated as a
-  mismatch. A category marked as a hard requirement excludes a candidate entirely (rather than just lowering their
-  score) if that category comes back Incompatible. Results are always framed as compatibility *suggestions*, never
-  guaranteed matches — final decisions stay with the admin.
-- **Match workflow:** viewing a candidate in the comparison view persists a `Match` record (with per-category score
-  columns and the full breakdown) carrying its own status (`Suggested → Reviewed → Approved/Rejected →
-  Proposal Created → Closed`) and an optional admin recommendation, independent of any proposal created from it.
+- **Matching engine** (`src/lib/matching.ts`, algorithm-versioned as `LPP-MATCH-v1.1`): compatibility is scored as
+  *mutual* — every preference-based category (age, location, education, profession, income, marital status, height,
+  family) checks both directions (does the candidate meet the seeker's stated preference, **and** does the seeker
+  meet the candidate's), taking the weaker of the two, so a one-sided mismatch pulls the score down. Religious,
+  lifestyle, and languages compatibility compare both profiles' actual attributes directly. Default weights (age
+  15% / location 15% / education 10% / profession 10% / income 10% / marital status 10% / height 5% / family 10% /
+  religious 10% / lifestyle 5% / languages 5%), match-tier thresholds, a per-category hard-requirement toggle, and a
+  per-category **enable/disable** switch are all admin-configurable from Settings (Super Admin only) — the engine
+  normalizes by whichever categories are actually enabled rather than assuming weights sum to exactly 100, so
+  disabling a category (or any other weight customization) always yields a coherent 0-100 score. Each category is
+  classified as Compatible / Partially Compatible / Incompatible / **Unknown** — missing data is never silently
+  treated as a mismatch. A category marked as a hard requirement is flagged with a "Hard Requirement Not Met"
+  warning; whether that also excludes the candidate from results outright is a separate, admin-configurable toggle
+  (default: show them for review). Results are always framed as compatibility *suggestions*, never guaranteed
+  matches — final decisions stay with the admin. Free-text partner requirements are shown to the admin for judgment
+  but are never algorithmically scored. Core scoring logic has real unit tests (`npm test`, via Vitest) covering
+  exact/partial/no-match scoring, flexible preferences, missing data, hard requirements, mutual-vs-naive-average
+  compatibility, weight normalization, and ranking order.
+- **Match workflow & history:** viewing a candidate in the comparison view persists a `Match` record (with
+  per-category score columns, the mutual A→B/B→A directional scores, and the full breakdown) carrying its own status
+  (`Suggested → Reviewed → Approved/Rejected → Proposal Created → Closed`) and an optional admin recommendation,
+  independent of any proposal created from it. Every match is permanently auditable at `/admin/matches` (Match
+  History) and `/admin/matches/[id]` (Match Analysis — a full-page, linkable/permalinkable view with the same
+  breakdown, mutual scores, and decision controls as the Matching Center's comparison panel), and can be
+  recalculated on demand — recalculating snapshots the prior score/breakdown before overwriting and reports what
+  changed, so nothing is silently rewritten.
 - **Proposals:** create a proposal (with a Low/Medium/High priority) between two profiles from the Matching Center
   or a profile's Matches tab (linked back to the `Match` it came from, snapshotting its score), then move it through
   Draft → Sent → Interested/Not Interested → Waiting → Meeting → Finalized → Closed, with a visible timeline. The
@@ -128,8 +147,9 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   are being shared and confirming that consent was received from both parties — never a single blanket checkbox —
   and every share records exactly which channels were approved.
 - **Consent:** registration records four distinct, versioned consent flags (privacy, matchmaking use, contact
-  sharing, terms) rather than one blanket checkbox. A profile cannot be moved to `ACTIVE` status until all four are
-  on record.
+  sharing, terms) rather than one blanket checkbox — three (privacy, matchmaking, terms) are required at
+  registration, contact-sharing consent is genuinely optional. A profile cannot be moved to `ACTIVE` status until
+  the three required consents are on record.
 - **Follow-up Center:** a tabbed view (Today / Upcoming / Overdue / Completed / Cancelled) with a direct "Add
   Follow-up" action (date, priority, notes) from any profile, independent of logging a communication.
 - **Audit log:** every sensitive action (login, profile view/edit/delete, status changes, contact reveal/share,
@@ -160,8 +180,8 @@ structured so they can be added without restructuring anything else:
 - **Global search beyond profiles** — the topbar/Matching Center search covers profiles only (name / Profile ID /
   phone / city / profession), not proposals, matches, or follow-ups.
 - **Full per-category Matching Center filters** — the filter bar covers minimum score, city, education, profession,
-  and verified/active-only; the spec's full list (income, marital status, height, family, religion, lifestyle) isn't
-  each broken out as its own filter control yet.
+  age range, marital status, family type, religion, minimum completeness, and verified/active-only; height, income,
+  lifestyle, and languages aren't yet broken out as their own dedicated filter controls.
 - **Standalone cross-profile "Admin Notes" / "Communications" pages** — notes and communication history are
   per-profile (and per-match/per-proposal for notes), which already surfaces the same information without a
   separate aggregated view.
@@ -180,6 +200,14 @@ structured so they can be added without restructuring anything else:
   own instruction to never auto-translate entered information.
 - **A 4-value smoking/drinking scale** — kept as the existing boolean Yes/No to avoid a breaking change to the
   matching engine's lifestyle scorer.
+- **Match caching / precalculation / background jobs** — matches are computed on demand; at the current profile
+  count (dozens, not thousands) this is well under a second and adds no perceptible latency. Existing indexes on
+  `Match(profileAId, profileBId, status)` are the only performance work in place. A job queue and cache-invalidation
+  layer would be real operational complexity with no current payoff — revisit if the profile count grows by orders
+  of magnitude.
+- **DB/permission-dependent matching test scenarios** (duplicate profiles, gender filtering, permission security,
+  archived/inactive exclusion) are verified live against production rather than as executable Vitest tests — this
+  project has no test database. The pure scoring logic (`src/lib/matching.ts`) does have real unit tests (`npm test`).
 
 ## Security notes
 

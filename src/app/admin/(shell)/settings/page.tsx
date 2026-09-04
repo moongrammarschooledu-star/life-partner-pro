@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Checkbox } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { ALGORITHM_VERSION } from "@/lib/matching";
 
 interface Settings {
   appName: string;
@@ -22,6 +23,7 @@ interface Settings {
   weightFamily: number;
   weightReligious: number;
   weightLifestyle: number;
+  weightLanguages: number;
   thresholdExcellent: number;
   thresholdVeryGood: number;
   thresholdGood: number;
@@ -36,19 +38,34 @@ interface Settings {
   hardRequirementFamily: boolean;
   hardRequirementReligious: boolean;
   hardRequirementLifestyle: boolean;
+  hardRequirementLanguages: boolean;
+  categoryEnabledAge: boolean;
+  categoryEnabledLocation: boolean;
+  categoryEnabledEducation: boolean;
+  categoryEnabledProfession: boolean;
+  categoryEnabledIncome: boolean;
+  categoryEnabledMaritalStatus: boolean;
+  categoryEnabledHeight: boolean;
+  categoryEnabledFamily: boolean;
+  categoryEnabledReligious: boolean;
+  categoryEnabledLifestyle: boolean;
+  categoryEnabledLanguages: boolean;
+  maxMatchResults: number;
+  excludeHardRequirementFailures: boolean;
 }
 
-const WEIGHT_FIELDS: { key: keyof Settings; label: string; hardKey: keyof Settings }[] = [
-  { key: "weightAge", label: "Age", hardKey: "hardRequirementAge" },
-  { key: "weightLocation", label: "Location", hardKey: "hardRequirementLocation" },
-  { key: "weightEducation", label: "Education", hardKey: "hardRequirementEducation" },
-  { key: "weightProfession", label: "Profession", hardKey: "hardRequirementProfession" },
-  { key: "weightIncome", label: "Income", hardKey: "hardRequirementIncome" },
-  { key: "weightMaritalStatus", label: "Marital Status", hardKey: "hardRequirementMaritalStatus" },
-  { key: "weightHeight", label: "Height", hardKey: "hardRequirementHeight" },
-  { key: "weightFamily", label: "Family", hardKey: "hardRequirementFamily" },
-  { key: "weightReligious", label: "Religious", hardKey: "hardRequirementReligious" },
-  { key: "weightLifestyle", label: "Lifestyle", hardKey: "hardRequirementLifestyle" },
+const WEIGHT_FIELDS: { key: keyof Settings; label: string; hardKey: keyof Settings; enabledKey: keyof Settings }[] = [
+  { key: "weightAge", label: "Age", hardKey: "hardRequirementAge", enabledKey: "categoryEnabledAge" },
+  { key: "weightLocation", label: "Location", hardKey: "hardRequirementLocation", enabledKey: "categoryEnabledLocation" },
+  { key: "weightEducation", label: "Education", hardKey: "hardRequirementEducation", enabledKey: "categoryEnabledEducation" },
+  { key: "weightProfession", label: "Profession", hardKey: "hardRequirementProfession", enabledKey: "categoryEnabledProfession" },
+  { key: "weightIncome", label: "Income", hardKey: "hardRequirementIncome", enabledKey: "categoryEnabledIncome" },
+  { key: "weightMaritalStatus", label: "Marital Status", hardKey: "hardRequirementMaritalStatus", enabledKey: "categoryEnabledMaritalStatus" },
+  { key: "weightHeight", label: "Height", hardKey: "hardRequirementHeight", enabledKey: "categoryEnabledHeight" },
+  { key: "weightFamily", label: "Family", hardKey: "hardRequirementFamily", enabledKey: "categoryEnabledFamily" },
+  { key: "weightReligious", label: "Religious", hardKey: "hardRequirementReligious", enabledKey: "categoryEnabledReligious" },
+  { key: "weightLifestyle", label: "Lifestyle", hardKey: "hardRequirementLifestyle", enabledKey: "categoryEnabledLifestyle" },
+  { key: "weightLanguages", label: "Languages", hardKey: "hardRequirementLanguages", enabledKey: "categoryEnabledLanguages" },
 ];
 
 const THRESHOLD_FIELDS: { key: keyof Settings; label: string }[] = [
@@ -95,7 +112,8 @@ export default function SettingsPage() {
     );
   }
 
-  const weightTotal = WEIGHT_FIELDS.reduce((sum, f) => sum + Number(settings[f.key] ?? 0), 0);
+  const enabledFields = WEIGHT_FIELDS.filter((f) => settings[f.enabledKey] !== false);
+  const weightTotal = enabledFields.reduce((sum, f) => sum + Number(settings[f.key] ?? 0), 0);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -129,11 +147,12 @@ export default function SettingsPage() {
           <CardTitle className="text-base">Matching Weights</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className={`text-sm mb-4 ${weightTotal === 100 ? "text-muted" : "text-danger"}`}>
-            Total: {weightTotal}% {weightTotal !== 100 && "(should total 100%)"}
-          </p>
+          <p className="text-sm mb-1 text-muted">Enabled categories total: {weightTotal}%</p>
           <p className="text-xs text-muted mb-4">
-            Marking a category as a hard requirement excludes candidates who fail it entirely, instead of just lowering their score.
+            Weights don&apos;t need to sum to exactly 100 — the engine automatically normalizes against whichever categories are
+            enabled. Disabling a category removes it from scoring entirely. Marking a category as a hard requirement excludes
+            candidates who fail it, instead of just lowering their score (unless &quot;Exclude Hard Requirement Failures&quot;
+            below is off, in which case they&apos;re shown with a warning for admin review).
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             {WEIGHT_FIELDS.map((f) => (
@@ -144,13 +163,20 @@ export default function SettingsPage() {
                     type="number"
                     min={0}
                     max={100}
+                    disabled={!settings[f.enabledKey]}
                     value={settings[f.key] as number}
                     onChange={(e) => setSettings({ ...settings, [f.key]: Number(e.target.value) })}
                   />
                 </Field>
                 <Checkbox
+                  label="Enabled"
+                  checked={settings[f.enabledKey] as boolean}
+                  onChange={(e) => setSettings({ ...settings, [f.enabledKey]: e.target.checked })}
+                />
+                <Checkbox
                   label="Hard requirement"
                   checked={settings[f.hardKey] as boolean}
+                  disabled={!settings[f.enabledKey]}
                   onChange={(e) => setSettings({ ...settings, [f.hardKey]: e.target.checked })}
                 />
               </div>
@@ -179,6 +205,33 @@ export default function SettingsPage() {
               </Field>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Matching Center Behavior</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Field label="Maximum Results" htmlFor="maxMatchResults" hint="Default number of ranked matches returned per search.">
+            <Input
+              id="maxMatchResults"
+              type="number"
+              min={1}
+              max={100}
+              value={settings.maxMatchResults}
+              onChange={(e) => setSettings({ ...settings, maxMatchResults: Number(e.target.value) })}
+            />
+          </Field>
+          <Checkbox
+            label="Exclude Hard Requirement Failures from results (default: off, so borderline cases stay visible for review)"
+            checked={settings.excludeHardRequirementFailures}
+            onChange={(e) => setSettings({ ...settings, excludeHardRequirementFailures: e.target.checked })}
+          />
+          <p className="text-xs text-muted">
+            Algorithm Version: <span className="font-medium text-foreground">{ALGORITHM_VERSION}</span> (read-only — tied to the
+            deployed scoring logic, not an editable preference).
+          </p>
         </CardContent>
       </Card>
 

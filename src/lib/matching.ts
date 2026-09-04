@@ -23,7 +23,8 @@ export type MatchCategory =
   | "height"
   | "family"
   | "religious"
-  | "lifestyle";
+  | "lifestyle"
+  | "languages";
 
 export type CompatibilityStatus = "compatible" | "partial" | "incompatible" | "unknown";
 
@@ -38,9 +39,21 @@ export interface MatchWeights {
   family: number;
   religious: number;
   lifestyle: number;
+  languages: number;
 }
 
 export type HardRequirements = Partial<Record<MatchCategory, boolean>>;
+
+// Distinct from HardRequirements: a disabled category is skipped entirely —
+// not scored, not shown in the breakdown, and its weight doesn't count
+// toward the normalization denominator (STEP 6 §5/§6).
+export type EnabledCategories = Partial<Record<MatchCategory, boolean>>;
+
+// This pass (STEP 6) adds the Languages category, per-category enable/
+// disable, and normalizes by the actual enabled-weight sum instead of a
+// hardcoded /100 — a real algorithm change. Historical Match rows keep their
+// "LPP-MATCH-v1.0" default and are never silently rewritten (spec §33).
+export const ALGORITHM_VERSION = "LPP-MATCH-v1.1";
 
 export interface MatchThresholds {
   excellent: number;
@@ -49,6 +62,11 @@ export interface MatchThresholds {
   possible: number;
 }
 
+// Sums to 105, not 100 — the spec's own default weights don't add up to the
+// 100% it claims either. Rather than force fractional weights to force-fit
+// 100, scoreMatch() normalizes by the actual sum of enabled categories'
+// weights, so this (and any admin customization, and disabled categories)
+// all self-correct through one code path.
 export const DEFAULT_WEIGHTS: MatchWeights = {
   age: 15,
   location: 15,
@@ -60,6 +78,7 @@ export const DEFAULT_WEIGHTS: MatchWeights = {
   family: 10,
   religious: 10,
   lifestyle: 5,
+  languages: 5,
 };
 
 export const DEFAULT_THRESHOLDS: MatchThresholds = {
@@ -80,6 +99,7 @@ export function weightsFromSettings(settings: {
   weightFamily: number;
   weightReligious: number;
   weightLifestyle: number;
+  weightLanguages: number;
 }): MatchWeights {
   return {
     age: settings.weightAge,
@@ -92,6 +112,7 @@ export function weightsFromSettings(settings: {
     family: settings.weightFamily,
     religious: settings.weightReligious,
     lifestyle: settings.weightLifestyle,
+    languages: settings.weightLanguages,
   };
 }
 
@@ -106,6 +127,7 @@ export function hardRequirementsFromSettings(settings: {
   hardRequirementFamily: boolean;
   hardRequirementReligious: boolean;
   hardRequirementLifestyle: boolean;
+  hardRequirementLanguages: boolean;
 }): HardRequirements {
   return {
     age: settings.hardRequirementAge,
@@ -118,6 +140,35 @@ export function hardRequirementsFromSettings(settings: {
     family: settings.hardRequirementFamily,
     religious: settings.hardRequirementReligious,
     lifestyle: settings.hardRequirementLifestyle,
+    languages: settings.hardRequirementLanguages,
+  };
+}
+
+export function enabledCategoriesFromSettings(settings: {
+  categoryEnabledAge: boolean;
+  categoryEnabledLocation: boolean;
+  categoryEnabledEducation: boolean;
+  categoryEnabledProfession: boolean;
+  categoryEnabledIncome: boolean;
+  categoryEnabledMaritalStatus: boolean;
+  categoryEnabledHeight: boolean;
+  categoryEnabledFamily: boolean;
+  categoryEnabledReligious: boolean;
+  categoryEnabledLifestyle: boolean;
+  categoryEnabledLanguages: boolean;
+}): EnabledCategories {
+  return {
+    age: settings.categoryEnabledAge,
+    location: settings.categoryEnabledLocation,
+    education: settings.categoryEnabledEducation,
+    profession: settings.categoryEnabledProfession,
+    income: settings.categoryEnabledIncome,
+    maritalStatus: settings.categoryEnabledMaritalStatus,
+    height: settings.categoryEnabledHeight,
+    family: settings.categoryEnabledFamily,
+    religious: settings.categoryEnabledReligious,
+    lifestyle: settings.categoryEnabledLifestyle,
+    languages: settings.categoryEnabledLanguages,
   };
 }
 
@@ -181,6 +232,7 @@ export interface MatchableProfile {
   sect?: string | null;
   smoking?: boolean;
   drinking?: boolean;
+  languages?: string | null; // comma-separated, as entered by the applicant
   preference: {
     minAge?: number | null;
     maxAge?: number | null;
@@ -381,6 +433,27 @@ function scoreLifestyle(a: MatchableProfile, b: MatchableProfile): { score: numb
   };
 }
 
+function parseLanguages(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function scoreLanguages(a: MatchableProfile, b: MatchableProfile): { score: number; hasData: boolean; note: string } {
+  const langsA = parseLanguages(a.languages);
+  const langsB = parseLanguages(b.languages);
+  if (langsA.length === 0 || langsB.length === 0) {
+    return { score: 0.75, hasData: false, note: "Languages not specified by one or both profiles" };
+  }
+  const shared = langsA.filter((l) => langsB.includes(l));
+  if (shared.length === 0) {
+    return { score: 0.6, hasData: true, note: "No shared language on record" };
+  }
+  return { score: 1, hasData: true, note: `Shares ${shared.length} language(s)` };
+}
+
 const TIER_LABELS: Record<MatchResult["tier"], string> = {
   EXCELLENT: "Excellent Match",
   VERY_GOOD: "Very Good Match",
@@ -412,10 +485,12 @@ export function scoreMatch(
   a: MatchableProfile,
   b: MatchableProfile,
   weights: MatchWeights = DEFAULT_WEIGHTS,
-  hardRequirements: HardRequirements = {}
+  hardRequirements: HardRequirements = {},
+  enabled: EnabledCategories = {}
 ): MatchResult {
   const aToB = a.preference;
   const bToA = b.preference;
+  const isEnabled = (category: MatchCategory) => enabled[category] !== false;
 
   // Accumulated separately from `parts[].points` so the transparency display
   // can show "how well does B satisfy A's stated preference" independently
@@ -429,7 +504,8 @@ export function scoreMatch(
     dirAtoB: { score: number; hasData: boolean },
     dirBtoA: { score: number; hasData: boolean },
     reasonForStatus: (status: CompatibilityStatus, weaker: "a" | "b") => string
-  ): CategoryResult {
+  ): CategoryResult | null {
+    if (!isEnabled(category)) return null;
     const weaker = dirAtoB.score <= dirBtoA.score ? "a" : "b";
     const combinedScore = Math.min(dirAtoB.score, dirBtoA.score);
     const hasData = dirAtoB.hasData || dirBtoA.hasData;
@@ -453,8 +529,15 @@ export function scoreMatch(
   }
 
   const parts: CategoryResult[] = [];
+  let totalWeight = 0;
 
-  parts.push(
+  function push(part: CategoryResult | null) {
+    if (!part) return;
+    parts.push(part);
+    totalWeight += part.weight;
+  }
+
+  push(
     mutual(
       "age",
       "Age",
@@ -469,7 +552,7 @@ export function scoreMatch(
     )
   );
 
-  parts.push(
+  push(
     mutual(
       "location",
       "Location",
@@ -484,7 +567,7 @@ export function scoreMatch(
     )
   );
 
-  parts.push(
+  push(
     mutual(
       "education",
       "Education",
@@ -499,7 +582,7 @@ export function scoreMatch(
     )
   );
 
-  parts.push(
+  push(
     mutual(
       "profession",
       "Profession",
@@ -514,7 +597,7 @@ export function scoreMatch(
     )
   );
 
-  parts.push(
+  push(
     mutual(
       "income",
       "Income",
@@ -529,7 +612,7 @@ export function scoreMatch(
     )
   );
 
-  parts.push(
+  push(
     mutual(
       "maritalStatus",
       "Marital Status",
@@ -544,7 +627,7 @@ export function scoreMatch(
     )
   );
 
-  parts.push(
+  push(
     mutual(
       "height",
       "Height",
@@ -559,7 +642,7 @@ export function scoreMatch(
     )
   );
 
-  parts.push(
+  push(
     mutual(
       "family",
       "Family Background",
@@ -574,49 +657,48 @@ export function scoreMatch(
     )
   );
 
-  const religious = scoreReligious(a, b);
-  const religiousWeight = weights.religious;
-  const religiousStatus = statusFor(religious.score, religious.hasData);
-  // Symmetric category — both profiles' actual attributes are compared
-  // directly rather than one side's stated preference, so it contributes the
-  // same amount to both directional totals below.
-  aToBPoints += religiousWeight * religious.score;
-  bToAPoints += religiousWeight * religious.score;
-  parts.push({
-    category: "religious",
-    label: "Religious Compatibility",
-    weight: religiousWeight,
-    score: religious.score,
-    points: religiousWeight * religious.score,
-    status: religiousStatus,
-    reason:
-      religiousStatus === "unknown"
+  // Symmetric categories — both profiles' actual attributes are compared
+  // directly rather than one side's stated preference, so each contributes
+  // the same amount to both directional totals below.
+  function symmetric(
+    category: MatchCategory,
+    label: string,
+    result: { score: number; hasData: boolean; note?: string },
+    reasonForStatus?: (status: CompatibilityStatus) => string
+  ): CategoryResult | null {
+    if (!isEnabled(category)) return null;
+    const weight = weights[category];
+    const status = statusFor(result.score, result.hasData);
+    aToBPoints += weight * result.score;
+    bToAPoints += weight * result.score;
+    return {
+      category,
+      label,
+      weight,
+      score: result.score,
+      points: weight * result.score,
+      status,
+      reason: reasonForStatus ? reasonForStatus(status) : (result.note ?? ""),
+      isDifference: status === "incompatible" || status === "partial",
+      hardRequirementFailed: !!hardRequirements[category] && status === "incompatible",
+    };
+  }
+
+  push(
+    symmetric("religious", "Religious Compatibility", scoreReligious(a, b), (status) =>
+      status === "unknown"
         ? "Religious background not specified by one or both profiles"
-        : religiousStatus === "compatible"
+        : status === "compatible"
           ? "Same religious background"
-          : "Different religious background",
-    isDifference: religiousStatus === "incompatible" || religiousStatus === "partial",
-    hardRequirementFailed: !!hardRequirements.religious && religiousStatus === "incompatible",
-  });
+          : "Different religious background"
+    )
+  );
 
-  const lifestyle = scoreLifestyle(a, b);
-  const lifestyleWeight = weights.lifestyle;
-  const lifestyleStatus = statusFor(lifestyle.score, lifestyle.hasData);
-  aToBPoints += lifestyleWeight * lifestyle.score;
-  bToAPoints += lifestyleWeight * lifestyle.score;
-  parts.push({
-    category: "lifestyle",
-    label: "Lifestyle",
-    weight: lifestyleWeight,
-    score: lifestyle.score,
-    points: lifestyleWeight * lifestyle.score,
-    status: lifestyleStatus,
-    reason: lifestyle.note,
-    isDifference: lifestyleStatus === "incompatible" || lifestyleStatus === "partial",
-    hardRequirementFailed: !!hardRequirements.lifestyle && lifestyleStatus === "incompatible",
-  });
+  push(symmetric("lifestyle", "Lifestyle", scoreLifestyle(a, b)));
 
-  const total = Math.round(clamp01(parts.reduce((sum, p) => sum + p.points, 0) / 100) * 100);
+  push(symmetric("languages", "Languages", scoreLanguages(a, b)));
+
+  const total = totalWeight > 0 ? Math.round(clamp01(parts.reduce((sum, p) => sum + p.points, 0) / totalWeight) * 100) : 0;
   const thresholds = DEFAULT_THRESHOLDS;
   const tier = tierFor(total, thresholds);
 
@@ -632,8 +714,8 @@ export function scoreMatch(
     excludedByHardRequirement: failedHard.length > 0,
     failedHardRequirements: failedHard.map((p) => p.label),
     direction: {
-      aToB: Math.round(clamp01(aToBPoints / 100) * 100),
-      bToA: Math.round(clamp01(bToAPoints / 100) * 100),
+      aToB: totalWeight > 0 ? Math.round(clamp01(aToBPoints / totalWeight) * 100) : 0,
+      bToA: totalWeight > 0 ? Math.round(clamp01(bToAPoints / totalWeight) * 100) : 0,
     },
   };
 }
@@ -644,9 +726,10 @@ export function scoreMatchWithThresholds(
   b: MatchableProfile,
   weights: MatchWeights,
   hardRequirements: HardRequirements,
-  thresholds: MatchThresholds
+  thresholds: MatchThresholds,
+  enabled: EnabledCategories = {}
 ): MatchResult {
-  const result = scoreMatch(a, b, weights, hardRequirements);
+  const result = scoreMatch(a, b, weights, hardRequirements, enabled);
   const tier = tierFor(result.total, thresholds);
   return { ...result, tier, tierLabel: TIER_LABELS[tier] };
 }

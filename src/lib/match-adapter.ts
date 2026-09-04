@@ -31,6 +31,7 @@ export function toMatchable(profile: MatchableRecord): MatchableProfile {
     sect: profile.lifestyle?.sect,
     smoking: profile.lifestyle?.smoking,
     drinking: profile.lifestyle?.drinking,
+    languages: profile.lifestyle?.languages,
     preference: {
       minAge: profile.preference?.minAge,
       maxAge: profile.preference?.maxAge,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Sparkles } from "lucide-react";
 import { MatchResultCard } from "@/components/admin/matching/match-result-card";
 import { MatchDetailPanel } from "@/components/admin/matching/match-detail-panel";
@@ -11,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 
 export function MatchesTab({ profileId }: { profileId: string }) {
   const { show } = useToast();
+  const router = useRouter();
   const [matches, setMatches] = useState<MatchCandidate[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<MatchCandidate | null>(null);
@@ -28,14 +30,18 @@ export function MatchesTab({ profileId }: { profileId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId]);
 
+  async function persistMatch(candidate: MatchCandidate): Promise<{ id: string }> {
+    const res = await fetch(`/api/admin/profiles/${profileId}/matches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: candidate.profile.id }),
+    });
+    return res.json();
+  }
+
   async function rejectMatch(candidate: MatchCandidate) {
     try {
-      const createRes = await fetch(`/api/admin/profiles/${profileId}/matches`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ candidateId: candidate.profile.id }),
-      });
-      const created = await createRes.json();
+      const created = await persistMatch(candidate);
       await fetch(`/api/admin/matches/${created.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -45,6 +51,15 @@ export function MatchesTab({ profileId }: { profileId: string }) {
       show("Match rejected", "success");
     } catch {
       show("Could not reject match.", "error");
+    }
+  }
+
+  async function openDetails(candidate: MatchCandidate) {
+    try {
+      const created = await persistMatch(candidate);
+      router.push(`/admin/matches/${created.id}`);
+    } catch {
+      show("Could not open match details.", "error");
     }
   }
 
@@ -66,7 +81,13 @@ export function MatchesTab({ profileId }: { profileId: string }) {
       ) : (
         <div className="space-y-3">
           {matches.map((m) => (
-            <MatchResultCard key={m.profile.id} match={m} onCompare={() => setSelected(m)} onReject={() => rejectMatch(m)} />
+            <MatchResultCard
+              key={m.profile.id}
+              match={m}
+              onCompare={() => setSelected(m)}
+              onReject={() => rejectMatch(m)}
+              onDetails={() => openDetails(m)}
+            />
           ))}
         </div>
       )}

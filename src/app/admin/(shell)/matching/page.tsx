@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { MatchResultCard } from "@/components/admin/matching/match-result-card";
 import { MatchDetailPanel } from "@/components/admin/matching/match-detail-panel";
 import type { MatchCandidate } from "@/components/admin/matching/types";
 
-function sortResults(results: MatchCandidate[], sort: string, seekerCity?: string): MatchCandidate[] {
+function sortResults(results: MatchCandidate[], sort: string, seekerCity?: string, seekerArea?: string | null): MatchCandidate[] {
   const copy = [...results];
   switch (sort) {
     case "lowest":
@@ -25,6 +25,12 @@ function sortResults(results: MatchCandidate[], sort: string, seekerCity?: strin
       return copy.sort((a, b) => {
         const aMatch = seekerCity && a.profile.city.toLowerCase() === seekerCity.toLowerCase() ? 0 : 1;
         const bMatch = seekerCity && b.profile.city.toLowerCase() === seekerCity.toLowerCase() ? 0 : 1;
+        return aMatch - bMatch || b.total - a.total;
+      });
+    case "same_area":
+      return copy.sort((a, b) => {
+        const aMatch = seekerArea && a.profile.area?.toLowerCase() === seekerArea.toLowerCase() ? 0 : 1;
+        const bMatch = seekerArea && b.profile.area?.toLowerCase() === seekerArea.toLowerCase() ? 0 : 1;
         return aMatch - bMatch || b.total - a.total;
       });
     case "age_closest": {
@@ -39,16 +45,29 @@ function sortResults(results: MatchCandidate[], sort: string, seekerCity?: strin
       const breakdown = (m: MatchCandidate) => m.breakdown.find((c) => c.category === "profession")?.score ?? 0;
       return copy.sort((a, b) => breakdown(b) - breakdown(a));
     }
+    case "most_complete":
+      return copy.sort((a, b) => b.profile.profileCompletion - a.profile.profileCompletion);
+    case "recently_active":
+      return copy.sort((a, b) => new Date(b.profile.updatedAt).getTime() - new Date(a.profile.updatedAt).getTime());
     case "highest":
     default:
-      return copy.sort((a, b) => b.total - a.total);
+      // Spec §25 ranking: mutual score, then verification, then activity, then completeness.
+      return copy.sort((a, b) => {
+        if (b.total !== a.total) return b.total - a.total;
+        if (a.profile.verified !== b.profile.verified) return a.profile.verified ? -1 : 1;
+        const activityDiff = new Date(b.profile.updatedAt).getTime() - new Date(a.profile.updatedAt).getTime();
+        if (activityDiff !== 0) return activityDiff;
+        return b.profile.profileCompletion - a.profile.profileCompletion;
+      });
   }
 }
 
 export default function MatchingCenterPage() {
   const { show } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [seeker, setSeeker] = useState<PickedProfile | null>(null);
+  const [seekerArea, setSeekerArea] = useState<string | null>(null);
   const [filters, setFilters] = useState<MatchFilters>(emptyMatchFilters);
   const [results, setResults] = useState<MatchCandidate[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,7 +84,10 @@ export default function MatchingCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sorted = useMemo(() => (results ? sortResults(results, filters.sort, seeker?.city) : null), [results, filters.sort, seeker?.city]);
+  const sorted = useMemo(
+    () => (results ? sortResults(results, filters.sort, seeker?.city, seekerArea) : null),
+    [results, filters.sort, seeker?.city, seekerArea]
+  );
 
   function findMatches() {
     if (!seeker) return;
@@ -74,24 +96,38 @@ export default function MatchingCenterPage() {
     if (filters.city) params.set("city", filters.city);
     if (filters.education) params.set("education", filters.education);
     if (filters.profession) params.set("profession", filters.profession);
+    if (filters.minAge) params.set("minAge", filters.minAge);
+    if (filters.maxAge) params.set("maxAge", filters.maxAge);
+    if (filters.maritalStatus) params.set("maritalStatus", filters.maritalStatus);
+    if (filters.familyType) params.set("familyType", filters.familyType);
+    if (filters.religion) params.set("religion", filters.religion);
+    if (filters.minCompleteness) params.set("minCompleteness", filters.minCompleteness);
     if (filters.verifiedOnly) params.set("verifiedOnly", "true");
     if (filters.activeOnly) params.set("activeOnly", "true");
+    if (filters.includeAllEligible) params.set("includeAllEligible", "true");
 
     fetch(`/api/admin/profiles/${seeker.id}/matches?${params.toString()}`)
       .then((r) => r.json())
-      .then((data) => setResults(data.results ?? []))
+      .then((data) => {
+        setResults(data.results ?? []);
+        setSeekerArea(data.seeker?.area ?? null);
+      })
       .finally(() => setLoading(false));
   }
 
+  async function persistMatch(candidate: MatchCandidate): Promise<{ id: string }> {
+    if (!seeker) throw new Error("no seeker");
+    const res = await fetch(`/api/admin/profiles/${seeker.id}/matches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: candidate.profile.id }),
+    });
+    return res.json();
+  }
+
   async function rejectMatch(candidate: MatchCandidate) {
-    if (!seeker) return;
     try {
-      const createRes = await fetch(`/api/admin/profiles/${seeker.id}/matches`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ candidateId: candidate.profile.id }),
-      });
-      const created = await createRes.json();
+      const created = await persistMatch(candidate);
       await fetch(`/api/admin/matches/${created.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -101,6 +137,15 @@ export default function MatchingCenterPage() {
       show("Match rejected", "success");
     } catch {
       show("Could not reject match.", "error");
+    }
+  }
+
+  async function openDetails(candidate: MatchCandidate) {
+    try {
+      const created = await persistMatch(candidate);
+      router.push(`/admin/matches/${created.id}`);
+    } catch {
+      show("Could not open match details.", "error");
     }
   }
 
@@ -129,7 +174,7 @@ export default function MatchingCenterPage() {
 
       {seeker && results !== null && (
         <>
-          <MatchFiltersBar filters={filters} onChange={setFilters} seekerCity={seeker.city} />
+          <MatchFiltersBar filters={filters} onChange={setFilters} seekerCity={seeker.city} seekerArea={seekerArea} />
 
           <div>
             <p className="mb-3 text-sm text-muted">
@@ -147,7 +192,13 @@ export default function MatchingCenterPage() {
             ) : (
               <div className="space-y-3">
                 {sorted?.map((m) => (
-                  <MatchResultCard key={m.profile.id} match={m} onCompare={() => setSelected(m)} onReject={() => rejectMatch(m)} />
+                  <MatchResultCard
+                    key={m.profile.id}
+                    match={m}
+                    onCompare={() => setSelected(m)}
+                    onReject={() => rejectMatch(m)}
+                    onDetails={() => openDetails(m)}
+                  />
                 ))}
               </div>
             )}

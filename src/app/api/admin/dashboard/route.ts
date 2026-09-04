@@ -131,6 +131,17 @@ export async function GET(req: Request) {
     const potentialMatches = matchCountByStatus.SUGGESTED ?? 0;
     const highCompatibilityMatches = await prisma.match.count({ where: { score: { gte: 80 }, status: { not: "REJECTED" } } });
 
+    // "Today's Best Matches" (spec §36) — top-scoring matches generated today.
+    const todaysBestMatches = await prisma.match.findMany({
+      where: { createdAt: { gte: startOfDay(now), lte: endOfDay(now) } },
+      include: {
+        profileA: { select: { profileCode: true, fullName: true } },
+        profileB: { select: { profileCode: true, fullName: true } },
+      },
+      orderBy: { score: "desc" },
+      take: 5,
+    });
+
     return NextResponse.json({
       counts: {
         total,
@@ -174,6 +185,15 @@ export async function GET(req: Request) {
         newHighCompatMatches,
         recentProposalResponses,
       },
+      todaysBestMatches: todaysBestMatches.map((m) => ({
+        id: m.id,
+        profileACode: m.profileA.profileCode,
+        profileAName: m.profileA.fullName,
+        profileBCode: m.profileB.profileCode,
+        profileBName: m.profileB.fullName,
+        score: m.score,
+        status: m.status,
+      })),
     });
   } catch (error) {
     return handleApiError(error);

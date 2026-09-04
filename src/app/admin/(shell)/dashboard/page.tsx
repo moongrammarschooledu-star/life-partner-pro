@@ -18,6 +18,8 @@ import { RegistrationTrendChart, type TrendPoint } from "@/components/admin/regi
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonClass } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import Link from "next/link";
 
 interface DashboardData {
@@ -45,6 +47,15 @@ interface DashboardData {
     newHighCompatMatches: number;
     recentProposalResponses: number;
   };
+  todaysBestMatches: {
+    id: string;
+    profileACode: string;
+    profileAName: string;
+    profileBCode: string;
+    profileBName: string;
+    score: number;
+    status: string;
+  }[];
 }
 
 function greeting(): string {
@@ -134,6 +145,52 @@ export default function DashboardPage() {
           <Link href="/admin/matching" className={buttonClass({ className: "mt-4" })}>
             Open Matching Center <ArrowRight className="h-4 w-4" />
           </Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Today&apos;s Best Matches</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.todaysBestMatches.length === 0 ? (
+            <EmptyState icon={Sparkles} title="No matches generated today yet" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="py-2 pr-3">Profile A</th>
+                    <th className="py-2 pr-3">Profile B</th>
+                    <th className="py-2 pr-3">Score</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.todaysBestMatches.map((m) => (
+                    <tr key={m.id} className="border-b border-border last:border-0">
+                      <td className="py-2 pr-3">
+                        {m.profileAName} <span className="text-muted">({m.profileACode})</span>
+                      </td>
+                      <td className="py-2 pr-3">
+                        {m.profileBName} <span className="text-muted">({m.profileBCode})</span>
+                      </td>
+                      <td className="py-2 pr-3 font-medium">{m.score}%</td>
+                      <td className="py-2 pr-3">
+                        <StatusBadge status={m.status} />
+                      </td>
+                      <td className="py-2">
+                        <Link href={`/admin/matches/${m.id}`} className="font-medium text-primary hover:underline">
+                          Review
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

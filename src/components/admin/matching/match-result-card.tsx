@@ -1,4 +1,4 @@
-import { ShieldCheck, Eye, Scale, Handshake, X } from "lucide-react";
+import { ShieldCheck, Eye, Scale, Handshake, X, FileSearch, AlertTriangle } from "lucide-react";
 import { MatchScore } from "@/components/ui/match-score";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,10 +11,12 @@ export function MatchResultCard({
   match,
   onCompare,
   onReject,
+  onDetails,
 }: {
   match: MatchCandidate;
   onCompare: () => void;
   onReject: () => void;
+  onDetails?: () => void;
 }) {
   return (
     <Card>
@@ -30,10 +32,15 @@ export function MatchResultCard({
           </p>
           <p className="text-xs text-muted">
             {match.profile.education ?? "—"} · {match.profile.profession ?? "—"} ·{" "}
-            {formatEnumLabel(match.profile.status)}
+            {formatEnumLabel(match.profile.status)} · {match.profile.profileCompletion}% complete
           </p>
-          <div className="mt-1">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <StatusBadge status={match.profile.status} />
+            {match.excludedByHardRequirement && (
+              <span className="flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+                <AlertTriangle className="h-3 w-3" /> Hard Requirement Not Met
+              </span>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -45,6 +52,11 @@ export function MatchResultCard({
           <Button size="sm" variant="outline" onClick={onCompare}>
             <Scale className="h-4 w-4" /> Compare
           </Button>
+          {onDetails && (
+            <Button size="sm" variant="outline" onClick={onDetails}>
+              <FileSearch className="h-4 w-4" /> Match Details
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={onReject}>
             <X className="h-4 w-4" /> Reject
           </Button>

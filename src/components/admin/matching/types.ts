@@ -6,12 +6,15 @@ export interface MatchCandidateProfile {
   fullName: string;
   age: number;
   city: string;
+  area: string | null;
   country: string;
   education: string | null;
   profession: string | null;
   status: string;
   verified: boolean;
   createdAt: string;
+  updatedAt: string;
+  profileCompletion: number;
 }
 
 export interface MatchCandidate extends MatchResult {

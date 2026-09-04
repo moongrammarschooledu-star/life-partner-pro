@@ -156,6 +156,7 @@ enum AuditAction {
   CONTACT_SHARED
   MATCH_CREATED
   MATCH_STATUS_CHANGED
+  MATCH_RECALCULATED
   PROPOSAL_CREATED
   PROPOSAL_STATUS_CHANGED
   NOTE_ADDED
@@ -440,7 +441,18 @@ model Match {
   familyScore         Int
   religiousScore      Int
   lifestyleScore      Int
+  languagesScore      Int      @default(0)
+  directionAToB       Int      @default(0) // how well B satisfies A's stated preference
+  directionBToA       Int      @default(0) // how well A satisfies B's stated preference
   breakdown           String // JSON: [{category, weight, score, status, reason}] — full explanation, see src/lib/matching.ts
+
+  // Versioning + recalculation audit trail (STEP 6 §33/§34) — historical
+  // rows are never silently rewritten; recalculating snapshots the prior
+  // score/breakdown here before overwriting the live fields above.
+  algorithmVersion  String    @default("LPP-MATCH-v1.0")
+  previousScore     Int?
+  previousBreakdown String?
+  recalculatedAt    DateTime?
 
   status         MatchStatus          @default(SUGGESTED)
   recommendation MatchRecommendation?
@@ -589,6 +601,7 @@ model AppSettings {
   weightFamily          Int      @default(10)
   weightReligious       Int      @default(10)
   weightLifestyle       Int      @default(5)
+  weightLanguages       Int      @default(5)
 
   // Match tier cutoffs (spec §30) — admin-configurable, must stay descending.
   thresholdExcellent    Int      @default(90)
@@ -609,6 +622,27 @@ model AppSettings {
   hardRequirementFamily        Boolean @default(false)
   hardRequirementReligious     Boolean @default(false)
   hardRequirementLifestyle     Boolean @default(false)
+  hardRequirementLanguages     Boolean @default(false)
+
+  // Per-category on/off (STEP 6 §5) — distinct from weight/hard-requirement:
+  // a disabled category is skipped entirely (not scored, not shown), and its
+  // weight no longer counts toward the normalization denominator in
+  // src/lib/matching.ts.
+  categoryEnabledAge           Boolean @default(true)
+  categoryEnabledLocation      Boolean @default(true)
+  categoryEnabledEducation     Boolean @default(true)
+  categoryEnabledProfession    Boolean @default(true)
+  categoryEnabledIncome        Boolean @default(true)
+  categoryEnabledMaritalStatus Boolean @default(true)
+  categoryEnabledHeight        Boolean @default(true)
+  categoryEnabledFamily        Boolean @default(true)
+  categoryEnabledReligious     Boolean @default(true)
+  categoryEnabledLifestyle     Boolean @default(true)
+  categoryEnabledLanguages     Boolean @default(true)
+
+  // Matching Center behavior (STEP 6 §19/§43).
+  maxMatchResults                Int     @default(10)
+  excludeHardRequirementFailures Boolean @default(false)
 
   updatedAt             DateTime @updatedAt
 }

@@ -63,20 +63,38 @@ export function NotificationsPanel() {
               {entries.map((e) => {
                 const Icon = ICONS[e.type];
                 return (
-                  <Link
-                    key={e.type}
-                    href={e.href}
-                    onClick={() => setOpen(false)}
-                    className={cn("flex items-center gap-3 px-4 py-3 text-sm hover:bg-surface-muted")}
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium">{e.label}</p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold">{e.count}</span>
-                  </Link>
+                  <div key={e.type}>
+                    <Link
+                      href={e.href}
+                      onClick={() => setOpen(false)}
+                      className={cn("flex items-center gap-3 px-4 py-3 text-sm hover:bg-surface-muted")}
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">{e.label}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold">{e.count}</span>
+                    </Link>
+                    {e.examples && e.examples.length > 0 && (
+                      <div className="space-y-1 px-4 pb-3">
+                        {e.examples.map((ex, i) => (
+                          <Link
+                            key={i}
+                            href={ex.href}
+                            onClick={() => setOpen(false)}
+                            className="flex items-center justify-between rounded-md bg-surface-muted px-2.5 py-1.5 text-xs hover:bg-border"
+                          >
+                            <span>
+                              {ex.profileACode} ↔ {ex.profileBCode}
+                            </span>
+                            <span className="font-semibold text-primary">{ex.score}%</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>

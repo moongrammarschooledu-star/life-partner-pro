@@ -20,6 +20,16 @@ interface ReportsData {
   finalizedOrMarried: number;
   adminPerformance: { name: string; notes: number; communications: number }[];
   incomeDistribution: { label: string; count: number }[];
+  matchingPerformance: {
+    averageMatchScore: number;
+    matchesGenerated: number;
+    matchesReviewed: number;
+    proposalsCreated: number;
+    finalizedMatches: number;
+    matchToProposalRate: number;
+    proposalToMeetingRate: number;
+    meetingToFinalizationRate: number;
+  };
 }
 
 function downloadExport(type: string) {
@@ -131,6 +141,35 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Matching Performance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-xs text-muted">
+            A compatibility score is a suggestion for admin review — it does not predict marriage success. These are activity and
+            conversion metrics only.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: "Avg Match Score", value: `${reports.matchingPerformance.averageMatchScore}%` },
+              { label: "Matches Generated", value: reports.matchingPerformance.matchesGenerated },
+              { label: "Matches Reviewed", value: reports.matchingPerformance.matchesReviewed },
+              { label: "Proposals Created", value: reports.matchingPerformance.proposalsCreated },
+              { label: "Finalized Matches", value: reports.matchingPerformance.finalizedMatches },
+              { label: "Match → Proposal Rate", value: `${reports.matchingPerformance.matchToProposalRate}%` },
+              { label: "Proposal → Meeting Rate", value: `${reports.matchingPerformance.proposalToMeetingRate}%` },
+              { label: "Meeting → Finalization Rate", value: `${reports.matchingPerformance.meetingToFinalizationRate}%` },
+            ].map((m) => (
+              <div key={m.label} className="rounded-lg border border-border p-3 text-center">
+                <p className="text-xl font-semibold">{m.value}</p>
+                <p className="mt-1 text-xs text-muted">{m.label}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
