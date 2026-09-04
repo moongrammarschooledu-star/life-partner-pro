@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/form";
@@ -22,6 +22,28 @@ export default function UpdateRequestPage() {
   const [additionalExpectations, setAdditionalExpectations] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  // If this browser already holds a valid session cookie from a recent
+  // registration (see /my-status), skip straight past the Profile ID +
+  // email form — the server resolves identity from the cookie instead.
+  useEffect(() => {
+    fetch("/api/update-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "lookup" }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json) {
+          setResult(json);
+          setMobileNumber(json.contact.mobileNumber);
+          setWhatsappNumber(json.contact.whatsappNumber ?? "");
+          setAdditionalExpectations(json.preference?.additionalExpectations ?? "");
+        }
+      })
+      .finally(() => setCheckingSession(false));
+  }, []);
 
   async function lookup() {
     setLoading(true);
@@ -66,6 +88,14 @@ export default function UpdateRequestPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (checkingSession) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted" />
+      </div>
+    );
   }
 
   if (submitted) {

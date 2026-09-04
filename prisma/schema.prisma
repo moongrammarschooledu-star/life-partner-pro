@@ -32,6 +32,14 @@ enum MaritalStatus {
   DIVORCED
   WIDOWED
   ANNULLED
+  SEPARATED
+  OTHER
+}
+
+enum PreferencePriority {
+  MUST_HAVE
+  PREFERRED
+  FLEXIBLE
 }
 
 enum ProfileStatus {
@@ -201,6 +209,9 @@ model Profile {
   country       String
   nationality   String?
 
+  hasChildren       Boolean?      // only meaningful for Divorced/Widowed/Separated
+  numberOfChildren  Int?
+
   status        ProfileStatus @default(NEW)
   verified      Boolean       @default(false)
   softDeleted   Boolean       @default(false)
@@ -274,6 +285,8 @@ model ProfessionInfo {
   annualIncome      Int?
   workLocation      String?
   businessDetails   String?
+  program           String? // Student employment type only
+  expectedGraduation String? // Student employment type only
 }
 
 model FamilyInfo {
@@ -340,6 +353,13 @@ model PartnerPreference {
   otherFamilyRequirements String?
 
   additionalExpectations  String? // large free text
+
+  // Captured at registration for future matching-engine consumption — the
+  // engine (src/lib/matching.ts) does not yet weight by these (spec §8).
+  agePriority        PreferencePriority? @default(PREFERRED)
+  locationPriority   PreferencePriority? @default(PREFERRED)
+  professionPriority PreferencePriority? @default(PREFERRED)
+  locationScope      String? // e.g. "Same City", "Anywhere in Country" — selected label, not scored yet
 }
 
 model ProfilePhoto {

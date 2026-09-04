@@ -24,6 +24,8 @@ export function OverviewTab({ profile }: { profile: ProfileDetailDto }) {
           <Row label="Gender" value={formatEnumLabel(profile.gender)} />
           <Row label="Age" value={profile.age} />
           <Row label="Marital Status" value={formatEnumLabel(profile.maritalStatus)} />
+          <Row label="Has Children" value={profile.hasChildren} />
+          <Row label="Number of Children" value={profile.numberOfChildren} />
           <Row label="Height" value={formatHeight(profile.heightCm)} />
           <Row label="City" value={[profile.area, profile.city].filter(Boolean).join(", ")} />
           <Row label="Country" value={profile.country} />
@@ -45,6 +47,8 @@ export function OverviewTab({ profile }: { profile: ProfileDetailDto }) {
           <Row label="Employment Type" value={profile.profession?.employmentType ? formatEnumLabel(profile.profession.employmentType) : undefined} />
           <Row label="Monthly Income" value={formatCurrency(profile.profession?.monthlyIncome)} />
           <Row label="Work Location" value={profile.profession?.workLocation} />
+          <Row label="Program" value={profile.profession?.program} />
+          <Row label="Expected Graduation" value={profile.profession?.expectedGraduation} />
         </CardContent>
       </Card>
 
@@ -75,6 +79,14 @@ export function OverviewTab({ profile }: { profile: ProfileDetailDto }) {
           <Row label="Languages" value={profile.lifestyle?.languages} />
           <Row label="Smoking" value={profile.lifestyle?.smoking} />
           <Row label="Drinking" value={profile.lifestyle?.drinking} />
+          <Row label="Hobbies" value={profile.lifestyle?.hobbies} />
+          <Row label="Personality" value={profile.lifestyle?.personality} />
+          {profile.lifestyle?.aboutMe && (
+            <div className="pt-2">
+              <p className="text-xs uppercase tracking-wide text-muted mb-1">About Me</p>
+              <p className="text-sm">{profile.lifestyle.aboutMe}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -85,9 +97,13 @@ export function OverviewTab({ profile }: { profile: ProfileDetailDto }) {
         <CardContent className="grid gap-x-8 sm:grid-cols-2">
           <div>
             <Row label="Age Range" value={profile.preference?.minAge || profile.preference?.maxAge ? `${profile.preference?.minAge ?? "?"} - ${profile.preference?.maxAge ?? "?"}` : undefined} />
+            <Row label="Age Priority" value={profile.preference?.agePriority ? formatEnumLabel(profile.preference.agePriority) : undefined} />
             <Row label="Preferred Location" value={[profile.preference?.preferredCity, profile.preference?.preferredCountry].filter(Boolean).join(", ")} />
+            <Row label="Location Scope" value={profile.preference?.locationScope} />
+            <Row label="Location Priority" value={profile.preference?.locationPriority ? formatEnumLabel(profile.preference.locationPriority) : undefined} />
             <Row label="Min Education" value={profile.preference?.minEducation} />
             <Row label="Profession Preference" value={profile.preference?.professionPreference} />
+            <Row label="Profession Priority" value={profile.preference?.professionPriority ? formatEnumLabel(profile.preference.professionPriority) : undefined} />
           </div>
           <div>
             <Row

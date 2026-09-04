@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
 
 // Lightweight self-service verification: matching Profile Code + email is
 // enough to look up and submit an update request. This is intentionally not
@@ -18,6 +20,13 @@ async function findProfileByCodeAndEmail(profileCode: string, email: string) {
   return profile;
 }
 
+async function findProfileBySessionCookie() {
+  const cookieStore = await cookies();
+  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  if (!profileId) return null;
+  return prisma.profile.findUnique({ where: { id: profileId }, include: { contact: true, preference: true } });
+}
+
 export async function POST(req: Request) {
   const key = `update-request:${clientKeyFromRequest(req)}`;
   if (!rateLimit(key, 10, 60_000)) {
@@ -28,11 +37,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { profileCode, email, action } = body;
 
-    if (typeof profileCode !== "string" || typeof email !== "string") {
-      return NextResponse.json({ error: "Profile code and email are required." }, { status: 400 });
-    }
+    // A visitor arriving from /my-status is already proven to own this
+    // profile via the signed session cookie — no need to re-enter email.
+    const profile =
+      (await findProfileBySessionCookie()) ??
+      (typeof profileCode === "string" && typeof email === "string"
+        ? await findProfileByCodeAndEmail(profileCode.trim().toUpperCase(), email.trim())
+        : null);
 
-    const profile = await findProfileByCodeAndEmail(profileCode.trim().toUpperCase(), email.trim());
     if (!profile) {
       return NextResponse.json({ error: "We could not find a profile matching that Profile ID and email." }, { status: 404 });
     }

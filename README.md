@@ -61,6 +61,25 @@ No third-party API keys are required or referenced anywhere in the codebase (see
 - **Public site:** landing page, privacy policy, terms, an 8-step registration wizard (basic info → contact →
   education/profession → family → lifestyle → partner preferences → photo → review & consent), and a self-service
   "request an update" flow that requires admin approval before changes go live.
+- **Registration wizard, in depth:** age is auto-calculated (read-only) from date of birth; height supports a
+  feet/inches ⇄ centimeters toggle; Divorced/Widowed/Separated reveals optional children fields; the
+  Education/Career step shows different sub-fields for Job vs Business vs Student vs Not Working; Country is a
+  dropdown and City is a searchable (native `<datalist>`) field with curated suggestions; partner preferences
+  capture a Must-Have/Preferred/Flexible priority for age/location/profession plus a location-scope selector
+  (captured for future matching-engine use — see Deferred below); the photo step offers rotate, a private-photo
+  notice, and a lightweight non-biometric quality check (dimensions + a blur heuristic — never facial recognition or
+  attribute inference); the review step masks phone/email, shows a live profile-completion percentage with
+  suggestions, and lets you jump back into any section to edit it; consent is four distinct checkboxes (three
+  required, one — contact/communication consent — genuinely optional) instead of one blanket checkbox; the whole
+  form autosaves to the browser (`localStorage`) and offers to resume a draft after a refresh or closed tab; a
+  hidden honeypot field plus the existing rate limiter give baseline anti-spam protection; and a submission with a
+  phone number or email already on file is rejected as a possible duplicate. An English | اردو toggle translates the
+  wizard's own labels, headings, buttons, and consent text (never the data you type, and never the admin dashboard).
+- **Post-submission status, without accounts:** submitting a profile sets a signed, httpOnly cookie (HMAC'd with
+  `NEXTAUTH_SECRET`, never a guessable URL/ID) that lets that browser revisit `/my-status` for a private view of
+  Profile Status / Completion / Verification / Matchmaking Status — never other applicants' data. A device without
+  the cookie (or a different browser) can still get in with Profile ID + registered email, the same identity check
+  the update-request flow already used.
 - **Privacy by design:** contact information (phone/WhatsApp/email) is never included in any list or detail
   response by default. It is only ever returned by one explicit "reveal contact" endpoint, which is permission-gated
   and writes an audit log entry every time it's called. Photos are stored in Vercel Blob; the raw blob URL is never
@@ -147,6 +166,20 @@ structured so they can be added without restructuring anything else:
   per-profile (and per-match/per-proposal for notes), which already surfaces the same information without a
   separate aggregated view.
 - **Saved filter presets and CSV import** — not implemented; CSV *export* already exists on the Reports page.
+- **Real applicant accounts (password/OTP login)** — deliberately replaced by the signed-cookie `/my-status` flow
+  above; there is no SMS/email OTP provider configured for this project.
+- **Drag-to-crop photo editing** — the photo step supports rotate (90° steps) and replace; free-form cropping is not
+  implemented.
+- **A real CAPTCHA provider** (hCaptcha / Cloudflare Turnstile / reCAPTCHA) — registration anti-spam is a honeypot
+  field plus the existing rate limiter; wiring a real provider needs an account and site/secret keys.
+- **Matching-engine use of per-preference priorities** — the registration wizard captures a Must-Have/Preferred/
+  Flexible priority for age/location/profession plus a location-scope choice (`PartnerPreference.agePriority` etc.),
+  but `src/lib/matching.ts` does not yet weight scoring by them.
+- **Exhaustive Urdu translation** — the wizard's labels, headings, buttons, and consent/error text are translated;
+  dropdown *option* text and all stored data remain in their canonical English/enum form, matching the platform's
+  own instruction to never auto-translate entered information.
+- **A 4-value smoking/drinking scale** — kept as the existing boolean Yes/No to avoid a breaking change to the
+  matching engine's lifestyle scorer.
 
 ## Security notes
 

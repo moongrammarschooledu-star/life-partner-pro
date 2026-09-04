@@ -1,9 +1,14 @@
 export interface WizardData {
+  // Honeypot — real users never see or fill this (visually hidden in the
+  // wizard shell); a filled value means the submission is very likely a bot.
+  hp: string;
   basic: {
     fullName: string;
     gender: "MALE" | "FEMALE" | "";
     dateOfBirth: string;
-    maritalStatus: "NEVER_MARRIED" | "DIVORCED" | "WIDOWED" | "ANNULLED" | "";
+    maritalStatus: "NEVER_MARRIED" | "DIVORCED" | "WIDOWED" | "ANNULLED" | "SEPARATED" | "OTHER" | "";
+    hasChildren: boolean | null;
+    numberOfChildren: string;
     heightCm: string;
     city: string;
     area: string;
@@ -28,6 +33,8 @@ export interface WizardData {
     annualIncome: string;
     workLocation: string;
     businessDetails: string;
+    program: string;
+    expectedGraduation: string;
   };
   family: {
     fatherOccupation: string;
@@ -47,17 +54,24 @@ export interface WizardData {
     languages: string;
     smoking: boolean;
     drinking: boolean;
+    hobbies: string;
+    personality: string;
+    aboutMe: string;
     otherPreferences: string;
   };
   preference: {
     minAge: string;
     maxAge: string;
+    agePriority: "MUST_HAVE" | "PREFERRED" | "FLEXIBLE";
     preferredCountry: string;
     preferredCity: string;
     preferredArea: string;
+    locationScope: string;
+    locationPriority: "MUST_HAVE" | "PREFERRED" | "FLEXIBLE";
     minEducation: string;
     preferredEducation: string;
     professionPreference: string;
+    professionPriority: "MUST_HAVE" | "PREFERRED" | "FLEXIBLE";
     minIncome: string;
     maxIncome: string;
     incomeFlexible: boolean;
@@ -70,12 +84,28 @@ export interface WizardData {
     additionalExpectations: string;
   };
   consent: {
-    agreed: boolean;
+    accurate: boolean;
+    storageConsent: boolean;
+    reviewConsent: boolean;
+    contactConsent: boolean;
   };
 }
 
 export const initialWizardData: WizardData = {
-  basic: { fullName: "", gender: "", dateOfBirth: "", maritalStatus: "", heightCm: "", city: "", area: "", country: "", nationality: "" },
+  hp: "",
+  basic: {
+    fullName: "",
+    gender: "",
+    dateOfBirth: "",
+    maritalStatus: "",
+    hasChildren: null,
+    numberOfChildren: "",
+    heightCm: "",
+    city: "",
+    area: "",
+    country: "",
+    nationality: "",
+  },
   contact: { mobileNumber: "", whatsappNumber: "", email: "", preferredContactMethod: "WHATSAPP" },
   educationProfession: {
     educationLevel: "",
@@ -89,6 +119,8 @@ export const initialWizardData: WizardData = {
     annualIncome: "",
     workLocation: "",
     businessDetails: "",
+    program: "",
+    expectedGraduation: "",
   },
   family: {
     fatherOccupation: "",
@@ -101,16 +133,31 @@ export const initialWizardData: WizardData = {
     familyBackground: "",
     additionalInfo: "",
   },
-  lifestyle: { religion: "", sect: "", religiousPractice: "", languages: "", smoking: false, drinking: false, otherPreferences: "" },
+  lifestyle: {
+    religion: "",
+    sect: "",
+    religiousPractice: "",
+    languages: "",
+    smoking: false,
+    drinking: false,
+    hobbies: "",
+    personality: "",
+    aboutMe: "",
+    otherPreferences: "",
+  },
   preference: {
     minAge: "",
     maxAge: "",
+    agePriority: "PREFERRED",
     preferredCountry: "",
     preferredCity: "",
     preferredArea: "",
+    locationScope: "",
+    locationPriority: "PREFERRED",
     minEducation: "",
     preferredEducation: "",
     professionPreference: "ANY",
+    professionPriority: "PREFERRED",
     minIncome: "",
     maxIncome: "",
     incomeFlexible: true,
@@ -122,7 +169,7 @@ export const initialWizardData: WizardData = {
     otherFamilyRequirements: "",
     additionalExpectations: "",
   },
-  consent: { agreed: false },
+  consent: { accurate: false, storageConsent: false, reviewConsent: false, contactConsent: false },
 };
 
 export const STEP_TITLES = [

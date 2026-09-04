@@ -53,6 +53,8 @@ export function toDetailDto(profile: ProfileDetail) {
     dateOfBirth: profile.dateOfBirth,
     age: calculateAge(profile.dateOfBirth),
     maritalStatus: profile.maritalStatus,
+    hasChildren: profile.hasChildren,
+    numberOfChildren: profile.numberOfChildren,
     heightCm: profile.heightCm,
     city: profile.city,
     area: profile.area,

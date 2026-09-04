@@ -19,11 +19,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!VALID_STATUSES.includes(status)) throw new ApiError(400, "Invalid status");
 
     if (status === "ACTIVE") {
+      // Contact-sharing consent is a genuinely optional checkbox at
+      // registration (spec STEP 5 §15) — only the three mandatory consents
+      // gate activation.
       const consent = await prisma.consentRecord.findUnique({ where: { profileId: id } });
-      const hasFullConsent =
-        !!consent?.privacyConsent && !!consent?.matchmakingConsent && !!consent?.contactSharingConsent && !!consent?.termsAccepted;
-      if (!hasFullConsent) {
-        throw new ApiError(400, "This profile cannot be activated until privacy, matchmaking, contact-sharing, and terms consent are all recorded.");
+      const hasRequiredConsent = !!consent?.privacyConsent && !!consent?.matchmakingConsent && !!consent?.termsAccepted;
+      if (!hasRequiredConsent) {
+        throw new ApiError(400, "This profile cannot be activated until privacy, matchmaking, and terms consent are all recorded.");
       }
     }
 

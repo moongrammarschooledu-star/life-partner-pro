@@ -16,22 +16,36 @@ function optionalNumber(min: number, max: number) {
   );
 }
 
-export const basicInfoSchema = z.object({
-  fullName: z.string().trim().min(2, "Full name is required").max(120),
-  gender: z.enum(["MALE", "FEMALE"]),
-  dateOfBirth: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Enter a valid date"),
-  maritalStatus: z.enum(["NEVER_MARRIED", "DIVORCED", "WIDOWED", "ANNULLED"]),
-  heightCm: z.coerce.number().int().min(100).max(230),
-  city: z.string().trim().min(1, "City is required").max(80),
-  area: z.string().trim().max(80).optional().or(z.literal("")),
-  country: z.string().trim().min(1, "Country is required").max(80),
-  nationality: z.string().trim().max(80).optional().or(z.literal("")),
-});
+const priorityEnum = z.enum(["MUST_HAVE", "PREFERRED", "FLEXIBLE"]).default("PREFERRED");
+
+export const basicInfoSchema = z
+  .object({
+    fullName: z.string().trim().min(2, "Please enter your full name.").max(120),
+    gender: z.enum(["MALE", "FEMALE"]),
+    dateOfBirth: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Enter a valid date"),
+    maritalStatus: z.enum(["NEVER_MARRIED", "DIVORCED", "WIDOWED", "ANNULLED", "SEPARATED", "OTHER"]),
+    hasChildren: z.boolean().nullable().optional(),
+    numberOfChildren: optionalNumber(0, 20),
+    heightCm: z.coerce.number().int().min(100).max(230),
+    city: z.string().trim().min(1, "Please select your city.").max(80),
+    area: z.string().trim().max(80).optional().or(z.literal("")),
+    country: z.string().trim().min(1, "Country is required").max(80),
+    nationality: z.string().trim().max(80).optional().or(z.literal("")),
+  })
+  .refine((v) => !Number.isNaN(new Date(v.dateOfBirth).getTime()) && new Date(v.dateOfBirth) <= new Date(), {
+    message: "Date of birth cannot be in the future",
+    path: ["dateOfBirth"],
+  });
 
 export const contactInfoSchema = z.object({
-  mobileNumber: z.string().trim().min(7, "Enter a valid mobile number").max(20),
+  mobileNumber: z
+    .string()
+    .trim()
+    .min(7, "Please enter a valid mobile number.")
+    .max(20)
+    .regex(/^[+0-9][0-9\s-]{6,19}$/, "Please enter a valid mobile number."),
   whatsappNumber: z.string().trim().max(20).optional().or(z.literal("")),
-  email: z.string().trim().email("Enter a valid email"),
+  email: z.string().trim().email("Please enter a valid email address."),
   preferredContactMethod: z.enum(["PHONE", "WHATSAPP", "EMAIL"]),
 });
 
@@ -47,6 +61,8 @@ export const educationProfessionSchema = z.object({
   annualIncome: optionalNumber(0, 100_000_000),
   workLocation: z.string().trim().max(120).optional().or(z.literal("")),
   businessDetails: z.string().trim().max(500).optional().or(z.literal("")),
+  program: z.string().trim().max(150).optional().or(z.literal("")),
+  expectedGraduation: z.string().trim().max(30).optional().or(z.literal("")),
 });
 
 export const familyInfoSchema = z.object({
@@ -68,18 +84,25 @@ export const lifestyleSchema = z.object({
   languages: z.string().trim().max(200).optional().or(z.literal("")),
   smoking: z.boolean().default(false),
   drinking: z.boolean().default(false),
+  hobbies: z.string().trim().max(300).optional().or(z.literal("")),
+  personality: z.string().trim().max(300).optional().or(z.literal("")),
+  aboutMe: z.string().trim().max(2000).optional().or(z.literal("")),
   otherPreferences: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
 export const partnerPreferenceSchema = z.object({
   minAge: optionalNumber(18, 80),
   maxAge: optionalNumber(18, 80),
+  agePriority: priorityEnum,
   preferredCountry: z.string().trim().max(80).optional().or(z.literal("")),
   preferredCity: z.string().trim().max(80).optional().or(z.literal("")),
   preferredArea: z.string().trim().max(80).optional().or(z.literal("")),
+  locationScope: z.string().trim().max(40).optional().or(z.literal("")),
+  locationPriority: priorityEnum,
   minEducation: z.string().trim().max(60).optional().or(z.literal("")),
   preferredEducation: z.string().trim().max(60).optional().or(z.literal("")),
   professionPreference: z.string().trim().max(120).optional().or(z.literal("")),
+  professionPriority: priorityEnum,
   minIncome: optionalNumber(0, 100_000_000),
   maxIncome: optionalNumber(0, 100_000_000),
   incomeFlexible: z.boolean().default(true),
@@ -92,11 +115,18 @@ export const partnerPreferenceSchema = z.object({
   additionalExpectations: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 
+// Three checkboxes are genuinely required (accuracy, storage, review-disclosure);
+// the fourth (contact/communication consent) is explicitly optional per spec
+// §15 — a profile can be submitted without it.
 export const consentSchema = z.object({
-  agreed: z.literal(true, "You must agree to continue"),
+  accurate: z.literal(true, "You must confirm your information is accurate"),
+  storageConsent: z.literal(true, "You must agree to secure storage for matchmaking purposes"),
+  reviewConsent: z.literal(true, "You must acknowledge admin review"),
+  contactConsent: z.boolean().default(false),
 });
 
 export const registrationSchema = z.object({
+  hp: z.string().max(0).optional().or(z.literal("")),
   basic: basicInfoSchema,
   contact: contactInfoSchema,
   educationProfession: educationProfessionSchema,

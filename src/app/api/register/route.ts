@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createHash } from "crypto";
 import { registrationSchema } from "@/lib/validation/registration";
 import { prisma } from "@/lib/prisma";
@@ -7,8 +8,11 @@ import { savePhoto, UploadValidationError } from "@/lib/storage";
 import { writeAudit } from "@/lib/audit";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { parseDateOnly } from "@/lib/utils";
+import { computeCompletion } from "@/lib/profile-completion";
+import { signProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
 
 const CONSENT_VERSION = "1.0";
+const GENERIC_ERROR = "Your profile could not be submitted. Please check the highlighted fields.";
 
 export async function POST(req: Request) {
   const key = `register:${clientKeyFromRequest(req)}`;
@@ -24,14 +28,39 @@ export async function POST(req: Request) {
     }
 
     const parsed = JSON.parse(rawPayload);
+
+    // Honeypot: a real user never sees or fills this field (visually hidden
+    // in the wizard). A non-empty value is treated identically to any other
+    // validation failure — no signal is given back to distinguish a bot.
+    if (typeof parsed.hp === "string" && parsed.hp.length > 0) {
+      return NextResponse.json({ error: GENERIC_ERROR }, { status: 400 });
+    }
+
     const result = registrationSchema.safeParse(parsed);
     if (!result.success) {
-      return NextResponse.json(
-        { error: "Your profile could not be submitted. Please check the highlighted fields.", issues: result.error.issues },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: GENERIC_ERROR, issues: result.error.issues }, { status: 400 });
     }
     const value = result.data;
+
+    // Duplicate check (spec §31) — never reveal anything about the matched
+    // profile, only that one might already exist.
+    const existingContact = await prisma.contactInfo.findFirst({
+      where: {
+        OR: [{ mobileNumber: value.contact.mobileNumber }, { email: { equals: value.contact.email, mode: "insensitive" } }],
+      },
+      include: { profile: { select: { status: true, softDeleted: true } } },
+    });
+    if (
+      existingContact &&
+      !existingContact.profile.softDeleted &&
+      existingContact.profile.status !== "REJECTED" &&
+      existingContact.profile.status !== "ARCHIVED"
+    ) {
+      return NextResponse.json(
+        { error: "We found a possible existing profile. Please contact Life Partner Pro support if you already have an account." },
+        { status: 409 }
+      );
+    }
 
     let photoData: { storageKey: string; mimeType: string; sizeBytes: number } | null = null;
     const photo = formData.get("photo");
@@ -48,6 +77,20 @@ export async function POST(req: Request) {
     }
 
     const profileCode = await nextProfileCode();
+    const { percent: profileCompletion } = computeCompletion({
+      hasPhoto: !!photoData,
+      area: value.basic.area,
+      nationality: value.basic.nationality,
+      degree: value.educationProfession.degree,
+      institution: value.educationProfession.institution,
+      familyBackground: value.family.familyBackground,
+      aboutMe: value.lifestyle.aboutMe,
+      hobbies: value.lifestyle.hobbies,
+      personality: value.lifestyle.personality,
+      religion: value.lifestyle.religion,
+    });
+
+    const showsChildren = ["DIVORCED", "WIDOWED", "SEPARATED"].includes(value.basic.maritalStatus);
 
     const profile = await prisma.profile.create({
       data: {
@@ -56,11 +99,14 @@ export async function POST(req: Request) {
         gender: value.basic.gender,
         dateOfBirth: parseDateOnly(value.basic.dateOfBirth),
         maritalStatus: value.basic.maritalStatus,
+        hasChildren: showsChildren ? (value.basic.hasChildren ?? null) : null,
+        numberOfChildren: showsChildren ? (value.basic.numberOfChildren ?? null) : null,
         heightCm: value.basic.heightCm,
         city: value.basic.city,
         area: value.basic.area || null,
         country: value.basic.country,
         nationality: value.basic.nationality || null,
+        profileCompletion,
         contact: {
           create: {
             mobileNumber: value.contact.mobileNumber,
@@ -86,6 +132,8 @@ export async function POST(req: Request) {
             annualIncome: value.educationProfession.annualIncome ?? null,
             workLocation: value.educationProfession.workLocation || null,
             businessDetails: value.educationProfession.businessDetails || null,
+            program: value.educationProfession.program || null,
+            expectedGraduation: value.educationProfession.expectedGraduation || null,
           },
         },
         family: {
@@ -109,6 +157,9 @@ export async function POST(req: Request) {
             languages: value.lifestyle.languages || null,
             smoking: value.lifestyle.smoking,
             drinking: value.lifestyle.drinking,
+            hobbies: value.lifestyle.hobbies || null,
+            personality: value.lifestyle.personality || null,
+            aboutMe: value.lifestyle.aboutMe || null,
             otherPreferences: value.lifestyle.otherPreferences || null,
           },
         },
@@ -116,12 +167,16 @@ export async function POST(req: Request) {
           create: {
             minAge: value.preference.minAge ?? null,
             maxAge: value.preference.maxAge ?? null,
+            agePriority: value.preference.agePriority,
             preferredCountry: value.preference.preferredCountry || null,
             preferredCity: value.preference.preferredCity || null,
             preferredArea: value.preference.preferredArea || null,
+            locationScope: value.preference.locationScope || null,
+            locationPriority: value.preference.locationPriority,
             minEducation: value.preference.minEducation || null,
             preferredEducation: value.preference.preferredEducation || null,
             professionPreference: value.preference.professionPreference || null,
+            professionPriority: value.preference.professionPriority,
             minIncome: value.preference.minIncome ?? null,
             maxIncome: value.preference.maxIncome ?? null,
             incomeFlexible: value.preference.incomeFlexible,
@@ -134,16 +189,16 @@ export async function POST(req: Request) {
             additionalExpectations: value.preference.additionalExpectations || null,
           },
         },
-        // The wizard's single "I Agree" checkbox (validated by consentSchema
-        // as `agreed: true`) covers privacy, matchmaking use, and terms — all
-        // recorded distinctly so future re-consent flows (e.g. a separate
-        // contact-sharing opt-in) can be added without a schema change.
+        // Four distinct checkboxes, mapped to the four ConsentRecord fields.
+        // "accurate" (accuracy attestation) doubles as terms acceptance since
+        // the wizard displays the Terms/Privacy links right alongside it;
+        // "contactConsent" is the spec's one genuinely optional checkbox.
         consent: {
           create: {
-            privacyConsent: true,
-            matchmakingConsent: true,
-            contactSharingConsent: true,
-            termsAccepted: true,
+            privacyConsent: value.consent.reviewConsent,
+            matchmakingConsent: value.consent.storageConsent,
+            contactSharingConsent: value.consent.contactConsent,
+            termsAccepted: value.consent.accurate,
             consentVersion: CONSENT_VERSION,
             ipHash: createHash("sha256").update(clientKeyFromRequest(req)).digest("hex"),
           },
@@ -164,6 +219,17 @@ export async function POST(req: Request) {
     });
 
     await writeAudit({ action: "PROFILE_CREATED", targetProfileId: profile.id, meta: { profileCode } });
+
+    // Powers the private /my-status page for this browser — no accounts,
+    // no URL/ID exposure, just a signed cookie scoped to this one profile.
+    const cookieStore = await cookies();
+    cookieStore.set(APPLICANT_COOKIE, signProfileToken(profile.id), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
 
     return NextResponse.json({ profileCode });
   } catch (error) {

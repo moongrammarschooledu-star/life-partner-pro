@@ -16,12 +16,21 @@ export default async function ConfirmationPage({ searchParams }: PageProps<"/reg
         </p>
       )}
       <p className="text-muted">
-        Thank you for registering with Life Partner Pro. Our team will review your profile and begin the matchmaking
-        process. Your information remains private and is only visible to authorized administrators.
+        Thank you for submitting your matrimonial profile to Life Partner Pro. Our team will review your information
+        and contact you when appropriate. Your information remains private and is only visible to authorized
+        administrators.
       </p>
-      <Link href="/" className={buttonClass()}>
-        Return Home
-      </Link>
+      <p className="text-sm text-muted">
+        Status: <span className="font-medium text-foreground">Under Review</span>
+      </p>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <Link href="/my-status" className={buttonClass()}>
+          View My Profile
+        </Link>
+        <Link href="/" className={buttonClass({ variant: "outline" })}>
+          Go to Dashboard
+        </Link>
+      </div>
     </div>
   );
 }

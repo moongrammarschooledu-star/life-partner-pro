@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/registration/step-indicator";
 import { StepBasic } from "@/components/registration/steps/step-basic";
@@ -22,7 +22,10 @@ import {
   partnerPreferenceSchema,
 } from "@/lib/validation/registration";
 import { useToast } from "@/components/ui/toast";
+import { RegistrationLocaleProvider, LocaleToggle, useRegistrationLocale } from "@/components/registration/locale-context";
 import type { ZodError } from "zod";
+
+const DRAFT_KEY = "lpp_registration_draft";
 
 function zodErrorsToMap(error: ZodError): Record<string, string> {
   const map: Record<string, string> = {};
@@ -32,16 +35,79 @@ function zodErrorsToMap(error: ZodError): Record<string, string> {
   return map;
 }
 
-export function RegistrationWizard() {
+function loadDraft(): { data: WizardData; step: number; savedAt: number } | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function timeAgo(ms: number): string {
+  const minutes = Math.round((Date.now() - ms) / 60000);
+  if (minutes < 1) return "moments ago";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return `${Math.round(hours / 24)} day(s) ago`;
+}
+
+function WizardBody() {
   const router = useRouter();
   const { show } = useToast();
+  const { t, locale } = useRegistrationLocale();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(initialWizardData);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [draftBanner, setDraftBanner] = useState<{ savedAt: number } | null>(null);
 
-  function updateSection<S extends keyof WizardData>(section: S, field: keyof WizardData[S], value: unknown) {
+  // Draft recovery — offer to resume before touching any wizard state.
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft) setDraftBanner({ savedAt: draft.savedAt });
+  }, []);
+
+  // Silent autosave — survives an accidental refresh/close (spec §20).
+  useEffect(() => {
+    if (draftBanner) return; // don't overwrite the draft before the user decides
+    const handle = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
+      } catch {
+        // storage unavailable — autosave silently skipped
+      }
+    }, 600);
+    return () => clearTimeout(handle);
+  }, [data, step, draftBanner]);
+
+  function resumeDraft() {
+    const draft = loadDraft();
+    if (draft) {
+      setData(draft.data);
+      setStep(draft.step);
+    }
+    setDraftBanner(null);
+  }
+
+  function discardDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftBanner(null);
+  }
+
+  function saveDraftNow() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
+      show(t("draftSaved"), "success");
+    } catch {
+      show("Could not save draft on this device.", "error");
+    }
+  }
+
+  function updateSection<S extends Exclude<keyof WizardData, "hp">>(section: S, field: keyof WizardData[S], value: unknown) {
     setData((prev) => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
   }
 
@@ -67,16 +133,22 @@ export function RegistrationWizard() {
       const result = partnerPreferenceSchema.safeParse(data.preference);
       if (!result.success) return (setErrors(zodErrorsToMap(result.error)), false);
     }
-    if (step === 7 && !data.consent.agreed) {
-      setErrors({ agreed: "You must agree before submitting" });
-      return false;
+    if (step === 7) {
+      const newErrors: Record<string, string> = {};
+      if (!data.consent.accurate) newErrors.accurate = t("errorConsent");
+      if (!data.consent.storageConsent) newErrors.storageConsent = t("errorConsent");
+      if (!data.consent.reviewConsent) newErrors.reviewConsent = t("errorConsent");
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return false;
+      }
     }
     return true;
   }
 
   function next() {
     if (!validateStep()) {
-      show("Please check the highlighted fields before continuing.", "error");
+      show(t("checkFields"), "error");
       return;
     }
     setStep((s) => Math.min(s + 1, STEP_TITLES.length - 1));
@@ -103,6 +175,7 @@ export function RegistrationWizard() {
         return;
       }
 
+      localStorage.removeItem(DRAFT_KEY);
       router.push(`/register/confirmation?code=${encodeURIComponent(json.profileCode)}`);
     } catch {
       show("Something went wrong. Please try again.", "error");
@@ -111,9 +184,56 @@ export function RegistrationWizard() {
     }
   }
 
+  const localizedTitles = [
+    t("step1Title"),
+    t("step2Title"),
+    t("step3Title"),
+    t("step4Title"),
+    t("step5Title"),
+    t("step6Title"),
+    t("step7Title"),
+    t("step8Title"),
+  ];
+
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-      <StepIndicator current={step} total={STEP_TITLES.length} titles={STEP_TITLES} />
+    <div className="mx-auto max-w-2xl px-4 py-12 pb-28 sm:px-6 sm:pb-12" dir={locale === "ur" ? "rtl" : "ltr"}>
+      {/* Honeypot — visually hidden, never seen by real users. A filled value
+          server-side is treated as spam and silently rejected. */}
+      <input
+        type="text"
+        name="hp_field"
+        value={data.hp}
+        onChange={(e) => setData((prev) => ({ ...prev, hp: e.target.value }))}
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        style={{ position: "absolute", left: "-9999px", top: "-9999px", width: 1, height: 1, opacity: 0 }}
+      />
+
+      <div className="mb-4 flex justify-end">
+        <LocaleToggle />
+      </div>
+
+      {draftBanner && (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">{t("draftFoundTitle")}</p>
+            <p className="text-xs text-muted">
+              {t("draftFoundBody")} ({timeAgo(draftBanner.savedAt)})
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="outline" onClick={discardDraft}>
+              {t("startOver")}
+            </Button>
+            <Button size="sm" onClick={resumeDraft}>
+              {t("resumeDraft")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <StepIndicator current={step} total={STEP_TITLES.length} titles={localizedTitles} />
 
       <div className="mt-8">
         {step === 0 && <StepBasic data={data.basic} errors={errors} onChange={(f, v) => updateSection("basic", f, v)} />}
@@ -133,27 +253,40 @@ export function RegistrationWizard() {
           <StepReview
             data={data}
             photoFile={photoFile}
-            agreed={data.consent.agreed}
-            onAgreeChange={(v) => updateSection("consent", "agreed", v)}
-            error={errors.agreed}
+            onConsentChange={(f, v) => updateSection("consent", f, v)}
+            errors={errors}
+            onEditStep={setStep}
           />
         )}
       </div>
 
-      <div className="mt-8 flex justify-between">
-        <Button variant="outline" onClick={back} disabled={step === 0}>
-          <ChevronLeft className="h-4 w-4" /> Back
-        </Button>
-        {step < STEP_TITLES.length - 1 ? (
-          <Button onClick={next}>
-            Next <ChevronRight className="h-4 w-4" />
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface p-4 sm:static sm:z-auto sm:mt-8 sm:border-0 sm:bg-transparent sm:p-0">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-2">
+          <Button variant="outline" onClick={back} disabled={step === 0}>
+            <ChevronLeft className="h-4 w-4" /> {t("back")}
           </Button>
-        ) : (
-          <Button onClick={submit} disabled={submitting}>
-            {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Submit Profile
+          <Button variant="ghost" size="sm" onClick={saveDraftNow} className="hidden sm:inline-flex">
+            <Save className="h-4 w-4" /> {t("saveDraft")}
           </Button>
-        )}
+          {step < STEP_TITLES.length - 1 ? (
+            <Button onClick={next}>
+              {t("next")} <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button onClick={submit} disabled={submitting}>
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />} {t("submit")}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+export function RegistrationWizard() {
+  return (
+    <RegistrationLocaleProvider>
+      <WizardBody />
+    </RegistrationLocaleProvider>
   );
 }
