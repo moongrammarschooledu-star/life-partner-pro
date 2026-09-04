@@ -353,6 +353,21 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
+  async function recordResponse(profileId: string, response: "INTERESTED" | "NOT_INTERESTED" | "NEED_MORE_INFO") {
+    try {
+      const res = await fetch(`/api/admin/proposals/${id}/responses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId, response }),
+      });
+      if (!res.ok) throw new Error();
+      show("Response recorded", "success");
+      load();
+    } catch {
+      show("Could not record response.", "error");
+    }
+  }
+
   async function updateMeetingStatus(meetingId: string, newStatus: string) {
     try {
       const res = await fetch(`/api/admin/proposals/${id}/meetings/${meetingId}`, {
@@ -509,18 +524,32 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
             {[proposal.profileA, proposal.profileB].map((p) => {
               const r = responseFor(p.id);
               return (
-                <div key={p.id} className="flex items-center justify-between">
-                  <span>{p.fullName}</span>
-                  {r ? (
-                    <Badge variant={r.response === "INTERESTED" ? "success" : r.response === "NOT_INTERESTED" ? "danger" : "warning"}>
-                      {formatEnumLabel(r.response)}
-                    </Badge>
-                  ) : (
-                    <Badge variant="muted">Pending</Badge>
-                  )}
+                <div key={p.id} className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span>{p.fullName}</span>
+                    {r ? (
+                      <Badge variant={r.response === "INTERESTED" ? "success" : r.response === "NOT_INTERESTED" ? "danger" : "warning"}>
+                        {formatEnumLabel(r.response)}
+                      </Badge>
+                    ) : (
+                      <Badge variant="muted">Pending</Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="outline" className="px-2 py-1 text-xs" onClick={() => recordResponse(p.id, "INTERESTED")}>
+                      Interested
+                    </Button>
+                    <Button size="sm" variant="outline" className="px-2 py-1 text-xs" onClick={() => recordResponse(p.id, "NOT_INTERESTED")}>
+                      Not Interested
+                    </Button>
+                    <Button size="sm" variant="outline" className="px-2 py-1 text-xs" onClick={() => recordResponse(p.id, "NEED_MORE_INFO")}>
+                      Need Info
+                    </Button>
+                  </div>
                 </div>
               );
             })}
+            <p className="text-xs text-muted">Record on the applicant&apos;s behalf (e.g. a phone call) — they can also respond themselves via My Rishta Proposals.</p>
           </CardContent>
         </Card>
       </div>
