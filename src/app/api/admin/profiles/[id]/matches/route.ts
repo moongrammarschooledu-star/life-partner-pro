@@ -194,6 +194,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const scores = categoryScores(result);
 
     const [profileAId, profileBId] = [id, candidateId].sort();
+    // result.direction is computed relative to (seeker, candidate) — the
+    // Match table's profileA/profileB are sorted alphabetically by id
+    // instead, which doesn't always agree with which one was the seeker.
+    // Re-anchor the two direction values to profileA/profileB so a later
+    // recalculation (which always scores profileA as "a") stores a
+    // consistent, non-flipped pair.
+    const seekerIsProfileA = id === profileAId;
+    const directionAToB = seekerIsProfileA ? result.direction.aToB : result.direction.bToA;
+    const directionBToA = seekerIsProfileA ? result.direction.bToA : result.direction.aToB;
+
     const data = {
       score: result.total,
       ageScore: scores.age ?? 0,
@@ -207,8 +217,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       religiousScore: scores.religious ?? 0,
       lifestyleScore: scores.lifestyle ?? 0,
       languagesScore: scores.languages ?? 0,
-      directionAToB: result.direction.aToB,
-      directionBToA: result.direction.bToA,
+      directionAToB,
+      directionBToA,
       breakdown: JSON.stringify(result.breakdown),
       algorithmVersion: ALGORITHM_VERSION,
     };
