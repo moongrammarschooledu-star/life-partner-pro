@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
-  Heart,
   LayoutDashboard,
   Users,
   Handshake,
@@ -17,6 +17,9 @@ import {
   LogOut,
   Menu,
   X,
+  BarChart3,
+  UserCog,
+  Inbox,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -26,9 +29,13 @@ const NAV = [
   { href: "/admin/profiles", label: "Profiles", icon: Users },
   { href: "/admin/proposals", label: "Proposals", icon: Handshake },
   { href: "/admin/follow-ups", label: "Follow-ups", icon: CalendarClock },
+  { href: "/admin/reports", label: "Reports", icon: BarChart3 },
+  { href: "/admin/support", label: "Support", icon: Inbox },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
+
+const SUPER_ADMIN_NAV = [{ href: "/admin/admin-users", label: "Admin Users", icon: UserCog }];
 
 export function AdminShell({
   user,
@@ -41,9 +48,11 @@ export function AdminShell({
   const { theme, toggle } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const navItems = user.role === "SUPER_ADMIN" ? [...NAV, ...SUPER_ADMIN_NAV] : NAV;
+
   const NavLinks = (
     <nav className="flex flex-1 flex-col gap-1 p-3">
-      {NAV.map((item) => {
+      {navItems.map((item) => {
         const active = pathname.startsWith(item.href);
         return (
           <Link
@@ -67,7 +76,7 @@ export function AdminShell({
     <div className="flex min-h-screen">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface md:flex">
         <div className="flex h-16 items-center gap-2 border-b border-border px-4">
-          <Heart className="h-5 w-5 text-primary" fill="currentColor" />
+          <Image src="/logo-icon.png" alt="Life Partner Pro" width={28} height={28} className="h-7 w-7" priority />
           <span className="font-heading font-semibold">Life Partner Pro</span>
         </div>
         {NavLinks}
@@ -82,7 +91,10 @@ export function AdminShell({
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
           <div className="absolute left-0 top-0 flex h-full w-64 flex-col bg-surface">
             <div className="flex h-16 items-center justify-between border-b border-border px-4">
-              <span className="font-heading font-semibold">Life Partner Pro</span>
+              <div className="flex items-center gap-2">
+                <Image src="/logo-icon.png" alt="Life Partner Pro" width={24} height={24} className="h-6 w-6" />
+                <span className="font-heading font-semibold">Life Partner Pro</span>
+              </div>
               <button onClick={() => setMobileOpen(false)}>
                 <X className="h-5 w-5" />
               </button>

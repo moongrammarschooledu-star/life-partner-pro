@@ -120,6 +120,9 @@ enum AuditAction {
   UPDATE_REQUEST_SUBMITTED
   UPDATE_REQUEST_APPROVED
   UPDATE_REQUEST_REJECTED
+  ADMIN_USER_CREATED
+  ADMIN_USER_ROLE_CHANGED
+  ADMIN_USER_STATUS_CHANGED
 }
 
 // ---------- Admin ----------
@@ -329,6 +332,7 @@ model ProfileNote {
   admin       AdminUser @relation(fields: [adminId], references: [id])
   adminId     String
   text        String
+  pinned      Boolean   @default(false)
   createdAt   DateTime  @default(now())
 
   @@index([profileId])
@@ -465,4 +469,18 @@ model AppSettings {
 model ProfileCodeCounter {
   id      Int @id @default(1)
   lastSeq Int @default(0)
+}
+
+// ---------- Support ----------
+
+model SupportMessage {
+  id          String   @id @default(cuid())
+  profileCode String?
+  email       String
+  subject     String
+  message     String
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([resolved])
 }

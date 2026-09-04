@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ShieldCheck, Sparkles, Lock, HeartHandshake, Users, ArrowRight, ClipboardList, Search, MessagesSquare, Handshake } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,8 +25,9 @@ export default function HomePage() {
   return (
     <>
       <section className="relative overflow-hidden border-b border-border">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,var(--color-primary)_0%,transparent_60%)] opacity-[0.06]" />
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,var(--color-brand-pink)_0%,var(--color-primary)_45%,transparent_70%)] opacity-[0.07]" />
         <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 py-20 text-center sm:px-6 sm:py-28">
+          <Image src="/logo-icon.png" alt="Life Partner Pro" width={96} height={96} className="h-20 w-20 sm:h-24 sm:w-24" priority />
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted">
             <Lock className="h-3.5 w-3.5" /> Private &amp; admin-managed matchmaking
           </span>

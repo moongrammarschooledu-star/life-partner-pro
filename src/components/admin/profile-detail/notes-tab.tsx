@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Pin, PinOff, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea, Select, Input } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StickyNote } from "lucide-react";
 
 interface Note {
   id: string;
   text: string;
+  pinned: boolean;
   createdAt: string | Date;
   adminName: string;
 }
@@ -22,6 +24,7 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
   const [notes, setNotes] = useState(initialNotes);
   const [text, setText] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const [commType, setCommType] = useState("PHONE_CALL");
   const [commNotes, setCommNotes] = useState("");
@@ -47,6 +50,32 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
     } finally {
       setSubmittingNote(false);
     }
+  }
+
+  async function togglePin(note: Note) {
+    const res = await fetch(`/api/admin/profiles/${profileId}/notes/${note.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned: !note.pinned }),
+    });
+    if (!res.ok) {
+      show("Could not update note.", "error");
+      return;
+    }
+    setNotes((prev) =>
+      [...prev.map((n) => (n.id === note.id ? { ...n, pinned: !n.pinned } : n))].sort((a, b) => Number(b.pinned) - Number(a.pinned))
+    );
+  }
+
+  async function deleteNote(id: string) {
+    const res = await fetch(`/api/admin/profiles/${profileId}/notes/${id}`, { method: "DELETE" });
+    setDeleteTarget(null);
+    if (!res.ok) {
+      show("Could not delete note.", "error");
+      return;
+    }
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+    show("Note deleted", "success");
   }
 
   async function logCommunication() {
@@ -87,8 +116,22 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
               <EmptyState icon={StickyNote} title="No notes yet" />
             ) : (
               notes.map((n) => (
-                <div key={n.id} className="rounded-lg border border-border p-3 text-sm">
-                  <p>{n.text}</p>
+                <div key={n.id} className={cn("rounded-lg border p-3 text-sm", n.pinned ? "border-accent bg-accent/5" : "border-border")}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="flex-1">{n.text}</p>
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        onClick={() => togglePin(n)}
+                        title={n.pinned ? "Unpin" : "Pin"}
+                        className="text-muted hover:text-accent"
+                      >
+                        {n.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                      </button>
+                      <button onClick={() => setDeleteTarget(n.id)} title="Delete" className="text-muted hover:text-danger">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                   <p className="mt-1 text-xs text-muted">
                     {n.adminName} &middot; {formatDateTime(n.createdAt)}
                   </p>
@@ -122,6 +165,16 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
           </Button>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this note?"
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => deleteTarget && deleteNote(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

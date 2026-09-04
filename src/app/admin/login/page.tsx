@@ -3,8 +3,9 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { signIn } from "next-auth/react";
-import { Heart, Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export default function AdminLoginPage() {
       <Card className="w-full max-w-sm">
         <CardContent className="pt-8">
           <div className="flex flex-col items-center gap-2 mb-6">
-            <Heart className="h-8 w-8 text-primary" fill="currentColor" />
+            <Image src="/logo-icon.png" alt="Life Partner Pro" width={56} height={56} className="h-14 w-14" priority />
             <h1 className="font-heading text-xl font-semibold">Life Partner Pro</h1>
             <p className="flex items-center gap-1 text-xs text-muted">
               <ShieldCheck className="h-3.5 w-3.5" /> Administrator Login

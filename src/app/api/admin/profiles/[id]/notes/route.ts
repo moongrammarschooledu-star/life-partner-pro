@@ -20,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     await writeAudit({ action: "NOTE_ADDED", adminId: admin.id, targetProfileId: id });
 
-    return NextResponse.json({ id: note.id, text: note.text, createdAt: note.createdAt, adminName: note.admin.name });
+    return NextResponse.json({ id: note.id, text: note.text, pinned: note.pinned, createdAt: note.createdAt, adminName: note.admin.name });
   } catch (error) {
     return handleApiError(error);
   }

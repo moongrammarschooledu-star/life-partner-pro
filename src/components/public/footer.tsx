@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Heart } from "lucide-react";
+import Image from "next/image";
 
 export function PublicFooter() {
   return (
@@ -8,7 +8,7 @@ export function PublicFooter() {
         <div className="flex flex-col items-start justify-between gap-6 sm:flex-row">
           <div>
             <div className="flex items-center gap-2">
-              <Heart className="h-5 w-5 text-primary" fill="currentColor" />
+              <Image src="/logo-icon.png" alt="Life Partner Pro" width={28} height={28} className="h-7 w-7" />
               <span className="font-heading text-base font-semibold">Life Partner Pro</span>
             </div>
             <p className="mt-2 max-w-xs text-sm text-muted">Finding the Right Life Partner, With Trust.</p>
@@ -17,7 +17,9 @@ export function PublicFooter() {
             <div className="flex flex-col gap-2">
               <span className="font-medium text-foreground">Platform</span>
               <Link href="/register" className="text-muted hover:text-foreground">Register</Link>
+              <Link href="/how-it-works" className="text-muted hover:text-foreground">How It Works</Link>
               <Link href="/update-request" className="text-muted hover:text-foreground">Update My Profile</Link>
+              <Link href="/support" className="text-muted hover:text-foreground">Support</Link>
               <Link href="/admin/login" className="text-muted hover:text-foreground">Admin Login</Link>
             </div>
             <div className="flex flex-col gap-2">

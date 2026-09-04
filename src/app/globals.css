@@ -3,23 +3,29 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #fbf8f4;
+  --background: #fdf1f4;
   --foreground: #2b1d1f;
   --surface: #ffffff;
-  --surface-muted: #f4ede7;
-  --border: #e7dcd1;
+  --surface-muted: #f8e8ee;
+  --border: #ecd6de;
 
-  --primary: #7a1f34;
+  /* Palette sampled directly from the Life Partner Pro logo: deep maroon
+     (right figure/"LP" mark) as primary, warm gold (heart/handshake/"Pro")
+     as accent, and the logo's rose-pink (left figure/"Life") as a tasteful
+     secondary brand color used sparingly for accents, not as a primary UI color. */
+  --primary: #7a0f31;
   --primary-foreground: #ffffff;
-  --primary-hover: #611829;
+  --primary-hover: #5f0a26;
 
-  --accent: #b8872b;
+  --accent: #b8873a;
   --accent-foreground: #2b1d1f;
+
+  --brand-pink: #d6407a;
 
   --muted: #8a7a72;
 
   --success: #2f7a4f;
-  --warning: #b8872b;
+  --warning: #b8873a;
   --danger: #b3261e;
   --info: #2b6ca3;
 }
@@ -31,12 +37,14 @@
   --surface-muted: #2a1f1c;
   --border: #3a2d29;
 
-  --primary: #d4536a;
+  --primary: #d6407a;
   --primary-foreground: #16100f;
-  --primary-hover: #e26b80;
+  --primary-hover: #e2618f;
 
   --accent: #d9a94a;
   --accent-foreground: #16100f;
+
+  --brand-pink: #e2618f;
 
   --muted: #b7a89f;
 
@@ -57,6 +65,7 @@
   --color-primary-hover: var(--primary-hover);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-brand-pink: var(--brand-pink);
   --color-muted: var(--muted);
   --color-success: var(--success);
   --color-warning: var(--warning);

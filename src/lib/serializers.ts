@@ -17,7 +17,7 @@ export const profileDetailInclude = {
   lifestyle: true,
   preference: true,
   photos: true,
-  notes: { include: { admin: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" } },
+  notes: { include: { admin: { select: { id: true, name: true } } }, orderBy: [{ pinned: "desc" }, { createdAt: "desc" }] },
   consent: true,
   pendingUpdate: true,
 } satisfies Prisma.ProfileInclude;
@@ -69,7 +69,7 @@ export function toDetailDto(profile: ProfileDetail) {
     lifestyle: profile.lifestyle,
     preference: profile.preference,
     photos: profile.photos.map((p) => ({ id: p.id, isPrimary: p.isPrimary })),
-    notes: profile.notes.map((n) => ({ id: n.id, text: n.text, createdAt: n.createdAt, adminName: n.admin.name })),
+    notes: profile.notes.map((n) => ({ id: n.id, text: n.text, pinned: n.pinned, createdAt: n.createdAt, adminName: n.admin.name })),
     hasConsent: !!profile.consent,
     pendingUpdate: profile.pendingUpdate
       ? { id: profile.pendingUpdate.id, payload: JSON.parse(profile.pendingUpdate.payload), submittedAt: profile.pendingUpdate.submittedAt }
