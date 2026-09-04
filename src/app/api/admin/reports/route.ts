@@ -33,6 +33,16 @@ export async function GET() {
       prisma.proposalEvent.findMany({ where: { status: "BOTH_INTERESTED" }, distinct: ["proposalId"], select: { proposalId: true } }),
     ]);
 
+    // "Ever reached FINALIZED" via event history, not current status — a
+    // proposal that progressed FINALIZED -> MARRIED no longer shows
+    // FINALIZED as its *current* status, which would otherwise undercount
+    // finalization (every married proposal was finalized first).
+    const everFinalizedEvents = await prisma.proposalEvent.findMany({
+      where: { status: { in: ["FINALIZED", "MARRIED"] } },
+      distinct: ["proposalId"],
+      select: { proposalId: true },
+    });
+
     const proposalsWithAnyInterest = await prisma.proposal.count({ where: { responses: { some: { response: "INTERESTED" } } } });
 
     const performance = admins.map((a) => ({
@@ -64,7 +74,6 @@ export async function GET() {
 
     const proposalCountByStatus: Record<string, number> = Object.fromEntries(proposalStatusCounts.map((p) => [p.status, p._count.status]));
     const totalProposals = proposalStatusCounts.reduce((sum, p) => sum + p._count.status, 0);
-    const finalizedProposals = proposalCountByStatus.FINALIZED ?? 0;
     const marriedProposals = proposalCountByStatus.MARRIED ?? 0;
     // Kept for the older matchToProposalRate/proposalToMeetingRate fields below.
     const proposalsAtMeetingOrBeyond = proposalsWithMeeting;
@@ -91,17 +100,17 @@ export async function GET() {
         matchesGenerated,
         matchesReviewed,
         proposalsCreated: matchesToProposal,
-        finalizedMatches: finalizedProposals,
+        finalizedMatches: everFinalizedEvents.length,
         matchToProposalRate: matchesGenerated > 0 ? Math.round((matchesToProposal / matchesGenerated) * 100) : 0,
         proposalToMeetingRate: totalProposals > 0 ? Math.round((proposalsAtMeetingOrBeyond / totalProposals) * 100) : 0,
-        meetingToFinalizationRate: proposalsAtMeetingOrBeyond > 0 ? Math.round((finalizedProposals / proposalsAtMeetingOrBeyond) * 100) : 0,
+        meetingToFinalizationRate: proposalsAtMeetingOrBeyond > 0 ? Math.round((everFinalizedEvents.length / proposalsAtMeetingOrBeyond) * 100) : 0,
       },
       proposalPerformance: {
         proposalsByMonth,
         interestRate: totalProposals > 0 ? Math.round((proposalsWithAnyInterest / totalProposals) * 100) : 0,
         mutualInterestRate: totalProposals > 0 ? Math.round((mutualInterestEvents.length / totalProposals) * 100) : 0,
         meetingConversionRate: totalProposals > 0 ? Math.round((proposalsWithMeeting / totalProposals) * 100) : 0,
-        finalizationRate: totalProposals > 0 ? Math.round((finalizedProposals / totalProposals) * 100) : 0,
+        finalizationRate: totalProposals > 0 ? Math.round((everFinalizedEvents.length / totalProposals) * 100) : 0,
         marriageOutcomeRate: totalProposals > 0 ? Math.round((marriedProposals / totalProposals) * 100) : 0,
       },
     });
