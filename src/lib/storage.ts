@@ -1,13 +1,15 @@
-import { mkdir, writeFile, readFile, unlink } from "fs/promises";
-import path from "path";
+import { put, del } from "@vercel/blob";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 
-// Photos live outside `public/` so they are never statically servable —
-// every read goes through an authenticated API route (see
-// app/api/profiles/[id]/photo/route.ts) that checks the admin session first.
-const UPLOAD_ROOT = path.join(process.cwd(), "private-uploads", "photos");
-
+// Vercel's serverless functions have no persistent writable disk, so photos
+// live in Vercel Blob rather than on disk. Blob URLs are unlisted but not
+// authenticated by Vercel itself — the actual access control is that the
+// raw blob URL (storageKey) is never sent to the browser. Every read goes
+// through the authenticated admin route (see
+// app/api/admin/profiles/[id]/photo/[photoId]/route.ts), which fetches the
+// blob server-side and streams the bytes back; the client never sees this
+// URL directly.
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8MB raw upload cap
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -21,8 +23,6 @@ export async function savePhoto(file: Buffer, mimeType: string): Promise<{ stora
     throw new UploadValidationError("Image is too large (max 8MB).");
   }
 
-  await mkdir(UPLOAD_ROOT, { recursive: true });
-
   // Re-encode to strip metadata (incl. EXIF/GPS) and normalize size — also
   // acts as a sanity check that the bytes are actually a decodable image.
   const processed = await sharp(file)
@@ -31,18 +31,21 @@ export async function savePhoto(file: Buffer, mimeType: string): Promise<{ stora
     .jpeg({ quality: 82 })
     .toBuffer();
 
-  const storageKey = `${randomUUID()}.jpg`;
-  await writeFile(path.join(UPLOAD_ROOT, storageKey), processed);
+  const blob = await put(`photos/${randomUUID()}.jpg`, processed, {
+    access: "public",
+    contentType: "image/jpeg",
+    addRandomSuffix: true,
+  });
 
-  return { storageKey, mimeType: "image/jpeg", sizeBytes: processed.byteLength };
+  return { storageKey: blob.url, mimeType: "image/jpeg", sizeBytes: processed.byteLength };
 }
 
 export async function readPhoto(storageKey: string): Promise<Buffer> {
-  const safeName = path.basename(storageKey); // defense in depth against path traversal
-  return readFile(path.join(UPLOAD_ROOT, safeName));
+  const res = await fetch(storageKey);
+  if (!res.ok) throw new Error(`Failed to fetch photo from blob storage: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
 }
 
 export async function deletePhoto(storageKey: string): Promise<void> {
-  const safeName = path.basename(storageKey);
-  await unlink(path.join(UPLOAD_ROOT, safeName)).catch(() => undefined);
+  await del(storageKey).catch(() => undefined);
 }

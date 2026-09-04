@@ -52,6 +52,7 @@ script, then deactivate or delete the seeded account.
 | `DATABASE_URL` | Postgres connection string. |
 | `NEXTAUTH_SECRET` | Signs admin session JWTs. Generate with `openssl rand -base64 32`. |
 | `SEED_ADMIN_PASSWORD` | Optional — overrides the seeded super admin's password. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for photo uploads. Auto-set when you add a Blob store under the project's Storage tab. |
 
 No third-party API keys are required or referenced anywhere in the codebase (see "Notifications" below).
 
@@ -62,8 +63,8 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   "request an update" flow that requires admin approval before changes go live.
 - **Privacy by design:** contact information (phone/WhatsApp/email) is never included in any list or detail
   response by default. It is only ever returned by one explicit "reveal contact" endpoint, which is permission-gated
-  and writes an audit log entry every time it's called. Photos are stored outside `public/` in `private-uploads/`
-  and are only ever served through an authenticated route.
+  and writes an audit log entry every time it's called. Photos are stored in Vercel Blob; the raw blob URL is never
+  sent to the browser — it's only ever fetched server-side and streamed back through an authenticated route.
 - **Admin dashboard:** live counts (total/new/verified/by gender/by status), and distribution breakdowns by age,
   city, profession, education, plus monthly registrations and a matching success rate — all computed from the
   database, no mock data.
@@ -110,7 +111,9 @@ structured so they can be added without restructuring anything else:
 - Registration and self-service update-request endpoints are rate-limited (in-memory token bucket —
   `src/lib/rate-limit.ts`; swap for a Redis-backed limiter before running more than one server instance).
 - Uploaded photos are validated by MIME type and size, then re-encoded with `sharp` (which also strips EXIF/GPS
-  metadata) before being written to disk outside the public web root.
+  metadata) before being uploaded to Vercel Blob. Blob URLs are unlisted (long random tokens) but not
+  authenticated by the storage layer itself — the actual access control is that the URL is only ever known
+  server-side and is never sent to the browser; all reads go through an authenticated admin route.
 - Prisma parameterizes all queries; React escapes all rendered output — standard protection against SQL injection
   and XSS. No raw HTML is ever rendered from user input.
 
@@ -127,15 +130,17 @@ structured so they can be added without restructuring anything else:
    `vercel env pull .env.production.local && npm run db:seed` (uses whichever `.env*` file is present — see
    `SEED_ADMIN_PASSWORD` above to set a real password rather than the default).
 
-**Known limitation:** photo uploads use local disk (`src/lib/storage.ts`), which doesn't persist on Vercel's
-serverless functions — see the next section. Everything else (registration, matching, proposals, admin dashboard)
-works fully once `DATABASE_URL` and `NEXTAUTH_SECRET` are set.
+6. Under the project's **Storage** tab, add a **Blob** store — this sets `BLOB_READ_WRITE_TOKEN` for you
+   automatically, which `src/lib/storage.ts` needs for photo uploads.
 
-## Moving photo storage to cloud object storage
+Once `DATABASE_URL`, `NEXTAUTH_SECRET`, and `BLOB_READ_WRITE_TOKEN` are all set, everything works: registration,
+photo uploads, matching, proposals, and the admin dashboard.
 
-Photos are written/read through `src/lib/storage.ts` (`savePhoto` / `readPhoto` / `deletePhoto`). Replace the
-implementations in that one file with calls to S3/Cloudinary/Vercel Blob/etc. — nothing else in the app touches the
-filesystem directly. This is required for photo uploads to work correctly on Vercel (or any serverless host).
+## Photo storage
+
+Photos are written/read through `src/lib/storage.ts` (`savePhoto` / `readPhoto` / `deletePhoto`), backed by
+[Vercel Blob](https://vercel.com/docs/storage/vercel-blob). To swap in a different provider (S3, Cloudinary, etc.),
+replace the implementations in that one file — nothing else in the app touches storage directly.
 
 ## Project structure
 

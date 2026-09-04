@@ -296,7 +296,7 @@ model ProfilePhoto {
   id            String   @id @default(cuid())
   profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId     String
-  storageKey    String   // relative path under the private uploads dir
+  storageKey    String   // Vercel Blob URL — never sent to the client directly, see src/lib/storage.ts
   mimeType      String
   sizeBytes     Int
   isPrimary     Boolean  @default(true)
