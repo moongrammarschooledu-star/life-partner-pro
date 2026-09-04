@@ -1,5 +1,11 @@
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { authConfig } from "@/lib/auth.config";
+
+// A separate, minimal NextAuth instance built only from the edge-safe
+// config (no providers) — this is what keeps bcrypt and @prisma/client out
+// of the Edge Middleware bundle. See auth.config.ts for why.
+const { auth } = NextAuth(authConfig);
 
 // Defense-in-depth layer #1. Every admin API route also re-checks the
 // session + role server-side (see src/lib/route-guard.ts) since middleware
