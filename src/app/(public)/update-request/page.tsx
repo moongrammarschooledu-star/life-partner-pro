@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
 interface LookupResult {
+  profileCode?: string;
   contact: { mobileNumber: string; whatsappNumber: string | null; email: string };
   preference: { additionalExpectations: string | null } | null;
 }
@@ -37,6 +38,8 @@ export default function UpdateRequestPage() {
       .then((json) => {
         if (json) {
           setResult(json);
+          if (json.profileCode) setProfileCode(json.profileCode);
+          setEmail(json.contact.email);
           setMobileNumber(json.contact.mobileNumber);
           setWhatsappNumber(json.contact.whatsappNumber ?? "");
           setAdditionalExpectations(json.preference?.additionalExpectations ?? "");

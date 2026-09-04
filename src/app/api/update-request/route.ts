@@ -51,6 +51,7 @@ export async function POST(req: Request) {
 
     if (action === "lookup") {
       return NextResponse.json({
+        profileCode: profile.profileCode,
         contact: {
           mobileNumber: profile.contact!.mobileNumber,
           whatsappNumber: profile.contact!.whatsappNumber,
