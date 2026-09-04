@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, X, AlertTriangle, Minus, Loader2, Handshake, ThumbsUp, ThumbsDown, CheckCircle2, XCircle } from "lucide-react";
+import { Check, X, AlertTriangle, Minus, Loader2, Handshake, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { Drawer } from "@/components/ui/drawer";
 import { MatchScore } from "@/components/ui/match-score";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,18 @@ function ProfileColumn({ profile, title }: { profile: ProfileDetailDto | null; t
     <div className="flex-1 space-y-1.5 text-sm">
       <p className="text-xs uppercase tracking-wide text-muted">{title}</p>
       <p className="text-base font-semibold">{profile.fullName}</p>
-      <p className="text-xs text-muted">{profile.profileCode}</p>
+      <p className="flex items-center gap-1 text-xs text-muted">
+        {profile.profileCode}
+        {profile.verified ? (
+          <span className="inline-flex items-center gap-0.5 text-success">
+            <ShieldCheck className="h-3 w-3" /> Verified
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-0.5 text-warning">
+            <ShieldQuestion className="h-3 w-3" /> Unverified
+          </span>
+        )}
+      </p>
       <p>
         {profile.age} years · {formatHeight(profile.heightCm)}
       </p>
@@ -342,7 +353,27 @@ export function MatchDetailPanel({
 
         {showProposalForm ? (
           <div className="rounded-xl border border-border p-4">
-            <p className="text-sm font-semibold mb-3">Create Proposal</p>
+            <p className="text-sm font-semibold mb-1">Confirm Rishta Proposal</p>
+            <p className="mb-3 text-xs text-muted">Review the details below before creating this proposal.</p>
+            <div className="mb-3 grid gap-2 rounded-lg bg-surface-muted p-3 text-xs sm:grid-cols-2">
+              <p>
+                <span className="text-muted">Profile A:</span> {seeker?.fullName} ({seeker?.profileCode}) —{" "}
+                {seeker?.verified ? "Verified" : "Unverified"}
+              </p>
+              <p>
+                <span className="text-muted">Profile B:</span> {candidate?.fullName} ({candidate?.profileCode}) —{" "}
+                {candidate?.verified ? "Verified" : "Unverified"}
+              </p>
+              <p>
+                <span className="text-muted">Compatibility Score:</span> {match.total}% ({match.tierLabel})
+              </p>
+              <p>
+                <span className="text-muted">Key Highlights:</span> {match.reasons.slice(0, 2).join("; ") || "None"}
+              </p>
+              <p className="sm:col-span-2">
+                <span className="text-muted">Potential Differences:</span> {match.differences.slice(0, 2).join("; ") || "None"}
+              </p>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Priority" htmlFor="proposalPriority">
                 <Select id="proposalPriority" value={proposalPriority} onChange={(e) => setProposalPriority(e.target.value)}>
@@ -357,7 +388,7 @@ export function MatchDetailPanel({
                 <p className="flex h-10 items-center text-sm font-medium">{match.total}%</p>
               </Field>
             </div>
-            <Field label="Notes" htmlFor="proposalNote" className="mt-3">
+            <Field label="Admin Notes" htmlFor="proposalNote" className="mt-3">
               <Textarea id="proposalNote" rows={2} value={proposalNote} onChange={(e) => setProposalNote(e.target.value)} />
             </Field>
           </div>

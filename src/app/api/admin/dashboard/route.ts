@@ -85,6 +85,11 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    const [meetingsScheduledCount, meetingsCompletedCount] = await Promise.all([
+      prisma.meeting.count({ where: { status: { in: ["REQUESTED", "SCHEDULED", "CONFIRMED", "RESCHEDULED"] } } }),
+      prisma.meeting.count({ where: { status: "COMPLETED" } }),
+    ]);
+
     const ageBuckets: Record<string, number> = { "18-24": 0, "25-30": 0, "31-36": 0, "37-45": 0, "46+": 0 };
     for (const p of profiles) {
       const age = now.getFullYear() - p.dateOfBirth.getFullYear();
@@ -120,12 +125,29 @@ export async function GET(req: Request) {
       });
     }
 
-    const proposalCountByStatus = Object.fromEntries(proposalStats.map((p) => [p.status, p._count.status]));
+    const proposalCountByStatus: Record<string, number> = Object.fromEntries(proposalStats.map((p) => [p.status, p._count.status]));
     const totalProposals = proposalStats.reduce((sum, p) => sum + p._count.status, 0);
     const finalizedProposals = proposalCountByStatus.FINALIZED ?? 0;
     const activeProposals =
       (proposalCountByStatus.SENT ?? 0) + (proposalCountByStatus.WAITING ?? 0) + (proposalCountByStatus.INTERESTED ?? 0);
-    const meetingsScheduled = proposalCountByStatus.MEETING ?? 0;
+    const meetingsScheduled = meetingsScheduledCount;
+
+    // STEP 7 proposal KPIs (spec §22) — computed from the new 22-stage
+    // lifecycle; legacy (pre-STEP7) statuses are folded in where the
+    // meaning clearly corresponds, so old demo rows still count somewhere.
+    const sumStatuses = (statuses: string[]) => statuses.reduce((sum, s) => sum + (proposalCountByStatus[s] ?? 0), 0);
+    const proposalKpis = {
+      total: totalProposals,
+      pendingResponses: sumStatuses(["DRAFT", "PROPOSAL_CREATED", "WAITING_FOR_PROFILE_A", "WAITING_FOR_PROFILE_B", "BOTH_REVIEWING", "SENT", "WAITING"]),
+      mutualInterest: sumStatuses(["BOTH_INTERESTED", "INTERESTED"]),
+      contactPending: sumStatuses(["CONTACT_PERMISSION_PENDING"]),
+      meetingsScheduled: meetingsScheduledCount,
+      meetingsCompleted: meetingsCompletedCount,
+      accepted: sumStatuses(["ACCEPTED"]),
+      finalized: sumStatuses(["FINALIZED"]),
+      married: sumStatuses(["MARRIED"]),
+      rejected: sumStatuses(["REJECTED", "NOT_INTERESTED"]),
+    };
 
     const matchCountByStatus = Object.fromEntries(matchCounts.map((m) => [m.status, m._count.status]));
     const potentialMatches = matchCountByStatus.SUGGESTED ?? 0;
@@ -185,6 +207,7 @@ export async function GET(req: Request) {
         newHighCompatMatches,
         recentProposalResponses,
       },
+      proposalKpis,
       todaysBestMatches: todaysBestMatches.map((m) => ({
         id: m.id,
         profileACode: m.profileA.profileCode,

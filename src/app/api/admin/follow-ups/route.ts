@@ -38,7 +38,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const admin = await requireAdmin("communication:add");
-    const { profileId, proposalId, dueDate, title, priority, note } = await req.json();
+    const { profileId, proposalId, dueDate, title, priority, note, purpose } = await req.json();
 
     if (!profileId || !dueDate) throw new ApiError(400, "profileId and dueDate are required");
 
@@ -50,6 +50,7 @@ export async function POST(req: Request) {
         dueDate: parseDateOnly(dueDate),
         title: title || null,
         note: note || null,
+        purpose: purpose || null,
         priority: priority || "MEDIUM",
         status: "PENDING",
       },

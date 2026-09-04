@@ -139,13 +139,25 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   breakdown, mutual scores, and decision controls as the Matching Center's comparison panel), and can be
   recalculated on demand — recalculating snapshots the prior score/breakdown before overwriting and reports what
   changed, so nothing is silently rewritten.
-- **Proposals:** create a proposal (with a Low/Medium/High priority) between two profiles from the Matching Center
-  or a profile's Matches tab (linked back to the `Match` it came from, snapshotting its score), then move it through
-  Draft → Sent → Interested/Not Interested → Waiting → Meeting → Finalized → Closed, with a visible timeline. The
-  proposal list is tabbed by status and shows match %, priority, and the creating admin.
+- **Rishta Proposal Management (STEP 7):** create a proposal (with a Low/Medium/High priority) from the Matching
+  Center or a profile's Matches tab, behind a confirmation screen showing both profiles' IDs/names/verification
+  status, the compatibility score, match explanation, and admin notes. Each proposal gets a human-readable
+  `LPP-RP-000001` code and moves through a 22-stage lifecycle (Draft → Proposal Created → Waiting for Profile A/B →
+  Both Reviewing → Profile A/B Interested → Both Interested → Contact Permission Pending → Contact Approved →
+  Families Contacted → Meeting Requested/Scheduled/Completed → Further Discussion → Accepted/On Hold → Finalized →
+  Married → Closed/Archived/Rejected), with every transition recorded on a full timeline showing who performed it
+  (admin or the applicant themselves). Applicants respond via `/my-proposals` (Interested/Not Interested/Need More
+  Info/Contact Admin) using the same signed-cookie identity as `/my-status` — a pure `nextProposalStatus()` function
+  (unit-tested) advances the shared status from both sides' responses, auto-rejecting the moment either side
+  declines. The Proposal Detail page adds per-profile contact-permission tracking (request → approve, distinct from
+  the final one-shot reveal), meeting scheduling, an optional family-communication log, staff assignment
+  (Super Admin assigns; Staff can only edit proposals assigned to them), and dangerous actions (Reject, Finalize,
+  Mark Married, Archive) behind a confirmation dialog. Pre-STEP7 statuses (`SENT`/`INTERESTED`/`NOT_INTERESTED`/
+  `WAITING`/`MEETING`) are kept valid for old rows but never offered by new UI.
 - **Contact sharing:** approving contact sharing on a proposal requires picking which channels (phone/WhatsApp/email)
   are being shared and confirming that consent was received from both parties — never a single blanket checkbox —
-  and every share records exactly which channels were approved.
+  and every share records exactly which channels were approved. A warning banner (not a hard block, to avoid
+  regressing the existing reveal flow) appears if both sides' contact-permission approval isn't yet on record.
 - **Consent:** registration records four distinct, versioned consent flags (privacy, matchmaking use, contact
   sharing, terms) rather than one blanket checkbox — three (privacy, matchmaking, terms) are required at
   registration, contact-sharing consent is genuinely optional. A profile cannot be moved to `ACTIVE` status until
@@ -208,6 +220,19 @@ structured so they can be added without restructuring anything else:
 - **DB/permission-dependent matching test scenarios** (duplicate profiles, gender filtering, permission security,
   archived/inactive exclusion) are verified live against production rather than as executable Vitest tests — this
   project has no test database. The pure scoring logic (`src/lib/matching.ts`) does have real unit tests (`npm test`).
+- **Per-channel contact-permission granularity** — `ContactPermission` tracks one coarse approve/revoke state per
+  profile per proposal; per-channel detail (phone vs. WhatsApp vs. email) stays on `ContactShareLog` at the moment
+  of actual reveal, as before STEP 7.
+- **A calendar/drag-drop meetings UI** — `/admin/meetings` is a simple filtered table (Upcoming/Past); scheduling
+  and editing a meeting happens on its Proposal Detail page.
+- **Applicant-visible photos of the other profile** — matrimonial platforms conventionally gate photo visibility
+  behind mutual interest/consent; nothing in the schema tracks that distinction yet, so `/my-proposals` shows no
+  photos for now.
+- **Global search extended to proposal codes** — would need a discriminated result type in the topbar search
+  component; the dedicated Proposals list page already has its own code/name search and status/date/score filters.
+- **DB/permission-dependent proposal test scenarios** (staff row-level access, applicant response ownership checks,
+  legacy-status handling) are verified live rather than as executable Vitest tests, for the same reason as the
+  matching engine above. `src/lib/proposal-workflow.ts`'s pure status-transition logic does have real unit tests.
 
 ## Security notes
 

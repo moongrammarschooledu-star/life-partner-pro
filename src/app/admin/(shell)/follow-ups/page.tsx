@@ -15,6 +15,8 @@ interface FollowUpItem {
   dueDate: string;
   title: string | null;
   note: string | null;
+  purpose: string | null;
+  outcome: string | null;
   priority: "LOW" | "MEDIUM" | "HIGH";
   profile: { id: string; profileCode: string; fullName: string };
   proposal: { id: string } | null;
@@ -50,7 +52,17 @@ function FollowUpRow({ item, onComplete, onCancel }: { item: FollowUpItem; onCom
           {item.profile.profileCode} · Due {formatDate(item.dueDate)}
           {item.admin ? ` · ${item.admin.name}` : ""}
         </p>
+        {item.purpose && (
+          <p className="mt-1 text-xs">
+            <strong>Purpose:</strong> {item.purpose}
+          </p>
+        )}
         {(item.title || item.note) && <p className="mt-1 text-xs">{item.title ? <strong>{item.title}: </strong> : null}{item.note}</p>}
+        {item.outcome && (
+          <p className="mt-1 text-xs text-success">
+            <strong>Outcome:</strong> {item.outcome}
+          </p>
+        )}
       </div>
       {(onComplete || onCancel) && (
         <div className="flex shrink-0 gap-2">

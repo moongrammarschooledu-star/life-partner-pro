@@ -1,17 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Phone, MessageCircle, Mail, Send, Loader2, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
+// useSearchParams() (used to prefill from a "Contact Admin" link) requires a
+// Suspense boundary during static prerendering — the page shell below stays
+// outside it so the header/contact cards render immediately.
 export default function SupportPage() {
+  return (
+    <Suspense fallback={null}>
+      <SupportForm />
+    </Suspense>
+  );
+}
+
+function SupportForm() {
   const { show } = useToast();
-  const [profileCode, setProfileCode] = useState("");
+  const searchParams = useSearchParams();
+  const [profileCode, setProfileCode] = useState(() => searchParams.get("profileCode") ?? "");
   const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(() => searchParams.get("subject") ?? "");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);

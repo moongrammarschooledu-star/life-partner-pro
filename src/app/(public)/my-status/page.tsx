@@ -151,6 +151,9 @@ export default function MyStatusPage() {
           </CardContent>
         </Card>
 
+        <Link href="/my-proposals" className={buttonClass({ className: "w-full justify-center" })}>
+          View My Rishta Proposals
+        </Link>
         <Link href="/update-request" className={buttonClass({ variant: "outline", className: "w-full justify-center" })}>
           Request Profile Update
         </Link>

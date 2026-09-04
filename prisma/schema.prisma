@@ -88,6 +88,10 @@ enum EmploymentType {
   STUDENT
 }
 
+// STEP 7 replaced the original 8-value lifecycle with the spec's 22-stage
+// one below. SENT/INTERESTED/NOT_INTERESTED/WAITING/MEETING are legacy —
+// kept only so pre-STEP7 rows stay valid; never offered by new UI/code.
+// DRAFT/FINALIZED/CLOSED are shared (same meaning, reused as-is).
 enum ProposalStatus {
   DRAFT
   SENT
@@ -97,6 +101,61 @@ enum ProposalStatus {
   MEETING
   FINALIZED
   CLOSED
+
+  PROPOSAL_CREATED
+  WAITING_FOR_PROFILE_A
+  WAITING_FOR_PROFILE_B
+  BOTH_REVIEWING
+  PROFILE_A_INTERESTED
+  PROFILE_B_INTERESTED
+  BOTH_INTERESTED
+  CONTACT_PERMISSION_PENDING
+  CONTACT_APPROVED
+  FAMILIES_CONTACTED
+  MEETING_REQUESTED
+  MEETING_SCHEDULED
+  MEETING_COMPLETED
+  FURTHER_DISCUSSION
+  ACCEPTED
+  REJECTED
+  ON_HOLD
+  MARRIED
+  ARCHIVED
+}
+
+enum ProposalResponseType {
+  INTERESTED
+  NOT_INTERESTED
+  NEED_MORE_INFO
+}
+
+enum ProposalDeclineReason {
+  DIFFERENT_EXPECTATIONS
+  LOCATION
+  AGE
+  EDUCATION
+  PROFESSION
+  FAMILY_PREFERENCE
+  PERSONAL_PREFERENCE
+  OTHER
+}
+
+enum MeetingType {
+  FAMILY_MEETING
+  INITIAL_MEETING
+  ONLINE_MEETING
+  PHONE_DISCUSSION
+  IN_PERSON_MEETING
+  OTHER
+}
+
+enum MeetingStatus {
+  REQUESTED
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
 }
 
 enum CommunicationType {
@@ -168,6 +227,18 @@ enum AuditAction {
   ADMIN_USER_CREATED
   ADMIN_USER_ROLE_CHANGED
   ADMIN_USER_STATUS_CHANGED
+
+  PROPOSAL_VIEWED
+  PROPOSAL_RESPONSE_SUBMITTED
+  CONTACT_PERMISSION_REQUESTED
+  CONTACT_PERMISSION_APPROVED
+  MEETING_CREATED
+  MEETING_MODIFIED
+  FAMILY_COMMUNICATION_LOGGED
+  PROPOSAL_FINALIZED
+  PROPOSAL_MARRIED
+  PROPOSAL_ARCHIVED
+  PROPOSAL_ASSIGNED
 }
 
 // ---------- Admin ----------
@@ -191,6 +262,12 @@ model AdminUser {
   contactShares     ContactShareLog[]
   proposalsCreated  Proposal[]
   matchesCreated    Match[]
+  assignedProposals Proposal[] @relation("AssignedProposals")
+
+  contactPermissionsApproved ContactPermission[]
+  meetingsCreated            Meeting[]
+  familyCommunicationsLogged FamilyCommunication[]
+  performedProposalEvents    ProposalEvent[]
 }
 
 // ---------- Core profile ----------
@@ -242,6 +319,11 @@ model Profile {
   auditLogs           AuditLog[]
   contactSharesAsA    ContactShareLog[] @relation("ShareProfileA")
   contactSharesAsB    ContactShareLog[] @relation("ShareProfileB")
+
+  proposalResponses     ProposalResponse[]
+  contactPermissions    ContactPermission[]
+  familyCommunications  FamilyCommunication[]
+  performedProposalEvents ProposalEvent[]
 
   @@index([gender, status])
   @@index([city])
@@ -473,6 +555,11 @@ model Match {
 
 model Proposal {
   id            String         @id @default(cuid())
+  // LPP-RP-000001 style, cosmetic display id — see src/lib/proposal-code.ts.
+  // Nullable: a live table already has rows when this column was added;
+  // new proposals get one at creation, old rows are lazily backfilled by
+  // ensureProposalCode() the first time they're read (see plan §Schema).
+  proposalCode  String?        @unique
   profileA      Profile        @relation("ProposalProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
   profileAId    String
   profileB      Profile        @relation("ProposalProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
@@ -487,14 +574,44 @@ model Proposal {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  events          ProposalEvent[]
-  notes           ProfileNote[]
-  communications  Communication[]
-  followUps       FollowUp[]
+  // Staff assignment (spec §24) — STAFF admins may only edit proposals
+  // assigned to them, enforced in src/lib/proposal-access.ts.
+  assignedTo    AdminUser?     @relation("AssignedProposals", fields: [assignedToId], references: [id])
+  assignedToId  String?
+
+  finalizedAt   DateTime?
+  finalizedById String?
+  finalNotes    String?
+
+  marriedAt     DateTime?
+  marriedById   String?
+  marriageNotes String?
+
+  // rejectionReason is a short admin-chosen category; internalRejectionNote
+  // is free text that must never be serialized to any applicant-facing API
+  // response (spec §17 — "never expose sensitive rejection reasons").
+  rejectedAt             DateTime?
+  rejectedById           String?
+  rejectionReason        String?
+  internalRejectionNote  String?
+
+  closedAt      DateTime?
+  archivedAt    DateTime?
+
+  events                ProposalEvent[]
+  notes                 ProfileNote[]
+  communications        Communication[]
+  followUps             FollowUp[]
+  responses             ProposalResponse[]
+  contactPermissions    ContactPermission[]
+  meetings              Meeting[]
+  familyCommunications  FamilyCommunication[]
 
   @@index([profileAId])
   @@index([profileBId])
   @@index([matchId])
+  @@index([assignedToId])
+  @@index([status])
 }
 
 model ProposalEvent {
@@ -505,7 +622,102 @@ model ProposalEvent {
   note          String?
   createdAt     DateTime  @default(now())
 
+  // Exactly one of these is set — an admin action vs. an applicant's own
+  // self-service response (spec §12 "Performed by").
+  performedByAdmin     AdminUser? @relation(fields: [performedByAdminId], references: [id])
+  performedByAdminId   String?
+  performedByProfile   Profile?   @relation(fields: [performedByProfileId], references: [id])
+  performedByProfileId String?
+
   @@index([proposalId])
+}
+
+// Per-profile Interested/Not Interested/Need More Info response (spec §6).
+// Upserted — one row per profile per proposal, respondedAt tracks the
+// latest response if a profile changes their mind.
+model ProposalResponse {
+  id           String                  @id @default(cuid())
+  proposal     Proposal                @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId   String
+  profile      Profile                 @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId    String
+  response     ProposalResponseType
+  reason       ProposalDeclineReason?
+  reasonNote   String?
+  respondedAt  DateTime                @default(now())
+
+  @@unique([proposalId, profileId])
+  @@index([proposalId])
+}
+
+// Per-profile contact consent state (spec §8) — distinct from
+// ContactShareLog, which records the actual one-shot reveal of contact
+// details once both sides here are approved.
+model ContactPermission {
+  id           String     @id @default(cuid())
+  proposal     Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId   String
+  profile      Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId    String
+  requestedAt  DateTime   @default(now())
+  approvedAt   DateTime?
+  approvedBy   AdminUser? @relation(fields: [approvedById], references: [id])
+  approvedById String?
+  revokedAt    DateTime?
+
+  @@unique([proposalId, profileId])
+  @@index([proposalId])
+}
+
+model Meeting {
+  id            String        @id @default(cuid())
+  proposal      Proposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId    String
+  meetingType   MeetingType
+  scheduledAt   DateTime
+  locationInfo  String?
+  participants  String?
+  status        MeetingStatus @default(REQUESTED)
+  notes         String?
+  followUpDate  DateTime?
+  createdBy     AdminUser     @relation(fields: [createdById], references: [id])
+  createdById   String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([proposalId])
+  @@index([scheduledAt])
+}
+
+// Optional family-involvement log (spec §9) — kept separate from the
+// general Communication model since its fields (contact person,
+// relationship, outcome) are specific to family outreach.
+model FamilyCommunication {
+  id                  String    @id @default(cuid())
+  proposal            Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId          String
+  profile             Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId           String
+  contactPerson       String
+  relationship        String
+  communicationMethod String
+  communicationDate   DateTime
+  outcome             String?
+  notes               String?
+  nextFollowUpDate    DateTime?
+  createdBy           AdminUser @relation(fields: [createdById], references: [id])
+  createdById         String
+  createdAt           DateTime  @default(now())
+
+  @@index([proposalId])
+  @@index([profileId])
+}
+
+// Running counter backing LPP-RP-###### proposal codes — see
+// src/lib/proposal-code.ts (mirrors ProfileCodeCounter).
+model ProposalCodeCounter {
+  id      Int @id @default(1)
+  lastSeq Int @default(0)
 }
 
 model Communication {
@@ -536,6 +748,8 @@ model FollowUp {
   adminId       String?
   title         String?
   note          String?
+  purpose       String? // e.g. "Check on family discussion" — spec §11
+  outcome       String? // recorded once the follow-up is completed
   dueDate       DateTime
   priority      FollowUpPriority @default(MEDIUM)
   status        FollowUpStatus   @default(PENDING)

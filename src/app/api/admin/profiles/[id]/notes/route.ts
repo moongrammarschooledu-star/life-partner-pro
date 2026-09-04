@@ -7,14 +7,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const admin = await requireAdmin("note:add");
     const { id } = await params;
-    const { text } = await req.json();
+    const { text, proposalId } = await req.json();
 
     if (!text || typeof text !== "string" || !text.trim()) {
       throw new ApiError(400, "Note text is required");
     }
 
     const note = await prisma.profileNote.create({
-      data: { profileId: id, adminId: admin.id, text: text.trim() },
+      data: { profileId: id, proposalId: proposalId || undefined, adminId: admin.id, text: text.trim() },
       include: { admin: { select: { name: true } } },
     });
 

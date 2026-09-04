@@ -4,7 +4,7 @@ import { requireAdmin, handleApiError } from "@/lib/route-guard";
 import { subDays, endOfDay } from "date-fns";
 
 export interface NotificationEntry {
-  type: "verification" | "follow_up" | "match" | "proposal";
+  type: "verification" | "follow_up" | "match" | "proposal" | "mutual_interest" | "contact_permission";
   label: string;
   count: number;
   href: string;
@@ -21,7 +21,7 @@ export async function GET() {
     await requireAdmin("profile:view");
     const now = new Date();
 
-    const [awaitingVerification, followUpsDue, newMatchRows, proposalResponses] = await Promise.all([
+    const [awaitingVerification, followUpsDue, newMatchRows, proposalResponses, mutualInterestRows, contactPermissionPendingRows] = await Promise.all([
       prisma.profile.count({ where: { softDeleted: false, verified: false, status: { in: ["NEW", "UNDER_REVIEW"] } } }),
       prisma.followUp.count({ where: { status: "PENDING", dueDate: { lte: endOfDay(now) } } }),
       prisma.match.findMany({
@@ -31,8 +31,24 @@ export async function GET() {
         take: 3,
       }),
       prisma.proposal.count({ where: { updatedAt: { gte: subDays(now, 1) }, status: { in: ["INTERESTED", "NOT_INTERESTED"] } } }),
+      // "Mutual Interest Received — Action Required" (spec §7).
+      prisma.proposal.findMany({
+        where: { status: "BOTH_INTERESTED" },
+        include: { profileA: { select: { profileCode: true } }, profileB: { select: { profileCode: true } } },
+        orderBy: { updatedAt: "desc" },
+        take: 3,
+      }),
+      // Contact permission requested by at least one side but not yet approved by both.
+      prisma.proposal.findMany({
+        where: { status: "CONTACT_PERMISSION_PENDING" },
+        include: { profileA: { select: { profileCode: true } }, profileB: { select: { profileCode: true } } },
+        orderBy: { updatedAt: "desc" },
+        take: 3,
+      }),
     ]);
     const newMatchesTotal = await prisma.match.count({ where: { status: "SUGGESTED", score: { gte: 80 }, createdAt: { gte: subDays(now, 2) } } });
+    const mutualInterestTotal = await prisma.proposal.count({ where: { status: "BOTH_INTERESTED" } });
+    const contactPermissionPendingTotal = await prisma.proposal.count({ where: { status: "CONTACT_PERMISSION_PENDING" } });
 
     const entries: NotificationEntry[] = [];
     if (awaitingVerification > 0) {
@@ -57,6 +73,34 @@ export async function GET() {
     }
     if (proposalResponses > 0) {
       entries.push({ type: "proposal", label: "Recent proposal responses", count: proposalResponses, href: "/admin/proposals" });
+    }
+    if (mutualInterestTotal > 0) {
+      entries.push({
+        type: "mutual_interest",
+        label: "Mutual Interest Received — Action Required",
+        count: mutualInterestTotal,
+        href: "/admin/proposals",
+        examples: mutualInterestRows.map((p) => ({
+          profileACode: p.profileA.profileCode,
+          profileBCode: p.profileB.profileCode,
+          score: p.matchScore ?? 0,
+          href: `/admin/proposals/${p.id}`,
+        })),
+      });
+    }
+    if (contactPermissionPendingTotal > 0) {
+      entries.push({
+        type: "contact_permission",
+        label: "Contact Permission Requests Pending",
+        count: contactPermissionPendingTotal,
+        href: "/admin/proposals",
+        examples: contactPermissionPendingRows.map((p) => ({
+          profileACode: p.profileA.profileCode,
+          profileBCode: p.profileB.profileCode,
+          score: p.matchScore ?? 0,
+          href: `/admin/proposals/${p.id}`,
+        })),
+      });
     }
 
     return NextResponse.json({ entries, total: entries.reduce((sum, e) => sum + e.count, 0) });

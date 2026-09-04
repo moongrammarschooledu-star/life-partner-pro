@@ -6,13 +6,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     await requireAdmin("communication:add");
     const { id } = await params;
-    const { done, status } = await req.json();
+    const { done, status, outcome } = await req.json();
 
     const data =
       status === "CANCELLED"
         ? { status: "CANCELLED" as const }
         : done
-          ? { status: "COMPLETED" as const, completedAt: new Date() }
+          ? { status: "COMPLETED" as const, completedAt: new Date(), outcome: outcome || undefined }
           : { status: "PENDING" as const, completedAt: null };
 
     const followUp = await prisma.followUp.update({ where: { id }, data });

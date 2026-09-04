@@ -2,19 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Loader2,
-  Check,
-  X,
-  AlertTriangle,
-  Minus,
-  CheckCircle2,
-  XCircle,
-  ThumbsUp,
-  ThumbsDown,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, CheckCircle2, XCircle, ThumbsUp, ThumbsDown, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/form";
@@ -23,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatCurrency, formatHeight, formatDateTime } from "@/lib/utils";
 import type { ProfileDetailDto } from "@/lib/serializers";
 import type { CompatibilityStatus } from "@/lib/matching";
+import { CompatibilityBreakdownList } from "@/components/admin/compatibility-breakdown";
 
 interface CategoryRow {
   category: string;
@@ -66,13 +55,6 @@ const RECOMMENDATION_OPTIONS = [
   { value: "NEEDS_REVIEW", label: "Needs Review" },
   { value: "NOT_RECOMMENDED", label: "Not Recommended" },
 ];
-
-function CompatIndicator({ status }: { status: CompatibilityStatus }) {
-  if (status === "compatible") return <Check className="h-4 w-4 shrink-0 text-success" aria-label="Strong match" />;
-  if (status === "partial") return <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-label="Partial match" />;
-  if (status === "incompatible") return <X className="h-4 w-4 shrink-0 text-danger" aria-label="Conflict" />;
-  return <Minus className="h-4 w-4 shrink-0 text-muted" aria-label="Not provided" />;
-}
 
 function ProfileSummary({ profile, title }: { profile: ProfileDetailDto; title: string }) {
   return (
@@ -239,37 +221,8 @@ export default function MatchAnalysisPage({ params }: { params: Promise<{ id: st
         <CardHeader>
           <CardTitle className="text-base">Compatibility Breakdown</CardTitle>
         </CardHeader>
-        <CardContent className="divide-y divide-border">
-          {data.breakdown.map((row) => {
-            const pct = Math.round(row.score * 100);
-            return (
-            <div key={row.category} className="py-2.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <CompatIndicator status={row.status} /> {row.label}
-                  {row.hardRequirementFailed && <span className="text-xs text-danger">(Must Have not met)</span>}
-                </span>
-                <span className="text-muted">{row.status === "unknown" ? "—" : `${pct}%`}</span>
-              </div>
-              <div className="mt-1.5 h-2 rounded-full bg-surface-muted">
-                <div
-                  className={
-                    "h-2 rounded-full " +
-                    (row.status === "compatible"
-                      ? "bg-success"
-                      : row.status === "partial"
-                        ? "bg-warning"
-                        : row.status === "incompatible"
-                          ? "bg-danger"
-                          : "bg-muted")
-                  }
-                  style={{ width: row.status === "unknown" ? "0%" : `${Math.max(4, pct)}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-muted">{row.reason}</p>
-            </div>
-            );
-          })}
+        <CardContent>
+          <CompatibilityBreakdownList breakdown={data.breakdown} />
         </CardContent>
       </Card>
 

@@ -30,6 +30,14 @@ interface ReportsData {
     proposalToMeetingRate: number;
     meetingToFinalizationRate: number;
   };
+  proposalPerformance: {
+    proposalsByMonth: { month: string; count: number }[];
+    interestRate: number;
+    mutualInterestRate: number;
+    meetingConversionRate: number;
+    finalizationRate: number;
+    marriageOutcomeRate: number;
+  };
 }
 
 function downloadExport(type: string) {
@@ -161,6 +169,40 @@ export default function ReportsPage() {
               { label: "Match → Proposal Rate", value: `${reports.matchingPerformance.matchToProposalRate}%` },
               { label: "Proposal → Meeting Rate", value: `${reports.matchingPerformance.proposalToMeetingRate}%` },
               { label: "Meeting → Finalization Rate", value: `${reports.matchingPerformance.meetingToFinalizationRate}%` },
+            ].map((m) => (
+              <div key={m.label} className="rounded-lg border border-border p-3 text-center">
+                <p className="text-xl font-semibold">{m.value}</p>
+                <p className="mt-1 text-xs text-muted">{m.label}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Proposals by Month</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BarChart data={reports.proposalPerformance.proposalsByMonth.map((m) => ({ label: m.month, count: m.count }))} title="" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Proposal Outcomes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-xs text-muted">
+            Rates reflect proposals that ever reached each stage — not a prediction of future outcomes for any single proposal.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {[
+              { label: "Interest Rate", value: `${reports.proposalPerformance.interestRate}%` },
+              { label: "Mutual Interest Rate", value: `${reports.proposalPerformance.mutualInterestRate}%` },
+              { label: "Meeting Conversion", value: `${reports.proposalPerformance.meetingConversionRate}%` },
+              { label: "Finalization Rate", value: `${reports.proposalPerformance.finalizationRate}%` },
+              { label: "Marriage Outcomes", value: `${reports.proposalPerformance.marriageOutcomeRate}%` },
             ].map((m) => (
               <div key={m.label} className="rounded-lg border border-border p-3 text-center">
                 <p className="text-xl font-semibold">{m.value}</p>

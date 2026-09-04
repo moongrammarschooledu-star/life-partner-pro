@@ -1,22 +1,39 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
+import { subMonths, startOfMonth, format } from "date-fns";
 
 export async function GET() {
   try {
     await requireAdmin("audit:view");
 
-    const [totalProfiles, finalizedOrMarried, notesByAdmin, communicationsByAdmin, admins, incomeBuckets, matches, proposalStatusCounts] =
-      await Promise.all([
-        prisma.profile.count({ where: { softDeleted: false } }),
-        prisma.profile.count({ where: { status: { in: ["FINALIZED", "MARRIED"] }, softDeleted: false } }),
-        prisma.profileNote.groupBy({ by: ["adminId"], _count: { adminId: true } }),
-        prisma.communication.groupBy({ by: ["adminId"], _count: { adminId: true } }),
-        prisma.adminUser.findMany({ select: { id: true, name: true } }),
-        prisma.professionInfo.findMany({ select: { monthlyIncome: true } }),
-        prisma.match.findMany({ select: { score: true, status: true } }),
-        prisma.proposal.groupBy({ by: ["status"], _count: { status: true } }),
-      ]);
+    const [
+      totalProfiles,
+      finalizedOrMarried,
+      notesByAdmin,
+      communicationsByAdmin,
+      admins,
+      incomeBuckets,
+      matches,
+      proposalStatusCounts,
+      allProposals,
+      proposalsWithMeeting,
+      mutualInterestEvents,
+    ] = await Promise.all([
+      prisma.profile.count({ where: { softDeleted: false } }),
+      prisma.profile.count({ where: { status: { in: ["FINALIZED", "MARRIED"] }, softDeleted: false } }),
+      prisma.profileNote.groupBy({ by: ["adminId"], _count: { adminId: true } }),
+      prisma.communication.groupBy({ by: ["adminId"], _count: { adminId: true } }),
+      prisma.adminUser.findMany({ select: { id: true, name: true } }),
+      prisma.professionInfo.findMany({ select: { monthlyIncome: true } }),
+      prisma.match.findMany({ select: { score: true, status: true } }),
+      prisma.proposal.groupBy({ by: ["status"], _count: { status: true } }),
+      prisma.proposal.findMany({ select: { createdAt: true } }),
+      prisma.proposal.count({ where: { meetings: { some: {} } } }),
+      prisma.proposalEvent.findMany({ where: { status: "BOTH_INTERESTED" }, distinct: ["proposalId"], select: { proposalId: true } }),
+    ]);
+
+    const proposalsWithAnyInterest = await prisma.proposal.count({ where: { responses: { some: { response: "INTERESTED" } } } });
 
     const performance = admins.map((a) => ({
       name: a.name,
@@ -45,10 +62,23 @@ export async function GET() {
     const matchesReviewed = matches.filter((m) => m.status !== "SUGGESTED").length;
     const matchesToProposal = matches.filter((m) => m.status === "PROPOSAL_CREATED").length;
 
-    const proposalCountByStatus = Object.fromEntries(proposalStatusCounts.map((p) => [p.status, p._count.status]));
+    const proposalCountByStatus: Record<string, number> = Object.fromEntries(proposalStatusCounts.map((p) => [p.status, p._count.status]));
     const totalProposals = proposalStatusCounts.reduce((sum, p) => sum + p._count.status, 0);
-    const proposalsAtMeetingOrBeyond = (proposalCountByStatus.MEETING ?? 0) + (proposalCountByStatus.FINALIZED ?? 0);
     const finalizedProposals = proposalCountByStatus.FINALIZED ?? 0;
+    const marriedProposals = proposalCountByStatus.MARRIED ?? 0;
+    // Kept for the older matchToProposalRate/proposalToMeetingRate fields below.
+    const proposalsAtMeetingOrBeyond = proposalsWithMeeting;
+
+    const proposalsByMonth: { month: string; count: number }[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = startOfMonth(subMonths(now, i));
+      const nextMonthStart = startOfMonth(subMonths(now, i - 1));
+      proposalsByMonth.push({
+        month: format(monthStart, "MMM yyyy"),
+        count: allProposals.filter((p) => p.createdAt >= monthStart && p.createdAt < nextMonthStart).length,
+      });
+    }
 
     return NextResponse.json({
       conversionRate: totalProfiles > 0 ? Math.round((finalizedOrMarried / totalProfiles) * 100) : 0,
@@ -65,6 +95,14 @@ export async function GET() {
         matchToProposalRate: matchesGenerated > 0 ? Math.round((matchesToProposal / matchesGenerated) * 100) : 0,
         proposalToMeetingRate: totalProposals > 0 ? Math.round((proposalsAtMeetingOrBeyond / totalProposals) * 100) : 0,
         meetingToFinalizationRate: proposalsAtMeetingOrBeyond > 0 ? Math.round((finalizedProposals / proposalsAtMeetingOrBeyond) * 100) : 0,
+      },
+      proposalPerformance: {
+        proposalsByMonth,
+        interestRate: totalProposals > 0 ? Math.round((proposalsWithAnyInterest / totalProposals) * 100) : 0,
+        mutualInterestRate: totalProposals > 0 ? Math.round((mutualInterestEvents.length / totalProposals) * 100) : 0,
+        meetingConversionRate: totalProposals > 0 ? Math.round((proposalsWithMeeting / totalProposals) * 100) : 0,
+        finalizationRate: totalProposals > 0 ? Math.round((finalizedProposals / totalProposals) * 100) : 0,
+        marriageOutcomeRate: totalProposals > 0 ? Math.round((marriedProposals / totalProposals) * 100) : 0,
       },
     });
   } catch (error) {

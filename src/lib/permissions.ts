@@ -10,6 +10,7 @@ export type Permission =
   | "match:run"
   | "proposal:create"
   | "proposal:edit"
+  | "proposal:assign"
   | "note:add"
   | "communication:add"
   | "audit:view"
@@ -27,6 +28,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "match:run",
     "proposal:create",
     "proposal:edit",
+    "proposal:assign",
     "note:add",
     "communication:add",
     "audit:view",
@@ -53,6 +55,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "profile:status",
     "match:run",
     "proposal:create",
+    "proposal:edit", // row-gated: only proposals assigned to them — see src/lib/proposal-access.ts
     "note:add",
     "communication:add",
   ],
