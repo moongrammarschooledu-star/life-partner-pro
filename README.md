@@ -70,17 +70,31 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   database, no mock data.
 - **Profile management:** server-side paginated/filterable table (collapses to cards on mobile), full detail view
   with edit, verify, status lifecycle, soft-delete/restore, internal notes, and a per-profile audit trail.
-- **Matching engine** (`src/lib/matching.ts`): a pure, unit-testable weighted scoring function (age 15% / location
-  15% / education 10% / profession 10% / income 10% / marital status 10% / height 5% / family 10% / religious 10% /
-  lifestyle 5%), producing a ranked "Find Matches" list with tier labels, a transparent "why this match" /
-  "potential differences" breakdown, and a side-by-side comparison view with an admin recommendation.
-- **Proposals:** create a proposal between two profiles from the comparison view, then move it through
+- **Matching engine** (`src/lib/matching.ts`): compatibility is scored as *mutual* — every preference-based category
+  (age, location, education, profession, income, marital status, height, family) checks both directions (does the
+  candidate meet the seeker's stated preference, **and** does the seeker meet the candidate's), taking the weaker of
+  the two, so a one-sided mismatch pulls the score down. Religious and lifestyle compatibility compare both
+  profiles' actual attributes directly. Default weights (age 15% / location 15% / education 10% / profession 10% /
+  income 10% / marital status 10% / height 5% / family 10% / religious 10% / lifestyle 5%), match-tier thresholds,
+  and a per-category hard-requirement toggle are all admin-configurable from Settings. Each category is classified
+  as Compatible / Partially Compatible / Incompatible / **Unknown** — missing data is never silently treated as a
+  mismatch. A category marked as a hard requirement excludes a candidate entirely (rather than just lowering their
+  score) if that category comes back Incompatible. Results are always framed as compatibility *suggestions*, never
+  guaranteed matches — final decisions stay with the admin.
+- **Match workflow:** viewing a candidate in the comparison view persists a `Match` record (with per-category score
+  columns and the full breakdown) carrying its own status (`Suggested → Reviewed → Approved/Rejected →
+  Proposal Created → Closed`) and an optional admin recommendation, independent of any proposal created from it.
+- **Proposals:** create a proposal between two profiles from the comparison view (optionally linked back to the
+  `Match` it came from, snapshotting its score), then move it through
   Draft → Sent → Interested/Not Interested → Waiting → Meeting → Finalized → Closed, with a visible timeline.
+- **Consent:** registration records four distinct, versioned consent flags (privacy, matchmaking use, contact
+  sharing, terms) rather than one blanket checkbox. A profile cannot be moved to `ACTIVE` status until all four are
+  on record.
 - **Communications & follow-ups:** log calls/WhatsApp/SMS/email/meetings per profile, with optional follow-up
-  dates that populate a Today / Upcoming / Overdue follow-ups dashboard.
+  dates/priority that populate a Today / Upcoming / Overdue follow-ups dashboard.
 - **Audit log:** every sensitive action (login, profile view/edit/delete, status changes, contact reveal/share,
-  match creation, proposal creation/status changes, note additions, update-request decisions) is recorded and
-  browsable by an admin.
+  match creation/status change, proposal creation/status changes, note additions, update-request decisions) is
+  recorded and browsable by an admin.
 - **Role-based access control:** `SUPER_ADMIN` / `ADMIN` / `STAFF` / `VIEWER`, enforced both in `middleware.ts`
   (redirects unauthenticated requests) and again in every API route handler via `requireAdmin()` (the actual
   permission check — middleware alone is not sufficient authorization).

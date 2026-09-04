@@ -1,7 +1,17 @@
-// Pure, dependency-free matching/scoring engine.
-// Deliberately has no DB calls in here so it stays unit-testable and the
-// weighting scheme can be tuned (or made admin-configurable) without
-// touching any query code. See spec §14/§15.
+// Pure, dependency-free matching/scoring engine. No DB calls in here so it
+// stays unit-testable and the weighting/threshold/hard-requirement scheme
+// can be tuned (all admin-configurable — see AppSettings) without touching
+// any query code.
+//
+// Core rule (spec §15): compatibility is MUTUAL. For every preference-based
+// category we score BOTH directions — does the candidate meet the seeker's
+// stated preference, AND does the seeker meet the candidate's — then take
+// the weaker of the two. A profile that looks perfect from one side but is
+// explicitly outside what the other side is looking for is not a good
+// match, and the weaker direction is what should show up in the score.
+//
+// This produces a "Compatibility Suggestion" for admin review, never a
+// guarantee (spec §49) — the UI must not present these as certainties.
 
 export type MatchCategory =
   | "age"
@@ -15,6 +25,8 @@ export type MatchCategory =
   | "religious"
   | "lifestyle";
 
+export type CompatibilityStatus = "compatible" | "partial" | "incompatible" | "unknown";
+
 export interface MatchWeights {
   age: number;
   location: number;
@@ -26,6 +38,15 @@ export interface MatchWeights {
   family: number;
   religious: number;
   lifestyle: number;
+}
+
+export type HardRequirements = Partial<Record<MatchCategory, boolean>>;
+
+export interface MatchThresholds {
+  excellent: number;
+  veryGood: number;
+  good: number;
+  possible: number;
 }
 
 export const DEFAULT_WEIGHTS: MatchWeights = {
@@ -41,10 +62,13 @@ export const DEFAULT_WEIGHTS: MatchWeights = {
   lifestyle: 5,
 };
 
-// Converts the admin-configurable AppSettings row (spec §40, "Matching
-// Settings — allow admin to adjust matching weights") into the shape
-// scoreMatch expects. Callers should fetch AppSettings once per request and
-// pass the result here rather than assuming DEFAULT_WEIGHTS.
+export const DEFAULT_THRESHOLDS: MatchThresholds = {
+  excellent: 90,
+  veryGood: 80,
+  good: 65,
+  possible: 50,
+};
+
 export function weightsFromSettings(settings: {
   weightAge: number;
   weightLocation: number;
@@ -71,23 +95,67 @@ export function weightsFromSettings(settings: {
   };
 }
 
+export function hardRequirementsFromSettings(settings: {
+  hardRequirementAge: boolean;
+  hardRequirementLocation: boolean;
+  hardRequirementEducation: boolean;
+  hardRequirementProfession: boolean;
+  hardRequirementIncome: boolean;
+  hardRequirementMaritalStatus: boolean;
+  hardRequirementHeight: boolean;
+  hardRequirementFamily: boolean;
+  hardRequirementReligious: boolean;
+  hardRequirementLifestyle: boolean;
+}): HardRequirements {
+  return {
+    age: settings.hardRequirementAge,
+    location: settings.hardRequirementLocation,
+    education: settings.hardRequirementEducation,
+    profession: settings.hardRequirementProfession,
+    income: settings.hardRequirementIncome,
+    maritalStatus: settings.hardRequirementMaritalStatus,
+    height: settings.hardRequirementHeight,
+    family: settings.hardRequirementFamily,
+    religious: settings.hardRequirementReligious,
+    lifestyle: settings.hardRequirementLifestyle,
+  };
+}
+
+export function thresholdsFromSettings(settings: {
+  thresholdExcellent: number;
+  thresholdVeryGood: number;
+  thresholdGood: number;
+  thresholdPossible: number;
+}): MatchThresholds {
+  return {
+    excellent: settings.thresholdExcellent,
+    veryGood: settings.thresholdVeryGood,
+    good: settings.thresholdGood,
+    possible: settings.thresholdPossible,
+  };
+}
+
 export interface CategoryResult {
   category: MatchCategory;
   label: string;
   weight: number;
-  score: number; // 0..1 fraction of the category weight achieved
+  score: number; // 0..1 fraction of the category weight achieved (mutual — the weaker of both directions)
   points: number; // weight * score
+  status: CompatibilityStatus;
   reason: string;
   isDifference: boolean; // true if this should show under "Potential differences"
+  hardRequirementFailed: boolean;
 }
 
 export interface MatchResult {
   total: number; // 0..100
-  tier: "BEST_MATCH" | "VERY_GOOD_MATCH" | "GOOD_MATCH" | "POSSIBLE_MATCH" | "LOW_MATCH";
+  tier: "EXCELLENT" | "VERY_GOOD" | "GOOD" | "POSSIBLE" | "LOW";
   tierLabel: string;
   breakdown: CategoryResult[];
-  reasons: string[]; // "Why this match" — non-differences with score >= 0.7
+  reasons: string[]; // "Why this match" — non-differences with score >= 0.6
   differences: string[]; // "Potential differences" — isDifference true
+  excludedByHardRequirement: boolean; // caller should drop this candidate from results if true
+  failedHardRequirements: string[];
 }
 
 export interface MatchableProfile {
@@ -97,6 +165,7 @@ export interface MatchableProfile {
   heightCm: number;
   maritalStatus: string;
   city: string;
+  area?: string | null;
   country: string;
   educationLevel?: string | null;
   profession?: string | null;
@@ -112,6 +181,7 @@ export interface MatchableProfile {
     maxAge?: number | null;
     preferredCountry?: string | null;
     preferredCity?: string | null;
+    preferredArea?: string | null;
     minEducation?: string | null;
     professionPreference?: string | null;
     minIncome?: number | null;
@@ -129,75 +199,48 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-function scoreRange(value: number, min?: number | null, max?: number | null, tolerance = 0): number {
-  if (min == null && max == null) return 0.8; // no stated preference — assume mild compatibility
-  const lo = min ?? -Infinity;
-  const hi = max ?? Infinity;
-  if (value >= lo && value <= hi) return 1;
-  const distance = value < lo ? lo - value : value - hi;
-  if (tolerance <= 0) return 0.2;
-  return clamp01(1 - distance / tolerance) * 0.6; // partial credit tapering to 0
+function statusFor(score: number, hasData: boolean): CompatibilityStatus {
+  if (!hasData) return "unknown";
+  if (score >= 0.8) return "compatible";
+  if (score >= 0.4) return "partial";
+  return "incompatible";
 }
 
-function scoreAge(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  const score = scoreRange(candidate.age, prefs.minAge, prefs.maxAge, 5);
-  const inRange = score === 1;
-  return {
-    category: "age",
-    label: "Age",
-    weight: 0,
-    score,
-    points: 0,
-    reason: inRange
-      ? `Age ${candidate.age} is within the preferred range`
-      : `Age ${candidate.age} is outside the preferred range`,
-    isDifference: !inRange,
-  };
+// ---------- Directional scorers ----------
+// Each returns { score, hasData } for ONE direction (a preference applied to
+// a candidate's actual attribute). scoreMatch() below calls these twice —
+// once per direction — and combines with Math.min for the mutual result.
+
+function scoreAgeDirection(candidateAge: number, minAge?: number | null, maxAge?: number | null): { score: number; hasData: boolean } {
+  if (minAge == null && maxAge == null) return { score: 0.75, hasData: false };
+  const lo = minAge ?? 18;
+  const hi = maxAge ?? 80;
+  if (candidateAge >= lo && candidateAge <= hi) return { score: 1, hasData: true };
+  const distance = candidateAge < lo ? lo - candidateAge : candidateAge - hi;
+  if (distance <= 2) return { score: 0.8, hasData: true }; // "close to range"
+  if (distance <= 5) return { score: 0.5, hasData: true }; // "moderately outside"
+  return { score: 0.1, hasData: true }; // "significantly outside"
 }
 
-function scoreLocation(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  if (!prefs.preferredCity && !prefs.preferredCountry) {
-    return {
-      category: "location",
-      label: "Location",
-      weight: 0,
-      score: 0.7,
-      points: 0,
-      reason: "No specific location preference stated",
-      isDifference: false,
-    };
+function scoreLocationDirection(
+  candidateCity: string,
+  candidateArea: string | null | undefined,
+  candidateCountry: string,
+  preferredCity?: string | null,
+  preferredArea?: string | null,
+  preferredCountry?: string | null
+): { score: number; hasData: boolean } {
+  if (!preferredCity && !preferredCountry && !preferredArea) return { score: 0.7, hasData: false };
+  if (preferredArea && candidateArea && candidateArea.toLowerCase() === preferredArea.toLowerCase()) {
+    return { score: 1, hasData: true }; // same area
   }
-  if (prefs.preferredCity && candidate.city.toLowerCase() === prefs.preferredCity.toLowerCase()) {
-    return {
-      category: "location",
-      label: "Location",
-      weight: 0,
-      score: 1,
-      points: 0,
-      reason: `Same city (${candidate.city})`,
-      isDifference: false,
-    };
+  if (preferredCity && candidateCity.toLowerCase() === preferredCity.toLowerCase()) {
+    return { score: 0.9, hasData: true }; // same city
   }
-  if (prefs.preferredCountry && candidate.country.toLowerCase() === prefs.preferredCountry.toLowerCase()) {
-    return {
-      category: "location",
-      label: "Location",
-      weight: 0,
-      score: 0.6,
-      points: 0,
-      reason: `Same country (${candidate.country}), different city`,
-      isDifference: true,
-    };
+  if (preferredCountry && candidateCountry.toLowerCase() === preferredCountry.toLowerCase()) {
+    return { score: 0.7, hasData: true }; // same country, different city (region tier)
   }
-  return {
-    category: "location",
-    label: "Location",
-    weight: 0,
-    score: 0.2,
-    points: 0,
-    reason: "Preferred city/country differs",
-    isDifference: true,
-  };
+  return { score: 0.2, hasData: true }; // different country
 }
 
 const EDUCATION_RANK: Record<string, number> = {
@@ -215,266 +258,371 @@ function educationRank(level?: string | null): number {
   return EDUCATION_RANK[key] ?? 3;
 }
 
-function scoreEducation(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  if (!prefs.minEducation) {
-    return {
-      category: "education",
-      label: "Education",
-      weight: 0,
-      score: 0.75,
-      points: 0,
-      reason: "No specific education requirement stated",
-      isDifference: false,
-    };
-  }
-  const required = educationRank(prefs.minEducation);
-  const actual = educationRank(candidate.educationLevel);
-  const meets = actual >= required;
-  return {
-    category: "education",
-    label: "Education",
-    weight: 0,
-    score: meets ? 1 : clamp01(0.5 - (required - actual) * 0.15),
-    points: 0,
-    reason: meets
-      ? `Education (${candidate.educationLevel ?? "unspecified"}) meets the requirement`
-      : `Education (${candidate.educationLevel ?? "unspecified"}) is below the preferred minimum (${prefs.minEducation})`,
-    isDifference: !meets,
-  };
+function scoreEducationDirection(candidateLevel: string | null | undefined, minEducation?: string | null): { score: number; hasData: boolean } {
+  if (!minEducation) return { score: 0.75, hasData: false };
+  const required = educationRank(minEducation);
+  const actual = educationRank(candidateLevel);
+  if (actual === required) return { score: 1, hasData: true }; // exact
+  if (actual > required) return { score: 0.8, hasData: true }; // higher — related/acceptable
+  const gap = required - actual;
+  if (gap === 1) return { score: 0.6, hasData: true }; // acceptable lower level
+  return { score: 0.25, hasData: true }; // not compatible
 }
 
-function scoreProfession(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  const wanted = prefs.professionPreference?.trim();
-  if (!wanted || wanted.toUpperCase() === "ANY") {
-    return {
-      category: "profession",
-      label: "Profession",
-      weight: 0,
-      score: 0.75,
-      points: 0,
-      reason: "Open to any profession",
-      isDifference: false,
-    };
-  }
-  const match = candidate.profession?.toLowerCase().includes(wanted.toLowerCase());
-  return {
-    category: "profession",
-    label: "Profession",
-    weight: 0,
-    score: match ? 1 : 0.4,
-    points: 0,
-    reason: match
-      ? `Profession (${candidate.profession}) matches the preference`
-      : `Profession (${candidate.profession ?? "unspecified"}) differs from the stated preference (${wanted})`,
-    isDifference: !match,
-  };
+function scoreProfessionDirection(candidateProfession: string | null | undefined, wanted?: string | null): { score: number; hasData: boolean } {
+  const pref = wanted?.trim();
+  if (!pref || pref.toUpperCase() === "ANY") return { score: 1, hasData: false }; // "any profession" = 100% per spec §19
+  if (!candidateProfession) return { score: 0.4, hasData: true };
+  const match = candidateProfession.toLowerCase().includes(pref.toLowerCase());
+  return { score: match ? 1 : 0.4, hasData: true };
 }
 
-function scoreIncome(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  if (prefs.incomeFlexible || (prefs.minIncome == null && prefs.maxIncome == null)) {
-    return {
-      category: "income",
-      label: "Income",
-      weight: 0,
-      score: 0.75,
-      points: 0,
-      reason: "Income preference marked as flexible",
-      isDifference: false,
-    };
-  }
-  if (candidate.monthlyIncome == null) {
-    return {
-      category: "income",
-      label: "Income",
-      weight: 0,
-      score: 0.4,
-      points: 0,
-      reason: "Income not disclosed",
-      isDifference: true,
-    };
-  }
-  const score = scoreRange(candidate.monthlyIncome, prefs.minIncome, prefs.maxIncome, prefs.minIncome ? prefs.minIncome * 0.2 : 500);
-  return {
-    category: "income",
-    label: "Income",
-    weight: 0,
-    score,
-    points: 0,
-    reason: score >= 1 ? "Within the preferred income range" : "Outside the preferred income range",
-    isDifference: score < 1,
-  };
+function scoreIncomeDirection(
+  candidateIncome: number | null | undefined,
+  minIncome?: number | null,
+  maxIncome?: number | null,
+  flexible?: boolean
+): { score: number; hasData: boolean } {
+  if (flexible || (minIncome == null && maxIncome == null)) return { score: 0.75, hasData: false };
+  if (candidateIncome == null) return { score: 0.4, hasData: true };
+  const lo = minIncome ?? 0;
+  const hi = maxIncome ?? Infinity;
+  if (candidateIncome >= lo && candidateIncome <= hi) return { score: 1, hasData: true };
+  const reference = lo || hi || 1000;
+  const distanceRatio = (candidateIncome < lo ? lo - candidateIncome : candidateIncome - hi) / reference;
+  if (distanceRatio <= 0.15) return { score: 0.75, hasData: true }; // slightly outside
+  if (distanceRatio <= 0.4) return { score: 0.5, hasData: true }; // moderately outside
+  return { score: 0.2, hasData: true }; // far outside
 }
 
-function scoreMaritalStatus(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  const pref = prefs.maritalStatusPreference?.trim();
-  if (!pref || pref.toUpperCase() === "ANY") {
-    return {
-      category: "maritalStatus",
-      label: "Marital Status",
-      weight: 0,
-      score: 0.9,
-      points: 0,
-      reason: "Open to any marital status",
-      isDifference: false,
-    };
+function scoreMaritalStatusDirection(candidateStatus: string, pref?: string | null): { score: number; hasData: boolean } {
+  const value = pref?.trim();
+  if (!value || value.toUpperCase() === "ANY") return { score: 0.9, hasData: false };
+  const allowed = value.split(",").map((s) => s.trim().toUpperCase());
+  if (allowed.includes(candidateStatus.toUpperCase())) return { score: 1, hasData: true };
+  // Widowed/divorced are treated as a softer, partially-acceptable alternative
+  // to each other rather than a hard clash with "never married".
+  const softAlternatives = new Set(["DIVORCED", "WIDOWED"]);
+  if (softAlternatives.has(candidateStatus.toUpperCase()) && allowed.some((a) => softAlternatives.has(a))) {
+    return { score: 0.6, hasData: true };
   }
-  const allowed = pref.split(",").map((s) => s.trim().toUpperCase());
-  const match = allowed.includes(candidate.maritalStatus.toUpperCase());
-  return {
-    category: "maritalStatus",
-    label: "Marital Status",
-    weight: 0,
-    score: match ? 1 : 0.1,
-    points: 0,
-    reason: match
-      ? "Marital status is compatible with the stated preference"
-      : "Marital status does not match the stated preference",
-    isDifference: !match,
-  };
+  return { score: 0, hasData: true };
 }
 
-function scoreHeight(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  const score = scoreRange(candidate.heightCm, prefs.minHeightCm, prefs.maxHeightCm, 5);
-  return {
-    category: "height",
-    label: "Height",
-    weight: 0,
-    score,
-    points: 0,
-    reason: score === 1 ? "Height is within the preferred range" : "Height is outside the preferred range",
-    isDifference: score < 1,
-  };
+function scoreHeightDirection(candidateHeight: number, minHeight?: number | null, maxHeight?: number | null): { score: number; hasData: boolean } {
+  if (minHeight == null && maxHeight == null) return { score: 0.75, hasData: false };
+  const lo = minHeight ?? 100;
+  const hi = maxHeight ?? 230;
+  if (candidateHeight >= lo && candidateHeight <= hi) return { score: 1, hasData: true };
+  const distance = candidateHeight < lo ? lo - candidateHeight : candidateHeight - hi;
+  if (distance <= 3) return { score: 0.8, hasData: true };
+  if (distance <= 8) return { score: 0.5, hasData: true };
+  return { score: 0.15, hasData: true };
 }
 
-function scoreFamily(candidate: MatchableProfile, prefs: MatchableProfile["preference"]): CategoryResult {
-  if (!prefs.familyTypePreference && !prefs.familyBackgroundPreference) {
-    return {
-      category: "family",
-      label: "Family Background",
-      weight: 0,
-      score: 0.75,
-      points: 0,
-      reason: "No specific family requirement stated",
-      isDifference: false,
-    };
+function scoreFamilyDirection(
+  candidateFamilyType: string | null | undefined,
+  candidateFamilyStatus: string | null | undefined,
+  familyTypePref?: string | null,
+  familyBackgroundPref?: string | null
+): { score: number; hasData: boolean } {
+  if ((!familyTypePref || familyTypePref.toUpperCase() === "ANY") && (!familyBackgroundPref || familyBackgroundPref.toUpperCase() === "ANY")) {
+    return { score: 0.75, hasData: false };
   }
-  const typeOk = !prefs.familyTypePreference || prefs.familyTypePreference.toUpperCase() === "ANY" ||
-    candidate.familyType?.toUpperCase() === prefs.familyTypePreference.toUpperCase();
-  const bgOk = !prefs.familyBackgroundPreference || prefs.familyBackgroundPreference.toUpperCase() === "ANY" ||
-    candidate.familyStatus?.toUpperCase() === prefs.familyBackgroundPreference.toUpperCase();
-  const score = typeOk && bgOk ? 1 : typeOk || bgOk ? 0.6 : 0.3;
-  return {
-    category: "family",
-    label: "Family Background",
-    weight: 0,
-    score,
-    points: 0,
-    reason: score === 1 ? "Family type and background match the preference" : "Family type/background partially matches the preference",
-    isDifference: score < 1,
-  };
+  const typeOk = !familyTypePref || familyTypePref.toUpperCase() === "ANY" || candidateFamilyType?.toUpperCase() === familyTypePref.toUpperCase();
+  const bgOk =
+    !familyBackgroundPref ||
+    familyBackgroundPref.toUpperCase() === "ANY" ||
+    candidateFamilyStatus?.toUpperCase() === familyBackgroundPref.toUpperCase();
+  if (typeOk && bgOk) return { score: 1, hasData: true };
+  if (typeOk || bgOk) return { score: 0.6, hasData: true };
+  return { score: 0.3, hasData: true };
 }
 
-function scoreReligious(candidate: MatchableProfile, other: MatchableProfile): CategoryResult {
-  if (!candidate.religion && !other.religion) {
-    return {
-      category: "religious",
-      label: "Religious Compatibility",
-      weight: 0,
-      score: 0.75,
-      points: 0,
-      reason: "Not specified by either profile",
-      isDifference: false,
-    };
-  }
-  const sameReligion = candidate.religion && other.religion && candidate.religion.toLowerCase() === other.religion.toLowerCase();
-  const sameSect = candidate.sect && other.sect && candidate.sect.toLowerCase() === other.sect.toLowerCase();
-  const score = sameReligion ? (sameSect || (!candidate.sect && !other.sect) ? 1 : 0.7) : 0.2;
-  return {
-    category: "religious",
-    label: "Religious Compatibility",
-    weight: 0,
-    score,
-    points: 0,
-    reason: sameReligion ? "Same religious background" : "Different religious background",
-    isDifference: score < 1,
-  };
+// ---------- Symmetric scorers (compare both profiles' actual attributes
+// directly rather than a stated preference — spec §24/§25) ----------
+
+function scoreReligious(a: MatchableProfile, b: MatchableProfile): { score: number; hasData: boolean } {
+  if (!a.religion && !b.religion) return { score: 0.75, hasData: false };
+  if (!a.religion || !b.religion) return { score: 0.6, hasData: false }; // one side didn't say — don't penalize as incompatible
+  const sameReligion = a.religion.toLowerCase() === b.religion.toLowerCase();
+  if (!sameReligion) return { score: 0.15, hasData: true };
+  if (!a.sect || !b.sect) return { score: 1, hasData: true };
+  return { score: a.sect.toLowerCase() === b.sect.toLowerCase() ? 1 : 0.7, hasData: true };
 }
 
-function scoreLifestyle(candidate: MatchableProfile, other: MatchableProfile): CategoryResult {
-  const points: string[] = [];
+function scoreLifestyle(a: MatchableProfile, b: MatchableProfile): { score: number; hasData: boolean; note: string } {
+  const aKnown = a.smoking != null && a.drinking != null;
+  const bKnown = b.smoking != null && b.drinking != null;
+  if (!aKnown && !bKnown) return { score: 0.75, hasData: false, note: "Lifestyle habits not specified by either profile" };
   let matches = 0;
   let total = 0;
-  total++;
-  if (!!candidate.smoking === !!other.smoking) matches++;
-  else points.push("smoking preference differs");
-  total++;
-  if (!!candidate.drinking === !!other.drinking) matches++;
-  else points.push("drinking preference differs");
-  const score = matches / total;
+  const diffs: string[] = [];
+  if (a.smoking != null && b.smoking != null) {
+    total++;
+    if (a.smoking === b.smoking) matches++;
+    else diffs.push("smoking");
+  }
+  if (a.drinking != null && b.drinking != null) {
+    total++;
+    if (a.drinking === b.drinking) matches++;
+    else diffs.push("drinking");
+  }
+  if (total === 0) return { score: 0.75, hasData: false, note: "Lifestyle habits not fully specified" };
   return {
-    category: "lifestyle",
-    label: "Lifestyle",
-    weight: 0,
-    score,
-    points: 0,
-    reason: points.length ? `Lifestyle differences: ${points.join(", ")}` : "Lifestyle habits are compatible",
-    isDifference: points.length > 0,
+    score: matches / total,
+    hasData: true,
+    note: diffs.length ? `Differs on: ${diffs.join(", ")}` : "Lifestyle habits are compatible",
   };
 }
 
 const TIER_LABELS: Record<MatchResult["tier"], string> = {
-  BEST_MATCH: "Best Match",
-  VERY_GOOD_MATCH: "Very Good Match",
-  GOOD_MATCH: "Good Match",
-  POSSIBLE_MATCH: "Possible Match",
-  LOW_MATCH: "Low Compatibility",
+  EXCELLENT: "Excellent Match",
+  VERY_GOOD: "Very Good Match",
+  GOOD: "Good Match",
+  POSSIBLE: "Possible Match",
+  LOW: "Low Compatibility",
 };
 
-function tierFor(total: number): MatchResult["tier"] {
-  if (total >= 90) return "BEST_MATCH";
-  if (total >= 80) return "VERY_GOOD_MATCH";
-  if (total >= 65) return "GOOD_MATCH";
-  if (total >= 50) return "POSSIBLE_MATCH";
-  return "LOW_MATCH";
+function tierFor(total: number, thresholds: MatchThresholds): MatchResult["tier"] {
+  if (total >= thresholds.excellent) return "EXCELLENT";
+  if (total >= thresholds.veryGood) return "VERY_GOOD";
+  if (total >= thresholds.good) return "GOOD";
+  if (total >= thresholds.possible) return "POSSIBLE";
+  return "LOW";
 }
 
 /**
- * Scores `candidate` against `seeker`'s stated partner preference.
- * Symmetric fields (religion/lifestyle) look at both profiles directly;
- * asymmetric fields (age/location/education/profession/income/marital
- * status/height/family) are judged against `seeker.preference`.
+ * Scores mutual compatibility between two profiles. For every
+ * preference-driven category, both directions are evaluated — A's stated
+ * preference against B's actual attributes, and B's against A's — and the
+ * WEAKER of the two is used, because a match only works if both sides would
+ * actually be happy with it (spec §15). Symmetric categories (religion,
+ * lifestyle) compare both profiles' actual attributes directly.
+ *
+ * This is a "Compatibility Suggestion" for admin review, not a guarantee of
+ * a successful match (spec §49) — callers must present it as such.
  */
 export function scoreMatch(
-  seeker: MatchableProfile,
-  candidate: MatchableProfile,
-  weights: MatchWeights = DEFAULT_WEIGHTS
+  a: MatchableProfile,
+  b: MatchableProfile,
+  weights: MatchWeights = DEFAULT_WEIGHTS,
+  hardRequirements: HardRequirements = {}
 ): MatchResult {
-  const prefs = seeker.preference;
-  const parts: CategoryResult[] = [
-    scoreAge(candidate, prefs),
-    scoreLocation(candidate, prefs),
-    scoreEducation(candidate, prefs),
-    scoreProfession(candidate, prefs),
-    scoreIncome(candidate, prefs),
-    scoreMaritalStatus(candidate, prefs),
-    scoreHeight(candidate, prefs),
-    scoreFamily(candidate, prefs),
-    scoreReligious(candidate, seeker),
-    scoreLifestyle(candidate, seeker),
-  ].map((part) => {
-    const weight = weights[part.category];
-    return { ...part, weight, points: weight * part.score };
+  const aToB = a.preference;
+  const bToA = b.preference;
+
+  function mutual(
+    category: MatchCategory,
+    label: string,
+    dirAtoB: { score: number; hasData: boolean },
+    dirBtoA: { score: number; hasData: boolean },
+    reasonForStatus: (status: CompatibilityStatus, weaker: "a" | "b") => string
+  ): CategoryResult {
+    const weaker = dirAtoB.score <= dirBtoA.score ? "a" : "b";
+    const combinedScore = Math.min(dirAtoB.score, dirBtoA.score);
+    const hasData = dirAtoB.hasData || dirBtoA.hasData;
+    const status = statusFor(combinedScore, hasData);
+    const weight = weights[category];
+    const isHard = !!hardRequirements[category];
+    const hardFailed = isHard && status === "incompatible";
+    return {
+      category,
+      label,
+      weight,
+      score: combinedScore,
+      points: weight * combinedScore,
+      status,
+      reason: reasonForStatus(status, weaker),
+      isDifference: status === "incompatible" || status === "partial",
+      hardRequirementFailed: hardFailed,
+    };
+  }
+
+  const parts: CategoryResult[] = [];
+
+  parts.push(
+    mutual(
+      "age",
+      "Age",
+      scoreAgeDirection(b.age, aToB.minAge, aToB.maxAge),
+      scoreAgeDirection(a.age, bToA.minAge, bToA.maxAge),
+      (status) =>
+        status === "unknown"
+          ? "No age preference stated"
+          : status === "compatible"
+            ? `Both ages (${a.age}, ${b.age}) fall within each other's preferred range`
+            : `Age preference conflict — at least one side's range excludes the other (${a.age} vs ${b.age})`
+    )
+  );
+
+  parts.push(
+    mutual(
+      "location",
+      "Location",
+      scoreLocationDirection(b.city, b.area, b.country, aToB.preferredCity, aToB.preferredArea, aToB.preferredCountry),
+      scoreLocationDirection(a.city, a.area, a.country, bToA.preferredCity, bToA.preferredArea, bToA.preferredCountry),
+      (status) =>
+        status === "unknown"
+          ? "No location preference stated"
+          : status === "compatible"
+            ? `Location works for both sides (${a.city} / ${b.city})`
+            : `Preferred location differs from at least one side's actual city (${a.city} vs ${b.city})`
+    )
+  );
+
+  parts.push(
+    mutual(
+      "education",
+      "Education",
+      scoreEducationDirection(b.educationLevel, aToB.minEducation),
+      scoreEducationDirection(a.educationLevel, bToA.minEducation),
+      (status) =>
+        status === "unknown"
+          ? "No education requirement stated"
+          : status === "compatible"
+            ? "Education levels meet both sides' requirements"
+            : "Education level falls short of at least one side's stated requirement"
+    )
+  );
+
+  parts.push(
+    mutual(
+      "profession",
+      "Profession",
+      scoreProfessionDirection(b.profession, aToB.professionPreference),
+      scoreProfessionDirection(a.profession, bToA.professionPreference),
+      (status) =>
+        status === "unknown"
+          ? "Open to any profession on at least one side"
+          : status === "compatible"
+            ? "Profession matches both sides' preference"
+            : "Profession differs from at least one side's stated preference"
+    )
+  );
+
+  parts.push(
+    mutual(
+      "income",
+      "Income",
+      scoreIncomeDirection(b.monthlyIncome, aToB.minIncome, aToB.maxIncome, aToB.incomeFlexible),
+      scoreIncomeDirection(a.monthlyIncome, bToA.minIncome, bToA.maxIncome, bToA.incomeFlexible),
+      (status) =>
+        status === "unknown"
+          ? "Income preference marked as flexible or not stated"
+          : status === "compatible"
+            ? "Income is within both sides' preferred range"
+            : "Income falls outside at least one side's preferred range"
+    )
+  );
+
+  parts.push(
+    mutual(
+      "maritalStatus",
+      "Marital Status",
+      scoreMaritalStatusDirection(b.maritalStatus, aToB.maritalStatusPreference),
+      scoreMaritalStatusDirection(a.maritalStatus, bToA.maritalStatusPreference),
+      (status) =>
+        status === "unknown"
+          ? "Open to any marital status on at least one side"
+          : status === "compatible"
+            ? "Marital status is mutually acceptable"
+            : "Marital status does not meet at least one side's stated preference"
+    )
+  );
+
+  parts.push(
+    mutual(
+      "height",
+      "Height",
+      scoreHeightDirection(b.heightCm, aToB.minHeightCm, aToB.maxHeightCm),
+      scoreHeightDirection(a.heightCm, bToA.minHeightCm, bToA.maxHeightCm),
+      (status) =>
+        status === "unknown"
+          ? "No height preference stated"
+          : status === "compatible"
+            ? "Height is within both sides' preferred range"
+            : "Height falls outside at least one side's preferred range"
+    )
+  );
+
+  parts.push(
+    mutual(
+      "family",
+      "Family Background",
+      scoreFamilyDirection(b.familyType, b.familyStatus, aToB.familyTypePreference, aToB.familyBackgroundPreference),
+      scoreFamilyDirection(a.familyType, a.familyStatus, bToA.familyTypePreference, bToA.familyBackgroundPreference),
+      (status) =>
+        status === "unknown"
+          ? "No specific family requirement stated"
+          : status === "compatible"
+            ? "Family type and background match both sides' expectations"
+            : "Family type or background partially or fully differs from a stated preference"
+    )
+  );
+
+  const religious = scoreReligious(a, b);
+  const religiousWeight = weights.religious;
+  const religiousStatus = statusFor(religious.score, religious.hasData);
+  parts.push({
+    category: "religious",
+    label: "Religious Compatibility",
+    weight: religiousWeight,
+    score: religious.score,
+    points: religiousWeight * religious.score,
+    status: religiousStatus,
+    reason:
+      religiousStatus === "unknown"
+        ? "Religious background not specified by one or both profiles"
+        : religiousStatus === "compatible"
+          ? "Same religious background"
+          : "Different religious background",
+    isDifference: religiousStatus === "incompatible" || religiousStatus === "partial",
+    hardRequirementFailed: !!hardRequirements.religious && religiousStatus === "incompatible",
   });
 
-  const total = Math.round(parts.reduce((sum, p) => sum + p.points, 0));
-  const tier = tierFor(total);
+  const lifestyle = scoreLifestyle(a, b);
+  const lifestyleWeight = weights.lifestyle;
+  const lifestyleStatus = statusFor(lifestyle.score, lifestyle.hasData);
+  parts.push({
+    category: "lifestyle",
+    label: "Lifestyle",
+    weight: lifestyleWeight,
+    score: lifestyle.score,
+    points: lifestyleWeight * lifestyle.score,
+    status: lifestyleStatus,
+    reason: lifestyle.note,
+    isDifference: lifestyleStatus === "incompatible" || lifestyleStatus === "partial",
+    hardRequirementFailed: !!hardRequirements.lifestyle && lifestyleStatus === "incompatible",
+  });
+
+  const total = Math.round(clamp01(parts.reduce((sum, p) => sum + p.points, 0) / 100) * 100);
+  const thresholds = DEFAULT_THRESHOLDS;
+  const tier = tierFor(total, thresholds);
+
+  const failedHard = parts.filter((p) => p.hardRequirementFailed);
 
   return {
     total,
     tier,
     tierLabel: TIER_LABELS[tier],
     breakdown: parts,
-    reasons: parts.filter((p) => !p.isDifference && p.score >= 0.6).map((p) => `${p.label}: ${p.reason}`),
+    reasons: parts.filter((p) => p.status === "compatible").map((p) => `${p.label}: ${p.reason}`),
     differences: parts.filter((p) => p.isDifference).map((p) => `${p.label}: ${p.reason}`),
+    excludedByHardRequirement: failedHard.length > 0,
+    failedHardRequirements: failedHard.map((p) => p.label),
   };
+}
+
+/** Same as scoreMatch but resolves tier against admin-configured thresholds. */
+export function scoreMatchWithThresholds(
+  a: MatchableProfile,
+  b: MatchableProfile,
+  weights: MatchWeights,
+  hardRequirements: HardRequirements,
+  thresholds: MatchThresholds
+): MatchResult {
+  const result = scoreMatch(a, b, weights, hardRequirements);
+  const tier = tierFor(result.total, thresholds);
+  return { ...result, tier, tierLabel: TIER_LABELS[tier] };
 }

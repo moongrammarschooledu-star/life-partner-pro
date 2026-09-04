@@ -13,17 +13,17 @@ export async function GET() {
 
     const [today, upcoming, overdue] = await Promise.all([
       prisma.followUp.findMany({
-        where: { done: false, dueDate: { gte: todayStart, lte: todayEnd } },
+        where: { status: "PENDING", dueDate: { gte: todayStart, lte: todayEnd } },
         include: { profile: { select: { id: true, profileCode: true, fullName: true } } },
         orderBy: { dueDate: "asc" },
       }),
       prisma.followUp.findMany({
-        where: { done: false, dueDate: { gt: todayEnd } },
+        where: { status: "PENDING", dueDate: { gt: todayEnd } },
         include: { profile: { select: { id: true, profileCode: true, fullName: true } } },
         orderBy: { dueDate: "asc" },
       }),
       prisma.followUp.findMany({
-        where: { done: false, dueDate: { lt: todayStart } },
+        where: { status: "PENDING", dueDate: { lt: todayStart } },
         include: { profile: { select: { id: true, profileCode: true, fullName: true } } },
         orderBy: { dueDate: "asc" },
       }),

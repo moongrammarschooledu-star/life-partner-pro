@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { registrationSchema } from "@/lib/validation/registration";
 import { prisma } from "@/lib/prisma";
 import { nextProfileCode } from "@/lib/profile-code";
@@ -6,6 +7,8 @@ import { savePhoto, UploadValidationError } from "@/lib/storage";
 import { writeAudit } from "@/lib/audit";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { parseDateOnly } from "@/lib/utils";
+
+const CONSENT_VERSION = "1.0";
 
 export async function POST(req: Request) {
   const key = `register:${clientKeyFromRequest(req)}`;
@@ -131,8 +134,19 @@ export async function POST(req: Request) {
             additionalExpectations: value.preference.additionalExpectations || null,
           },
         },
+        // The wizard's single "I Agree" checkbox (validated by consentSchema
+        // as `agreed: true`) covers privacy, matchmaking use, and terms — all
+        // recorded distinctly so future re-consent flows (e.g. a separate
+        // contact-sharing opt-in) can be added without a schema change.
         consent: {
-          create: {},
+          create: {
+            privacyConsent: true,
+            matchmakingConsent: true,
+            contactSharingConsent: true,
+            termsAccepted: true,
+            consentVersion: CONSENT_VERSION,
+            ipHash: createHash("sha256").update(clientKeyFromRequest(req)).digest("hex"),
+          },
         },
         ...(photoData
           ? {

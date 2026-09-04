@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Save, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Checkbox } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
@@ -22,19 +22,40 @@ interface Settings {
   weightFamily: number;
   weightReligious: number;
   weightLifestyle: number;
+  thresholdExcellent: number;
+  thresholdVeryGood: number;
+  thresholdGood: number;
+  thresholdPossible: number;
+  hardRequirementAge: boolean;
+  hardRequirementLocation: boolean;
+  hardRequirementEducation: boolean;
+  hardRequirementProfession: boolean;
+  hardRequirementIncome: boolean;
+  hardRequirementMaritalStatus: boolean;
+  hardRequirementHeight: boolean;
+  hardRequirementFamily: boolean;
+  hardRequirementReligious: boolean;
+  hardRequirementLifestyle: boolean;
 }
 
-const WEIGHT_FIELDS: { key: keyof Settings; label: string }[] = [
-  { key: "weightAge", label: "Age" },
-  { key: "weightLocation", label: "Location" },
-  { key: "weightEducation", label: "Education" },
-  { key: "weightProfession", label: "Profession" },
-  { key: "weightIncome", label: "Income" },
-  { key: "weightMaritalStatus", label: "Marital Status" },
-  { key: "weightHeight", label: "Height" },
-  { key: "weightFamily", label: "Family" },
-  { key: "weightReligious", label: "Religious" },
-  { key: "weightLifestyle", label: "Lifestyle" },
+const WEIGHT_FIELDS: { key: keyof Settings; label: string; hardKey: keyof Settings }[] = [
+  { key: "weightAge", label: "Age", hardKey: "hardRequirementAge" },
+  { key: "weightLocation", label: "Location", hardKey: "hardRequirementLocation" },
+  { key: "weightEducation", label: "Education", hardKey: "hardRequirementEducation" },
+  { key: "weightProfession", label: "Profession", hardKey: "hardRequirementProfession" },
+  { key: "weightIncome", label: "Income", hardKey: "hardRequirementIncome" },
+  { key: "weightMaritalStatus", label: "Marital Status", hardKey: "hardRequirementMaritalStatus" },
+  { key: "weightHeight", label: "Height", hardKey: "hardRequirementHeight" },
+  { key: "weightFamily", label: "Family", hardKey: "hardRequirementFamily" },
+  { key: "weightReligious", label: "Religious", hardKey: "hardRequirementReligious" },
+  { key: "weightLifestyle", label: "Lifestyle", hardKey: "hardRequirementLifestyle" },
+];
+
+const THRESHOLD_FIELDS: { key: keyof Settings; label: string }[] = [
+  { key: "thresholdExcellent", label: "Excellent" },
+  { key: "thresholdVeryGood", label: "Very Good" },
+  { key: "thresholdGood", label: "Good" },
+  { key: "thresholdPossible", label: "Possible" },
 ];
 
 export default function SettingsPage() {
@@ -111,8 +132,41 @@ export default function SettingsPage() {
           <p className={`text-sm mb-4 ${weightTotal === 100 ? "text-muted" : "text-danger"}`}>
             Total: {weightTotal}% {weightTotal !== 100 && "(should total 100%)"}
           </p>
+          <p className="text-xs text-muted mb-4">
+            Marking a category as a hard requirement excludes candidates who fail it entirely, instead of just lowering their score.
+          </p>
           <div className="grid gap-4 sm:grid-cols-2">
             {WEIGHT_FIELDS.map((f) => (
+              <div key={f.key} className="flex items-end gap-3">
+                <Field label={f.label} htmlFor={f.key} className="flex-1">
+                  <Input
+                    id={f.key}
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={settings[f.key] as number}
+                    onChange={(e) => setSettings({ ...settings, [f.key]: Number(e.target.value) })}
+                  />
+                </Field>
+                <Checkbox
+                  label="Hard requirement"
+                  checked={settings[f.hardKey] as boolean}
+                  onChange={(e) => setSettings({ ...settings, [f.hardKey]: e.target.checked })}
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Match Tier Thresholds</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted mb-4">Minimum overall compatibility score (%) required to reach each tier.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {THRESHOLD_FIELDS.map((f) => (
               <Field key={f.key} label={f.label} htmlFor={f.key}>
                 <Input
                   id={f.key}

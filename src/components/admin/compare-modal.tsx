@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Loader2, Handshake } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Handshake, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { MatchScore } from "@/components/ui/match-score";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,15 @@ function recommendation(score: number): { label: string; tone: string } {
   if (score >= 50) return { label: "Needs Review", tone: "text-warning" };
   return { label: "Not Recommended", tone: "text-danger" };
 }
+
+const STATUS_LABEL: Record<string, string> = {
+  SUGGESTED: "Suggested",
+  REVIEWED: "Reviewed",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  PROPOSAL_CREATED: "Proposal Created",
+  CLOSED: "Closed",
+};
 
 function ProfileColumn({ profile, title }: { profile: ProfileDetailDto | null; title: string }) {
   if (!profile) {
@@ -59,17 +68,49 @@ export function CompareModal({
   const [seeker, setSeeker] = useState<ProfileDetailDto | null>(null);
   const [candidate, setCandidate] = useState<ProfileDetailDto | null>(null);
   const [creating, setCreating] = useState(false);
+  const [matchRecord, setMatchRecord] = useState<{ id: string; status: string } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     if (!open || !match) return;
     setSeeker(null);
     setCandidate(null);
+    setMatchRecord(null);
     fetch(`/api/admin/profiles/${seekerId}`).then((r) => r.json()).then(setSeeker);
     fetch(`/api/admin/profiles/${match.profile.id}`).then((r) => r.json()).then(setCandidate);
+    // Persist this scored candidate as a real Match record so it has an id
+    // to hang status/recommendation/proposal linkage off of (spec §31/§33).
+    fetch(`/api/admin/profiles/${seekerId}/matches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: match.profile.id }),
+    })
+      .then((r) => r.json())
+      .then((m) => setMatchRecord({ id: m.id, status: m.status }));
   }, [open, match, seekerId]);
 
   if (!match) return null;
   const rec = recommendation(match.total);
+
+  async function setMatchStatus(status: string) {
+    if (!matchRecord) return;
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch(`/api/admin/matches/${matchRecord.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setMatchRecord({ id: updated.id, status: updated.status });
+      show(status === "APPROVED" ? "Match approved" : "Match rejected", "success");
+    } catch {
+      show("Could not update match status.", "error");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
 
   async function createProposal() {
     if (!match) return;
@@ -78,7 +119,7 @@ export function CompareModal({
       const res = await fetch("/api/admin/proposals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileAId: seekerId, profileBId: match.profile.id }),
+        body: JSON.stringify({ profileAId: seekerId, profileBId: match.profile.id, matchId: matchRecord?.id }),
       });
       if (!res.ok) throw new Error();
       show("Proposal created", "success");
@@ -128,11 +169,34 @@ export function CompareModal({
         </div>
       </div>
 
-      <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
-        <p className={`font-semibold ${rec.tone}`}>Admin Recommendation: {rec.label}</p>
-        <Button size="sm" onClick={createProposal} disabled={creating}>
-          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Handshake className="h-4 w-4" />} Create Proposal
-        </Button>
+      <div className="mt-6 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className={`font-semibold ${rec.tone}`}>Admin Recommendation: {rec.label}</p>
+          <p className="text-xs text-muted">
+            Match status: {matchRecord ? STATUS_LABEL[matchRecord.status] ?? matchRecord.status : "—"} &middot; a suggested pairing, not a guaranteed match — final decisions rest with the admin.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setMatchStatus("REJECTED")}
+            disabled={!matchRecord || updatingStatus || matchRecord.status === "REJECTED"}
+          >
+            <ThumbsDown className="h-4 w-4" /> Reject
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setMatchStatus("APPROVED")}
+            disabled={!matchRecord || updatingStatus || matchRecord.status === "APPROVED"}
+          >
+            <ThumbsUp className="h-4 w-4" /> Approve
+          </Button>
+          <Button size="sm" onClick={createProposal} disabled={creating}>
+            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Handshake className="h-4 w-4" />} Create Proposal
+          </Button>
+        </div>
       </div>
     </Modal>
   );

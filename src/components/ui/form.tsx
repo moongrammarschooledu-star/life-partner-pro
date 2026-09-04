@@ -1,15 +1,16 @@
 import { type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type LabelHTMLAttributes, forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
-export function Field({ label, error, hint, children, htmlFor }: {
+export function Field({ label, error, hint, children, htmlFor, className }: {
   label?: string;
   error?: string;
   hint?: string;
   children: React.ReactNode;
   htmlFor?: string;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn("flex flex-col gap-1.5", className)}>
       {label && <Label htmlFor={htmlFor}>{label}</Label>}
       {children}
       {hint && !error && <p className="text-xs text-muted">{hint}</p>}

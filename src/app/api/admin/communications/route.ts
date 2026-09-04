@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     if (followUpDate) {
       await prisma.followUp.create({
-        data: { profileId, dueDate: parseDateOnly(followUpDate), note: notes || null },
+        data: { profileId, dueDate: parseDateOnly(followUpDate), note: notes || null, status: "PENDING" },
       });
     }
 

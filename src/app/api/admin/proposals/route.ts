@@ -32,16 +32,26 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const admin = await requireAdmin("proposal:create");
-    const { profileAId, profileBId } = await req.json();
+    const { profileAId, profileBId, matchId } = await req.json();
 
     if (!profileAId || !profileBId || profileAId === profileBId) {
       throw new ApiError(400, "Two distinct profiles are required");
+    }
+
+    // Match creation never implies contact sharing (spec §35) — this only
+    // records the proposal + a snapshot of the match score it came from.
+    let matchScore: number | undefined;
+    if (matchId) {
+      const match = await prisma.match.findUnique({ where: { id: matchId } });
+      matchScore = match?.score;
     }
 
     const proposal = await prisma.proposal.create({
       data: {
         profileAId,
         profileBId,
+        matchId: matchId || undefined,
+        matchScore,
         createdById: admin.id,
         events: { create: { status: "DRAFT" } },
       },
@@ -51,9 +61,10 @@ export async function POST(req: Request) {
     await Promise.all([
       prisma.profile.update({ where: { id: profileAId }, data: { status: "MATCHING" } }),
       prisma.profile.update({ where: { id: profileBId }, data: { status: "MATCHING" } }),
+      matchId ? prisma.match.update({ where: { id: matchId }, data: { status: "PROPOSAL_CREATED" } }) : Promise.resolve(),
     ]);
 
-    await writeAudit({ action: "PROPOSAL_CREATED", adminId: admin.id, targetProfileId: profileAId, meta: { profileBId, proposalId: proposal.id } });
+    await writeAudit({ action: "PROPOSAL_CREATED", adminId: admin.id, targetProfileId: profileAId, meta: { profileBId, proposalId: proposal.id, matchId } });
 
     return NextResponse.json(proposal);
   } catch (error) {

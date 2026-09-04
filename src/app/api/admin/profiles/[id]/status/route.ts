@@ -18,6 +18,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (!VALID_STATUSES.includes(status)) throw new ApiError(400, "Invalid status");
 
+    if (status === "ACTIVE") {
+      const consent = await prisma.consentRecord.findUnique({ where: { profileId: id } });
+      const hasFullConsent =
+        !!consent?.privacyConsent && !!consent?.matchmakingConsent && !!consent?.contactSharingConsent && !!consent?.termsAccepted;
+      if (!hasFullConsent) {
+        throw new ApiError(400, "This profile cannot be activated until privacy, matchmaking, contact-sharing, and terms consent are all recorded.");
+      }
+    }
+
     const profile = await prisma.profile.update({
       where: { id },
       data: { status, verified: status === "VERIFIED" || status === "ACTIVE" ? true : undefined },

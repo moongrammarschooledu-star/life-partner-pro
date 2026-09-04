@@ -100,6 +100,34 @@ enum CommunicationType {
   FOLLOW_UP
 }
 
+enum MatchStatus {
+  SUGGESTED
+  REVIEWED
+  APPROVED
+  REJECTED
+  PROPOSAL_CREATED
+  CLOSED
+}
+
+enum MatchRecommendation {
+  STRONG_MATCH
+  GOOD_MATCH
+  NEEDS_REVIEW
+  NOT_RECOMMENDED
+}
+
+enum FollowUpPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FollowUpStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 enum AuditAction {
   ADMIN_LOGIN
   ADMIN_LOGOUT
@@ -113,6 +141,7 @@ enum AuditAction {
   CONTACT_VIEWED
   CONTACT_SHARED
   MATCH_CREATED
+  MATCH_STATUS_CHANGED
   PROPOSAL_CREATED
   PROPOSAL_STATUS_CHANGED
   NOTE_ADDED
@@ -135,14 +164,17 @@ model AdminUser {
   role              AdminRole @default(STAFF)
   twoFactorEnabled  Boolean   @default(false)
   active            Boolean   @default(true)
+  lastLoginAt       DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   notes             ProfileNote[]
   communications    Communication[]
+  followUps         FollowUp[]
   auditLogs         AuditLog[]
   contactShares     ContactShareLog[]
   proposalsCreated  Proposal[]
+  matchesCreated    Match[]
 }
 
 // ---------- Core profile ----------
@@ -165,6 +197,7 @@ model Profile {
   status        ProfileStatus @default(NEW)
   verified      Boolean       @default(false)
   softDeleted   Boolean       @default(false)
+  profileCompletion Int       @default(0) // 0-100, recomputed whenever the profile or its sections are written
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -194,6 +227,9 @@ model Profile {
   @@index([gender, status])
   @@index([city])
   @@index([status])
+  @@index([maritalStatus])
+  @@index([dateOfBirth])
+  @@index([verified])
 }
 
 model ContactInfo {
@@ -205,6 +241,7 @@ model ContactInfo {
   whatsappNumber        String?
   email                 String
   preferredContactMethod ContactMethod @default(PHONE)
+  contactVerified       Boolean       @default(false)
 }
 
 model EducationInfo {
@@ -259,6 +296,9 @@ model LifestyleInfo {
   languages             String?  // comma separated
   smoking               Boolean  @default(false)
   drinking              Boolean  @default(false)
+  hobbies               String?
+  personality           String?
+  aboutMe               String?
   otherPreferences      String?
 }
 
@@ -308,12 +348,21 @@ model ProfilePhoto {
   @@index([profileId])
 }
 
+// Granular consent, tracked separately per purpose rather than one blanket
+// checkbox — a profile must not go ACTIVE without all four being true (see
+// the status-change route). consentVersion records which wording the
+// applicant agreed to, for future re-consent if the policy text changes.
 model ConsentRecord {
-  id          String   @id @default(cuid())
-  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId   String   @unique
-  agreedAt    DateTime @default(now())
-  ipHash      String?
+  id                    String   @id @default(cuid())
+  profile               Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId             String   @unique
+  privacyConsent        Boolean  @default(false)
+  matchmakingConsent    Boolean  @default(false)
+  contactSharingConsent Boolean  @default(false)
+  termsAccepted         Boolean  @default(false)
+  consentVersion        String   @default("1.0")
+  agreedAt              DateTime @default(now())
+  ipHash                String?
 }
 
 // Pending, admin-reviewable edits to sensitive fields submitted by the applicant.
@@ -329,6 +378,10 @@ model ProfileNote {
   id          String    @id @default(cuid())
   profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId   String
+  proposal    Proposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId  String?
+  match       Match?    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  matchId     String?
   admin       AdminUser @relation(fields: [adminId], references: [id])
   adminId     String
   text        String
@@ -336,6 +389,8 @@ model ProfileNote {
   createdAt   DateTime  @default(now())
 
   @@index([profileId])
+  @@index([proposalId])
+  @@index([matchId])
 }
 
 // ---------- Matching & proposals ----------
@@ -346,12 +401,35 @@ model Match {
   profileAId    String
   profileB      Profile  @relation("MatchProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
   profileBId    String
-  score         Int
-  breakdown     String   // JSON: [{category, weight, score, reason}]
+
+  score               Int // overall mutual compatibility score, 0-100
+  ageScore            Int
+  locationScore       Int
+  educationScore      Int
+  professionScore     Int
+  incomeScore         Int
+  maritalStatusScore  Int
+  heightScore         Int
+  familyScore         Int
+  religiousScore      Int
+  lifestyleScore      Int
+  breakdown           String // JSON: [{category, weight, score, status, reason}] — full explanation, see src/lib/matching.ts
+
+  status         MatchStatus          @default(SUGGESTED)
+  recommendation MatchRecommendation?
+
+  createdBy     AdminUser? @relation(fields: [createdById], references: [id])
+  createdById   String?
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  notes         ProfileNote[]
+  proposals     Proposal[]
 
   @@unique([profileAId, profileBId])
   @@index([profileAId])
+  @@index([profileBId])
+  @@index([status])
 }
 
 model Proposal {
@@ -360,16 +438,23 @@ model Proposal {
   profileAId    String
   profileB      Profile        @relation("ProposalProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
   profileBId    String
+  match         Match?         @relation(fields: [matchId], references: [id])
+  matchId       String?
+  matchScore    Int? // snapshot of Match.score at proposal-creation time
   status        ProposalStatus @default(DRAFT)
   createdBy     AdminUser      @relation(fields: [createdById], references: [id])
   createdById   String
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  events        ProposalEvent[]
+  events          ProposalEvent[]
+  notes           ProfileNote[]
+  communications  Communication[]
+  followUps       FollowUp[]
 
   @@index([profileAId])
   @@index([profileBId])
+  @@index([matchId])
 }
 
 model ProposalEvent {
@@ -387,6 +472,8 @@ model Communication {
   id            String            @id @default(cuid())
   profile       Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId     String
+  proposal      Proposal?         @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  proposalId    String?
   admin         AdminUser         @relation(fields: [adminId], references: [id])
   adminId       String
   type          CommunicationType
@@ -396,19 +483,28 @@ model Communication {
   createdAt     DateTime          @default(now())
 
   @@index([profileId])
+  @@index([proposalId])
 }
 
 model FollowUp {
-  id            String    @id @default(cuid())
-  profile       Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id            String           @id @default(cuid())
+  profile       Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId     String
-  dueDate       DateTime
+  proposal      Proposal?        @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  proposalId    String?
+  admin         AdminUser?       @relation(fields: [adminId], references: [id])
+  adminId       String?
+  title         String?
   note          String?
-  done          Boolean   @default(false)
-  createdAt     DateTime  @default(now())
+  dueDate       DateTime
+  priority      FollowUpPriority @default(MEDIUM)
+  status        FollowUpStatus   @default(PENDING)
+  completedAt   DateTime?
+  createdAt     DateTime         @default(now())
 
-  @@index([dueDate, done])
+  @@index([dueDate, status])
   @@index([profileId])
+  @@index([proposalId])
 }
 
 // ---------- Contact sharing ----------
@@ -462,6 +558,27 @@ model AppSettings {
   weightFamily          Int      @default(10)
   weightReligious       Int      @default(10)
   weightLifestyle       Int      @default(5)
+
+  // Match tier cutoffs (spec §30) — admin-configurable, must stay descending.
+  thresholdExcellent    Int      @default(90)
+  thresholdVeryGood     Int      @default(80)
+  thresholdGood         Int      @default(65)
+  thresholdPossible     Int      @default(50)
+
+  // Hard requirement vs soft preference per category (spec §27). When true,
+  // a candidate failing that category is excluded from results rather than
+  // just scored low — see src/lib/matching.ts.
+  hardRequirementAge           Boolean @default(false)
+  hardRequirementLocation      Boolean @default(false)
+  hardRequirementEducation     Boolean @default(false)
+  hardRequirementProfession    Boolean @default(false)
+  hardRequirementIncome        Boolean @default(false)
+  hardRequirementMaritalStatus Boolean @default(false)
+  hardRequirementHeight        Boolean @default(false)
+  hardRequirementFamily        Boolean @default(false)
+  hardRequirementReligious     Boolean @default(false)
+  hardRequirementLifestyle     Boolean @default(false)
+
   updatedAt             DateTime @updatedAt
 }
 

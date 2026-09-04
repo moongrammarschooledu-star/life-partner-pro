@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils";
 
 const TIER_COLOR: Record<string, string> = {
-  BEST_MATCH: "text-success",
-  VERY_GOOD_MATCH: "text-success",
-  GOOD_MATCH: "text-accent",
-  POSSIBLE_MATCH: "text-warning",
-  LOW_MATCH: "text-muted",
+  EXCELLENT: "text-success",
+  VERY_GOOD: "text-success",
+  GOOD: "text-accent",
+  POSSIBLE: "text-warning",
+  LOW: "text-muted",
 };
 
 export function MatchScore({ score, tier, tierLabel, className }: { score: number; tier: string; tierLabel: string; className?: string }) {

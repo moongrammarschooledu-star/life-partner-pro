@@ -8,7 +8,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const { done } = await req.json();
 
-    const followUp = await prisma.followUp.update({ where: { id }, data: { done: !!done } });
+    const followUp = await prisma.followUp.update({
+      where: { id },
+      data: done
+        ? { status: "COMPLETED", completedAt: new Date() }
+        : { status: "PENDING", completedAt: null },
+    });
 
     return NextResponse.json(followUp);
   } catch (error) {
