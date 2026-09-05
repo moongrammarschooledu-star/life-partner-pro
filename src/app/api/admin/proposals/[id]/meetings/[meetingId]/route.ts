@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { assertProposalAccess } from "@/lib/proposal-access";
+import { notifyMeetingUpdated } from "@/lib/notifications/events";
 import type { MeetingStatus } from "@prisma/client";
 
 const VALID_STATUSES: MeetingStatus[] = ["REQUESTED", "SCHEDULED", "CONFIRMED", "COMPLETED", "RESCHEDULED", "CANCELLED"];
@@ -37,6 +38,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     await writeAudit({ action: "MEETING_MODIFIED", adminId: admin.id, targetProfileId: proposal.profileAId, meta: { proposalId: id, meetingId, status } });
+
+    if (status) {
+      await notifyMeetingUpdated(proposal.profileAId, proposal.profileBId, id, status, proposal.assignedToId);
+    }
 
     return NextResponse.json(meeting);
   } catch (error) {

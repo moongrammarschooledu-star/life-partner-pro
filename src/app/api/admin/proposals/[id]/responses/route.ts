@@ -4,6 +4,7 @@ import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { assertProposalAccess } from "@/lib/proposal-access";
 import { nextProposalStatus } from "@/lib/proposal-workflow";
+import { notifyProposalResponseReceived } from "@/lib/notifications/events";
 import type { ProposalResponseType, ProposalDeclineReason } from "@prisma/client";
 
 const VALID_RESPONSES: ProposalResponseType[] = ["INTERESTED", "NOT_INTERESTED", "NEED_MORE_INFO"];
@@ -59,6 +60,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     await writeAudit({ action: "PROPOSAL_RESPONSE_SUBMITTED", adminId: admin.id, targetProfileId: profileId, meta: { proposalId: id, response } });
+
+    await notifyProposalResponseReceived({
+      proposalId: id,
+      profileAId: proposal.profileAId,
+      profileBId: proposal.profileBId,
+      responderId: profileId,
+      response,
+      newStatus,
+      assignedToId: proposal.assignedToId,
+    });
 
     return NextResponse.json({ status: newStatus });
   } catch (error) {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Save, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, Input, Checkbox } from "@/components/ui/form";
+import { Field, Input, Checkbox, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { ALGORITHM_VERSION } from "@/lib/matching";
@@ -58,6 +58,18 @@ interface Settings {
   autoReVerificationOnKeyFieldChange: boolean;
   otpExpiryMinutes: number;
   otpMaxAttempts: number;
+  emailNotificationsEnabled: boolean;
+  smsNotificationsEnabled: boolean;
+  whatsappNotificationsEnabled: boolean;
+  inAppNotificationsEnabled: boolean;
+  defaultNotificationLanguage: "EN" | "UR";
+  meetingReminder24hEnabled: boolean;
+  meetingReminder2hEnabled: boolean;
+  followUpReminderEnabled: boolean;
+  pendingProposalReminderDays: number;
+  notificationRetryLimit: number;
+  quietHoursStart: number | null;
+  quietHoursEnd: number | null;
 }
 
 const WEIGHT_FIELDS: { key: keyof Settings; label: string; hardKey: keyof Settings; enabledKey: keyof Settings }[] = [
@@ -293,6 +305,112 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Communication Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted">
+            Each channel can be enabled independently. No real Email/SMS/WhatsApp provider credentials are configured in this
+            environment — sends fall back to a logged, no-op stub until real provider credentials are set as environment
+            variables.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Checkbox
+              label="In-App notifications enabled"
+              checked={settings.inAppNotificationsEnabled}
+              onChange={(e) => setSettings({ ...settings, inAppNotificationsEnabled: e.target.checked })}
+            />
+            <Checkbox
+              label="Email notifications enabled"
+              checked={settings.emailNotificationsEnabled}
+              onChange={(e) => setSettings({ ...settings, emailNotificationsEnabled: e.target.checked })}
+            />
+            <Checkbox
+              label="SMS notifications enabled"
+              checked={settings.smsNotificationsEnabled}
+              onChange={(e) => setSettings({ ...settings, smsNotificationsEnabled: e.target.checked })}
+            />
+            <Checkbox
+              label="WhatsApp notifications enabled"
+              checked={settings.whatsappNotificationsEnabled}
+              onChange={(e) => setSettings({ ...settings, whatsappNotificationsEnabled: e.target.checked })}
+            />
+          </div>
+          <Field label="Default Notification Language" htmlFor="defaultNotificationLanguage">
+            <Select
+              id="defaultNotificationLanguage"
+              value={settings.defaultNotificationLanguage}
+              onChange={(e) => setSettings({ ...settings, defaultNotificationLanguage: e.target.value as "EN" | "UR" })}
+            >
+              <option value="EN">English</option>
+              <option value="UR">اردو (Urdu)</option>
+            </Select>
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Checkbox
+              label="24-hour meeting reminder"
+              checked={settings.meetingReminder24hEnabled}
+              onChange={(e) => setSettings({ ...settings, meetingReminder24hEnabled: e.target.checked })}
+            />
+            <Checkbox
+              label="2-hour meeting reminder"
+              checked={settings.meetingReminder2hEnabled}
+              onChange={(e) => setSettings({ ...settings, meetingReminder2hEnabled: e.target.checked })}
+            />
+            <Checkbox
+              label="Follow-up reminders"
+              checked={settings.followUpReminderEnabled}
+              onChange={(e) => setSettings({ ...settings, followUpReminderEnabled: e.target.checked })}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Pending Proposal Reminder (days)" htmlFor="pendingProposalReminderDays" hint="Remind if a side hasn't responded after this many days.">
+              <Input
+                id="pendingProposalReminderDays"
+                type="number"
+                min={1}
+                max={30}
+                value={settings.pendingProposalReminderDays}
+                onChange={(e) => setSettings({ ...settings, pendingProposalReminderDays: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Notification Retry Limit" htmlFor="notificationRetryLimit">
+              <Input
+                id="notificationRetryLimit"
+                type="number"
+                min={0}
+                max={10}
+                value={settings.notificationRetryLimit}
+                onChange={(e) => setSettings({ ...settings, notificationRetryLimit: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Quiet Hours Start (0-23)" htmlFor="quietHoursStart" hint="Applied only to non-essential scheduled reminders.">
+              <Input
+                id="quietHoursStart"
+                type="number"
+                min={0}
+                max={23}
+                value={settings.quietHoursStart ?? ""}
+                onChange={(e) => setSettings({ ...settings, quietHoursStart: e.target.value === "" ? null : Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Quiet Hours End (0-23)" htmlFor="quietHoursEnd">
+              <Input
+                id="quietHoursEnd"
+                type="number"
+                min={0}
+                max={23}
+                value={settings.quietHoursEnd ?? ""}
+                onChange={(e) => setSettings({ ...settings, quietHoursEnd: e.target.value === "" ? null : Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Coming Soon</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted">
@@ -301,9 +419,6 @@ export default function SettingsPage() {
           </p>
           <p className="flex items-center gap-2">
             <Lock className="h-4 w-4" /> CSV / Excel / PDF export
-          </p>
-          <p className="flex items-center gap-2">
-            <Lock className="h-4 w-4" /> Email / SMS / WhatsApp notification delivery
           </p>
         </CardContent>
       </Card>

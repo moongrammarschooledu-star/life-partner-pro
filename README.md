@@ -193,6 +193,34 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   also excludes `SUSPENDED` profiles and anyone with an open high/critical security flag. Proposal creation
   (STEP 7) shows a "Verification Review Required" warning — not a hard block — when either profile has an
   unresolved verification issue, and records a non-blocking audit entry if an admin proceeds anyway.
+- **Notification & Communication System (STEP 9):** a persisted, per-recipient `Notification` model (with unread
+  counts and bells on both the public navbar and the admin header, alongside — not replacing — the existing computed
+  admin "action needed" panel) plus an automated `CommunicationLog` delivery record, distinct from the pre-existing
+  manual `Communication` log an admin types into a profile's Notes tab. One central `sendNotification()`/
+  `notifyAdmins()` pair (`src/lib/notifications/notification-service.ts`) is the only place that creates a
+  `Notification` row and decides, per external channel, whether to attempt Email/SMS/WhatsApp — checking an
+  admin-configurable per-channel enabled toggle, the profile's `NotificationPreference` (Proposal/Meeting/Follow-up/
+  Marketing, per channel), and `CommunicationConsent` (current-state, not a log) — with Account/Verification/
+  Matching/Contact/admin-only types classified essential and exempt from preference/consent gating. ~15 named event
+  wrapper functions (`src/lib/notifications/events.ts`) are wired into every existing proposal/meeting/contact-
+  permission/follow-up/verification/security-flag lifecycle transition, replacing the old ad-hoc
+  `notificationService.send()` calls in `status.ts`/`register/route.ts` without changing either function's external
+  signature. Templates are admin-editable per (event, channel, language) via `NotificationTemplate` DB overrides
+  that fall back to a built-in English/Urdu dictionary (`default-templates.ts`, same flat shape as the registration
+  wizard's own i18n strings) — the first server-rendered localization in the app, driven by a new
+  `Profile.preferredLanguage` field the applicant sets on `/my-notifications/preferences`. All copy is deliberately
+  generic ("You have received a new matrimonial proposal…") — no template variable is ever a name, city, or other
+  profile detail, only IDs/dates/times. There's no real job queue or worker (none exists in this Vercel-serverless
+  codebase); a "queue" is a `CommunicationLog` row dispatched synchronously through a per-channel provider interface
+  (console-log stub, same as every other channel in this project) that never throws back into the triggering
+  request. Scheduled reminders (meeting 24h/2h before, follow-up due, proposal-still-pending) run from
+  `/api/cron/notifications` (a new `vercel.json` Cron entry) with a manual "Run Now" admin twin route for live
+  verification, mirroring STEP 8's admin-triggered duplicate-scan precedent for otherwise time-based logic. A
+  signed, idempotent webhook intake pipeline (`/api/webhooks/notifications`) updates delivery status by
+  `providerMessageId`; since no real provider exists to send one, an admin "Simulate Webhook" action exercises the
+  identical code path. The Communication Center (`/admin/communication-center`) provides cross-profile search,
+  delivery analytics, a capped/controlled Retry action for `FAILED` sends, and a Test Mode that requires a
+  manually-typed destination so a test send can never reach a real applicant.
 
 ## Deferred / extension points
 
@@ -206,8 +234,6 @@ structured so they can be added without restructuring anything else:
   with a console-only implementation. Swap in a real provider by implementing that interface; nothing else in the
   app should ever import a provider SDK directly.
 - **Multi-language UI, native mobile apps, payments/subscriptions, CNIC/document verification** — not started.
-- **Persisted/event-sourced notifications** — the topbar notifications panel is computed live from existing tables
-  on every request rather than backed by a `Notification` table with write hooks on every triggering action.
 - **Admin-side manual "Add Profile"** — profiles are still only created through the public registration wizard;
   there's no admin-facing manual-entry form.
 - **Global search beyond profiles** — the topbar/Matching Center search covers profiles only (name / Profile ID /
@@ -277,6 +303,25 @@ structured so they can be added without restructuring anything else:
   Vitest tests, for the same reason as matching/proposals above. The pure logic (`src/lib/verification/
   completeness.ts`, `confidence.ts`, `otp.ts`, `duplicate-detection.ts`, `document-crypto.ts`) does have real unit
   tests.
+- **Real Email/SMS/WhatsApp provider credentials (STEP 9)** — `src/lib/notifications/providers/*` define a small
+  `NotificationProvider` interface per channel with a console-log default; each checks for its own env var
+  (`EMAIL_PROVIDER_API_KEY`, `SMS_PROVIDER_API_KEY`, `WHATSAPP_ENABLED`+`WHATSAPP_API_KEY`) and falls back cleanly
+  when unset, which is the case in this environment. Swapping in a real provider means implementing that interface
+  only — nothing else in the app should import a provider SDK directly.
+- **A real distributed job queue/worker for notifications** — no queue library (Bull/BullMQ/Agenda/etc.) exists in
+  this codebase and it's a Vercel serverless deployment with no persistent worker process. `CommunicationLog` rows
+  are dispatched synchronously and Vercel Cron covers time-deferred reminders instead; both are documented as an
+  intentional adaptation to this infrastructure, not a placeholder for something more "real."
+- **Webhook signature validation against a genuine provider (STEP 9)** — `/api/webhooks/notifications` implements
+  HMAC verification and idempotent processing (`WebhookEvent.idempotencyKey`), but `NOTIFICATION_WEBHOOK_SECRET` is
+  unset since no real provider exists to send a webhook here; the admin "Simulate Webhook" action in the
+  Communication Center exercises the identical processing path for live verification.
+- **Vercel Cron reliability across plan tiers** — `vercel.json` schedules `/api/cron/notifications` every 15
+  minutes, but this hasn't been (and can't be, from this environment) verified to actually fire on a schedule; the
+  manual "Run Now" admin route is the tested path for meeting/follow-up/pending-proposal reminder logic.
+- **Full ICU-style i18n** — `src/lib/notifications/default-templates.ts` is a flat English/Urdu dictionary with
+  simple `{{variable}}` substitution, matching the existing registration-wizard i18n pattern; no pluralization,
+  gendered forms, or additional languages.
 
 ## Security notes
 

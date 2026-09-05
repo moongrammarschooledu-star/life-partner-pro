@@ -20,7 +20,11 @@ export type Permission =
   | "verification:review"
   | "verification:document:view"
   | "verification:flag:manage"
-  | "verification:duplicate:scan";
+  | "verification:duplicate:scan"
+  | "communication:view"
+  | "communication:send"
+  | "communication:message:view"
+  | "notification:template:manage";
 
 const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -44,6 +48,10 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "verification:document:view",
     "verification:flag:manage",
     "verification:duplicate:scan",
+    "communication:view",
+    "communication:send",
+    "communication:message:view",
+    "notification:template:manage",
   ],
   ADMIN: [
     "profile:view",
@@ -63,6 +71,10 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "verification:document:view",
     "verification:flag:manage",
     "verification:duplicate:scan",
+    "communication:view",
+    "communication:send",
+    "communication:message:view",
+    "notification:template:manage",
   ],
   STAFF: [
     "profile:view",
@@ -76,8 +88,10 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "verification:view",
     "verification:review", // row-gated: only verifications assigned to them — see src/lib/verification-access.ts
     "verification:flag:manage", // row-gated the same way
+    "communication:view",
+    "communication:send", // row-gated: only proposals/profiles assigned to them — see src/lib/communication-access.ts
   ],
-  VIEWER: ["profile:view", "audit:view", "verification:view"],
+  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view"],
 };
 
 export function hasPermission(role: AdminRole, permission: Permission): boolean {

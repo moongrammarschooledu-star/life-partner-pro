@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { notifyAdminProfileUpdatePending } from "@/lib/notifications/events";
 
 // Lightweight self-service verification: matching Profile Code + email is
 // enough to look up and submit an update request. This is intentionally not
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
       });
 
       await writeAudit({ action: "UPDATE_REQUEST_SUBMITTED", targetProfileId: profile.id });
+      await notifyAdminProfileUpdatePending(profile.id);
 
       return NextResponse.json({ ok: true });
     }

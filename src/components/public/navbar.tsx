@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Moon, Sun, ShieldCheck } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { buttonClass } from "@/components/ui/button";
+import { NotificationBell } from "@/components/public/notification-bell";
 
 export function PublicNavbar() {
   const { theme, toggle } = useTheme();
@@ -29,6 +30,9 @@ export function PublicNavbar() {
           <Link href="/my-proposals" className="text-muted hover:text-foreground">
             My Proposals
           </Link>
+          <Link href="/my-notifications" className="text-muted hover:text-foreground">
+            My Notifications
+          </Link>
           <Link href="/support" className="text-muted hover:text-foreground">
             Support
           </Link>
@@ -37,6 +41,7 @@ export function PublicNavbar() {
           </Link>
         </nav>
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <button
             onClick={toggle}
             aria-label="Toggle dark mode"

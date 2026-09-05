@@ -453,11 +453,36 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
-  function sendNotification() {
-    // Console-log stub (src/lib/notifications.ts) — no real email/SMS
-    // provider exists in this codebase; this satisfies the "Send
-    // Notification" admin action as a wired-but-deferred integration point.
-    show("Notification queued (delivery is a console-log stub in this environment)", "success");
+  const [sendMessageOpen, setSendMessageOpen] = useState(false);
+  const [sendMessageProfileId, setSendMessageProfileId] = useState("");
+  const [sendMessageChannel, setSendMessageChannel] = useState("EMAIL");
+  const [sendMessageText, setSendMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  function openSendMessage() {
+    setSendMessageProfileId(proposal?.profileA.id ?? "");
+    setSendMessageChannel("EMAIL");
+    setSendMessageText("");
+    setSendMessageOpen(true);
+  }
+
+  async function sendMessage() {
+    if (!proposal || !sendMessageText.trim()) return;
+    setSendingMessage(true);
+    try {
+      const res = await fetch("/api/admin/communications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId: sendMessageProfileId, proposalId: proposal.id, channel: sendMessageChannel, message: sendMessageText.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      show("Message sent", "success");
+      setSendMessageOpen(false);
+    } catch {
+      show("Could not send message.", "error");
+    } finally {
+      setSendingMessage(false);
+    }
   }
 
   if (!proposal) {
@@ -916,8 +941,8 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
               <CardTitle className="text-base">Admin Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={sendNotification}>
-                <Bell className="h-4 w-4" /> Send Notification
+              <Button size="sm" variant="outline" className="w-full justify-start" onClick={openSendMessage}>
+                <Bell className="h-4 w-4" /> Send Message
               </Button>
               <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => patchProposal({ status: "ON_HOLD" }).then(load)}>
                 <Ban className="h-4 w-4" /> Put On Hold
@@ -962,6 +987,35 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         <Field label="Internal Note (private)" htmlFor="rejectNote">
           <Textarea id="rejectNote" rows={2} value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} />
         </Field>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={sendMessageOpen}
+        title="Send Message"
+        description="Review the recipient, channel, and message before sending — external channels require this confirmation."
+        confirmLabel="Send"
+        confirmDisabled={!sendMessageText.trim() || sendingMessage}
+        onConfirm={sendMessage}
+        onCancel={() => setSendMessageOpen(false)}
+      >
+        <Field label="Recipient" htmlFor="sendMessageProfileId">
+          <Select id="sendMessageProfileId" value={sendMessageProfileId} onChange={(e) => setSendMessageProfileId(e.target.value)}>
+            <option value={proposal.profileA.id}>{proposal.profileA.fullName}</option>
+            <option value={proposal.profileB.id}>{proposal.profileB.fullName}</option>
+          </Select>
+        </Field>
+        <Field label="Channel" htmlFor="sendMessageChannel">
+          <Select id="sendMessageChannel" value={sendMessageChannel} onChange={(e) => setSendMessageChannel(e.target.value)}>
+            <option value="IN_APP">In-App</option>
+            <option value="EMAIL">Email</option>
+            <option value="SMS">SMS</option>
+            <option value="WHATSAPP">WhatsApp</option>
+          </Select>
+        </Field>
+        <Field label="Message" htmlFor="sendMessageText">
+          <Textarea id="sendMessageText" rows={3} value={sendMessageText} onChange={(e) => setSendMessageText(e.target.value)} />
+        </Field>
+        <p className="text-xs text-muted">Related Proposal: {proposal.proposalCode ?? proposal.id}</p>
       </ConfirmDialog>
 
       <ConfirmDialog

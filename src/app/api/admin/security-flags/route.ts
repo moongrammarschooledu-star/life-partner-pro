@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { notifySecurityFlagRaised } from "@/lib/notifications/events";
 import type { SecurityFlagType, SecurityFlagSeverity } from "@prisma/client";
 
 const VALID_TYPES: SecurityFlagType[] = [
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
     });
 
     await writeAudit({ action: "SECURITY_FLAG_RAISED", adminId: admin.id, targetProfileId: profileId, meta: { flagId: flag.id, flagType } });
+    await notifySecurityFlagRaised(profileId, flagType === "DUPLICATE_PROFILE_SUSPECTED");
 
     return NextResponse.json(flag);
   } catch (error) {

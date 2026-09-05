@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { setVerificationStatus } from "@/lib/verification/status";
+import { notifyProfileUpdateDecision } from "@/lib/notifications/events";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,6 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ]);
 
       await writeAudit({ action: "UPDATE_REQUEST_APPROVED", adminId: admin.id, targetProfileId: id });
+      await notifyProfileUpdateDecision(id, true);
 
       // Contact info changing is the one field group STEP 8 §19's
       // change-monitoring rule can actually observe today — nothing else
@@ -43,6 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     } else {
       await prisma.pendingUpdate.delete({ where: { profileId: id } });
       await writeAudit({ action: "UPDATE_REQUEST_REJECTED", adminId: admin.id, targetProfileId: id });
+      await notifyProfileUpdateDecision(id, false);
     }
 
     return NextResponse.json({ ok: true });

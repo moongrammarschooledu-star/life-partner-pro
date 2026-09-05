@@ -5,6 +5,7 @@ import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { nextProposalCode, ensureProposalCode } from "@/lib/proposal-code";
 import { STATUS_GROUPS } from "@/lib/proposal-status-labels";
+import { notifyProposalCreated } from "@/lib/notifications/events";
 
 const proposalListInclude = {
   profileA: { select: { id: true, profileCode: true, fullName: true, gender: true, city: true } },
@@ -125,6 +126,8 @@ export async function POST(req: Request) {
         meta: { profileBId, proposalId: proposal.id },
       });
     }
+
+    await notifyProposalCreated({ id: proposal.id, profileAId, profileBId });
 
     return NextResponse.json(proposal);
   } catch (error) {

@@ -58,6 +58,15 @@ const STATUS_VARIANT: Record<string, "default" | "success" | "warning" | "danger
   ACCEPTED: "success",
   ON_HOLD: "muted",
   CLOSED: "muted",
+
+  // Notification delivery statuses (STEP 9).
+  QUEUED: "muted",
+  SENDING: "info",
+  SENT: "info",
+  DELIVERED: "success",
+  READ: "success",
+  FAILED: "danger",
+  CANCELLED: "muted",
 };
 
 export function StatusBadge({ status }: { status: string }) {

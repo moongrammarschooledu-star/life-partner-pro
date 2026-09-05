@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
-import { notificationService } from "@/lib/notifications";
+import { notifyProfileVerificationChanged, notifyProfileSuspended } from "@/lib/notifications/events";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import type { VerificationStatus } from "@prisma/client";
@@ -72,22 +72,18 @@ export async function ensureAllProfileVerifications(): Promise<void> {
   );
 }
 
-// Secure notification copy per status (spec §27) — never includes rejection
-// reasons, internal notes, or any other sensitive detail; delivery goes
-// through the same console-log stub every other notification in this
-// project uses (no real email/SMS provider exists anywhere here).
-const NOTIFICATION_COPY: Partial<Record<VerificationStatus, string>> = {
-  VERIFIED: "Your profile has been verified. You now have a Verified badge.",
-  VERIFICATION_REQUIRED: "Action is required on your Life Partner Pro profile. Please log in to My Verification to review what's needed.",
-  VERIFICATION_REJECTED: "There is an update on your Life Partner Pro verification. Please log in to My Verification for details.",
-  RE_VERIFICATION_REQUIRED: "Your Life Partner Pro profile requires re-verification. Please log in to My Verification to continue.",
+// STEP 9 notification type per verification status — routed through the
+// central notification service (src/lib/notifications/notification-service.ts)
+// so in-app/email/SMS/WhatsApp all get consistent, admin-editable, EN/UR
+// copy instead of a single hardcoded English email string.
+const NOTIFICATION_TYPE_FOR_STATUS: Partial<
+  Record<VerificationStatus, Parameters<typeof notifyProfileVerificationChanged>[1]>
+> = {
+  VERIFIED: "VERIFICATION_APPROVED",
+  VERIFICATION_REQUIRED: "VERIFICATION_ACTION_REQUIRED",
+  VERIFICATION_REJECTED: "VERIFICATION_REJECTED",
+  RE_VERIFICATION_REQUIRED: "RE_VERIFICATION_REQUIRED",
 };
-
-async function notifyProfile(profileId: string, body: string) {
-  const contact = await prisma.contactInfo.findUnique({ where: { profileId } });
-  if (!contact) return;
-  await notificationService.send({ channel: "EMAIL", to: contact.email, subject: "Life Partner Pro — Verification Update", body });
-}
 
 interface SetStatusOptions {
   adminId: string;
@@ -164,8 +160,9 @@ export async function setVerificationStatus(profileId: string, newStatus: Verifi
     meta: { status: newStatus },
   });
 
-  if (NOTIFICATION_COPY[newStatus]) {
-    await notifyProfile(profileId, NOTIFICATION_COPY[newStatus]!);
+  const notifyType = NOTIFICATION_TYPE_FOR_STATUS[newStatus];
+  if (notifyType) {
+    await notifyProfileVerificationChanged(profileId, notifyType);
   }
 
   return verification;
@@ -189,5 +186,5 @@ export async function suspendProfile(profileId: string, opts: { adminId: string;
   }
 
   await writeAudit({ action: "PROFILE_SUSPENDED", adminId: opts.adminId, targetProfileId: profileId, meta: { reason: opts.reason } });
-  await notifyProfile(profileId, "Your Life Partner Pro profile has been suspended. Please contact support for more information.");
+  await notifyProfileSuspended(profileId);
 }

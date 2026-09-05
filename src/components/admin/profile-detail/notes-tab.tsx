@@ -10,7 +10,9 @@ import { Timeline } from "@/components/ui/timeline";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatDateTime, formatEnumLabel } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
-import { StickyNote, MessageCircleHeart } from "lucide-react";
+import { StickyNote, MessageCircleHeart, Bell } from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "@/components/ui/badge";
 
 interface CommunicationEntry {
   id: string;
@@ -19,6 +21,16 @@ interface CommunicationEntry {
   occurredAt: string;
   followUpDate: string | null;
   adminName: string;
+}
+
+interface AutomatedLogEntry {
+  id: string;
+  channel: string;
+  notificationType: string;
+  deliveryStatus: string;
+  createdAt: string;
+  isTest: boolean;
+  createdBy: { name: string } | null;
 }
 
 interface Note {
@@ -41,6 +53,7 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
   const [followUpDate, setFollowUpDate] = useState("");
   const [submittingComm, setSubmittingComm] = useState(false);
   const [history, setHistory] = useState<CommunicationEntry[] | null>(null);
+  const [automatedHistory, setAutomatedHistory] = useState<AutomatedLogEntry[] | null>(null);
 
   function loadHistory() {
     fetch(`/api/admin/communications?profileId=${profileId}`)
@@ -48,8 +61,15 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
       .then((data) => setHistory(data.items ?? []));
   }
 
+  function loadAutomatedHistory() {
+    fetch(`/api/admin/communication-center?profileId=${profileId}&includeTest=true`)
+      .then((r) => r.json())
+      .then((data) => setAutomatedHistory(data.items ?? []));
+  }
+
   useEffect(() => {
     loadHistory();
+    loadAutomatedHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId]);
 
@@ -209,6 +229,38 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
                 date: c.occurredAt,
               }))}
             />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-base">Automated Notification History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {automatedHistory === null ? (
+            <div className="flex h-24 items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted" />
+            </div>
+          ) : automatedHistory.length === 0 ? (
+            <EmptyState icon={Bell} title="No automated notifications yet" description="System-triggered emails, SMS, WhatsApp, and in-app notifications appear here." />
+          ) : (
+            <div className="space-y-1.5">
+              {automatedHistory.map((log) => (
+                <div key={log.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{formatDateTime(log.createdAt)}</span>
+                    <Badge variant="muted">{formatEnumLabel(log.channel)}</Badge>
+                    <span className="text-muted">{formatEnumLabel(log.notificationType)}</span>
+                    {log.isTest && <Badge variant="warning">Test</Badge>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {log.createdBy && <span className="text-muted">by {log.createdBy.name}</span>}
+                    <StatusBadge status={log.deliveryStatus} />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

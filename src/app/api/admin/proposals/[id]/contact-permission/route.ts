@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { assertProposalAccess } from "@/lib/proposal-access";
+import { notifyContactPermissionAction, notifyAdminContactPermissionRequest, notifyContactApproved } from "@/lib/notifications/events";
 
 // Per-profile consent state for a proposal (spec §8) — distinct from
 // ContactShareLog, which records the actual reveal once both sides here are
@@ -30,6 +31,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         create: { proposalId: id, profileId },
       });
       await writeAudit({ action: "CONTACT_PERMISSION_REQUESTED", adminId: admin.id, targetProfileId: profileId, meta: { proposalId: id } });
+      await notifyContactPermissionAction(profileId, id, "request");
+      await notifyAdminContactPermissionRequest(id, proposal.assignedToId);
     } else if (action === "approve") {
       await prisma.contactPermission.upsert({
         where: { proposalId_profileId: { proposalId: id, profileId } },
@@ -37,8 +40,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         create: { proposalId: id, profileId, approvedAt: new Date(), approvedById: admin.id },
       });
       await writeAudit({ action: "CONTACT_PERMISSION_APPROVED", adminId: admin.id, targetProfileId: profileId, meta: { proposalId: id } });
+      await notifyContactPermissionAction(profileId, id, "approve");
     } else if (action === "revoke") {
       await prisma.contactPermission.updateMany({ where: { proposalId: id, profileId }, data: { revokedAt: new Date() } });
+      await notifyContactPermissionAction(profileId, id, "revoke");
     } else {
       throw new ApiError(400, "Invalid action");
     }
@@ -52,6 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { id },
         data: { status: "CONTACT_APPROVED", events: { create: { status: "CONTACT_APPROVED", performedByAdminId: admin.id } } },
       });
+      await notifyContactApproved(proposal.profileAId, proposal.profileBId, id);
     }
 
     return NextResponse.json({ permissions, bothApproved });

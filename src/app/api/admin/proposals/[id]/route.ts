@@ -6,6 +6,7 @@ import { ensureProposalCode } from "@/lib/proposal-code";
 import { assertProposalAccess } from "@/lib/proposal-access";
 import { SELECTABLE_STATUSES, isLegacyStatus } from "@/lib/proposal-status-labels";
 import { profileDetailInclude, toDetailDto } from "@/lib/serializers";
+import { notifyProposalStatusChanged } from "@/lib/notifications/events";
 import type { AuditAction, ProfileStatus, ProposalStatus } from "@prisma/client";
 
 const proposalDetailInclude = {
@@ -128,6 +129,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       targetProfileId: proposal.profileAId,
       meta: { proposalId: id, status, priority },
     });
+
+    if (status && status !== existing.status) {
+      await notifyProposalStatusChanged({ id, profileAId: proposal.profileAId, profileBId: proposal.profileBId }, status);
+    }
 
     return NextResponse.json({ status: proposal.status, priority: proposal.priority });
   } catch (error) {

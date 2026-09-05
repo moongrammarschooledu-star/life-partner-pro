@@ -333,6 +333,122 @@ enum AuditAction {
   VERIFICATION_ASSIGNED
   PROFILE_SUSPENDED
   PROPOSAL_CREATED_WITH_VERIFICATION_WARNING
+
+  // ---------- Notification & Communication (STEP 9) ----------
+  ADMIN_MESSAGE_SENT
+  NOTIFICATION_PREFERENCE_CHANGED
+  COMMUNICATION_CONSENT_CHANGED
+  NOTIFICATION_TEMPLATE_UPDATED
+  WEBHOOK_PROCESSED
+  WEBHOOK_SIMULATED
+  NOTIFICATION_TEST_SENT
+  NOTIFICATION_RETRY_TRIGGERED
+}
+
+// ---------- Notification & Communication (STEP 9) ----------
+
+enum Locale {
+  EN
+  UR
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  CANCELLED
+}
+
+enum ConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+enum TemplateStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum NotificationType {
+  // Account
+  ACCOUNT_REGISTERED
+  MOBILE_VERIFIED
+  EMAIL_VERIFIED
+  PROFILE_SUBMITTED
+  PROFILE_APPROVED
+  PROFILE_UPDATE_APPROVED
+  PROFILE_UPDATE_REJECTED
+  ACCOUNT_SUSPENDED
+
+  // Verification
+  VERIFICATION_STARTED
+  VERIFICATION_APPROVED
+  VERIFICATION_ACTION_REQUIRED
+  VERIFICATION_REJECTED
+  RE_VERIFICATION_REQUIRED
+
+  // Matching — never reveals the other profile (spec §3)
+  MATCH_IDENTIFIED
+
+  // Proposal
+  PROPOSAL_RECEIVED
+  PROPOSAL_VIEWED
+  PROPOSAL_INTEREST_SUBMITTED
+  PROPOSAL_NOT_INTERESTED
+  PROPOSAL_MUTUAL_INTEREST
+  PROPOSAL_ADMIN_ACTION_REQUIRED
+  PROPOSAL_STATUS_CHANGED
+  PROPOSAL_PENDING_REMINDER
+  PROPOSAL_FINALIZED
+
+  // Contact
+  CONTACT_PERMISSION_REQUESTED
+  CONTACT_PERMISSION_APPROVED
+  CONTACT_PERMISSION_REVOKED
+
+  // Meeting
+  MEETING_REQUESTED
+  MEETING_SCHEDULED
+  MEETING_CONFIRMED
+  MEETING_RESCHEDULED
+  MEETING_CANCELLED
+  MEETING_COMPLETED
+  MEETING_REMINDER_24H
+  MEETING_REMINDER_2H
+
+  // Follow-up
+  FOLLOWUP_REMINDER
+  FOLLOWUP_ADMIN_RESPONSE_REQUESTED
+
+  // Admin-only — persisted alongside (not duplicating) the existing computed
+  // NotificationsPanel aggregate; see src/lib/notifications/classification.ts.
+  ADMIN_MUTUAL_INTEREST
+  ADMIN_CONTACT_PERMISSION_REQUEST
+  ADMIN_MEETING_REQUEST
+  ADMIN_MEETING_CONFIRMATION
+  ADMIN_OVERDUE_FOLLOWUP
+  ADMIN_SUSPICIOUS_ACTIVITY
+  ADMIN_DUPLICATE_PROFILE_ALERT
+  ADMIN_PROFILE_UPDATE_PENDING
+  ADMIN_ASSIGNMENT_CHANGED
+
+  // Admin-composed manual message (spec §12) — the in-app Notification stays
+  // generic (see default-templates.ts); the actual admin-typed content lives
+  // only in CommunicationLog.messageBody, access-gated by communication:message:view.
+  ADMIN_DIRECT_MESSAGE
+
+  // Test mode (spec §32)
+  TEST_NOTIFICATION
 }
 
 // ---------- Admin ----------
@@ -369,6 +485,10 @@ model AdminUser {
   documentsReviewed          VerificationDocument[]
   securityFlagsAssigned      SecurityFlag[]         @relation("SecurityFlagAssignee")
   securityFlagsResolved      SecurityFlag[]         @relation("SecurityFlagResolver")
+
+  notificationsReceived      Notification[]         @relation("NotificationRecipientAdmin")
+  communicationLogsSent      CommunicationLog[]
+  notificationTemplatesEdited NotificationTemplate[]
 }
 
 // ---------- Core profile ----------
@@ -395,6 +515,7 @@ model Profile {
   verified      Boolean       @default(false)
   softDeleted   Boolean       @default(false)
   profileCompletion Int       @default(0) // 0-100, recomputed whenever the profile or its sections are written
+  preferredLanguage Locale    @default(EN) // drives server-side notification template language (STEP 9)
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -431,6 +552,12 @@ model Profile {
   verificationDocuments  VerificationDocument[]
   securityFlags          SecurityFlag[]         @relation("SecurityFlagProfile")
   relatedSecurityFlags   SecurityFlag[]         @relation("SecurityFlagRelatedProfile")
+
+  notificationsReceived  Notification[]          @relation("NotificationRecipientProfile")
+  notificationsRelated   Notification[]          @relation("NotificationRelatedProfile")
+  communicationLogs      CommunicationLog[]
+  notificationPreference NotificationPreference?
+  communicationConsents  CommunicationConsent[]
 
   @@index([gender, status])
   @@index([city])
@@ -705,6 +832,10 @@ model Proposal {
   closedAt      DateTime?
   archivedAt    DateTime?
 
+  // Anti-spam cooldown guard for the "still pending a response" reminder
+  // (spec §23) — see src/app/api/cron/notifications/route.ts.
+  lastPendingReminderAt DateTime?
+
   events                ProposalEvent[]
   notes                 ProfileNote[]
   communications        Communication[]
@@ -713,6 +844,8 @@ model Proposal {
   contactPermissions    ContactPermission[]
   meetings              Meeting[]
   familyCommunications  FamilyCommunication[]
+  notifications         Notification[]
+  communicationLogs     CommunicationLog[]
 
   @@index([profileAId])
   @@index([profileBId])
@@ -792,6 +925,11 @@ model Meeting {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  // Scheduled-reminder dedup guards (spec §23) — see
+  // src/app/api/cron/notifications/route.ts.
+  reminder24hSentAt DateTime?
+  reminder2hSentAt  DateTime?
+
   @@index([proposalId])
   @@index([scheduledAt])
 }
@@ -862,6 +1000,9 @@ model FollowUp {
   status        FollowUpStatus   @default(PENDING)
   completedAt   DateTime?
   createdAt     DateTime         @default(now())
+
+  // Scheduled-reminder dedup guard (spec §23).
+  reminderSentAt DateTime?
 
   @@index([dueDate, status])
   @@index([profileId])
@@ -1101,6 +1242,22 @@ model AppSettings {
   otpExpiryMinutes                   Int     @default(10)
   otpMaxAttempts                     Int     @default(5)
 
+  // Notification & Communication (STEP 9). SMS/WhatsApp default off since no
+  // real provider is configured in this environment — see
+  // src/lib/notifications/providers/.
+  emailNotificationsEnabled    Boolean @default(true)
+  smsNotificationsEnabled      Boolean @default(false)
+  whatsappNotificationsEnabled Boolean @default(false)
+  inAppNotificationsEnabled    Boolean @default(true)
+  defaultNotificationLanguage  Locale  @default(EN)
+  meetingReminder24hEnabled    Boolean @default(true)
+  meetingReminder2hEnabled     Boolean @default(true)
+  followUpReminderEnabled      Boolean @default(true)
+  pendingProposalReminderDays  Int     @default(3)
+  notificationRetryLimit       Int     @default(3)
+  quietHoursStart              Int? // hour of day, 0-23 — applied only to cron-triggered non-essential reminders
+  quietHoursEnd                Int?
+
   updatedAt             DateTime @updatedAt
 }
 
@@ -1108,6 +1265,154 @@ model AppSettings {
 model ProfileCodeCounter {
   id      Int @id @default(1)
   lastSeq Int @default(0)
+}
+
+// ---------- Notification & Communication (STEP 9) ----------
+
+// Persisted, per-recipient in-app notification — drives the user and admin
+// bells. Exactly one of recipientProfileId/recipientAdminId is set, mirroring
+// ProposalEvent's performedByAdmin/performedByProfile pattern. Never created
+// directly — always via src/lib/notifications/notification-service.ts.
+model Notification {
+  id                 String            @id @default(cuid())
+  recipientProfileId String?
+  recipientAdminId   String?
+  type               NotificationType
+  title              String
+  body               String // privacy-safe, generic copy only — see spec §33
+  relatedProposalId  String?
+  relatedProfileId   String?
+  actionUrl          String?
+  readAt             DateTime?
+  createdAt          DateTime          @default(now())
+
+  recipientProfile Profile?   @relation("NotificationRecipientProfile", fields: [recipientProfileId], references: [id], onDelete: Cascade)
+  recipientAdmin   AdminUser? @relation("NotificationRecipientAdmin", fields: [recipientAdminId], references: [id])
+  relatedProposal  Proposal?  @relation(fields: [relatedProposalId], references: [id], onDelete: SetNull)
+  relatedProfile   Profile?   @relation("NotificationRelatedProfile", fields: [relatedProfileId], references: [id], onDelete: SetNull)
+
+  @@index([recipientProfileId, readAt, createdAt])
+  @@index([recipientAdminId, readAt, createdAt])
+  @@index([type])
+}
+
+// The automated outbound-notification delivery record (spec §15) — distinct
+// from the pre-existing Communication model, which is an admin's manual
+// "I called/emailed the applicant" log. One row per channel per
+// sendNotification() call, including IN_APP (so per-profile communication
+// history, spec §26, is complete).
+model CommunicationLog {
+  id                 String              @id @default(cuid())
+  profileId          String
+  proposalId         String?
+  channel            NotificationChannel
+  notificationType   NotificationType
+  templateKey        String?
+  recipientReference String? // masked, e.g. "+92*****017" — never a raw destination
+  deliveryStatus     DeliveryStatus      @default(QUEUED)
+  messageBody        String? // access-gated by communication:message:view in the serializer
+  sentAt             DateTime?
+  deliveredAt        DateTime?
+  readAt             DateTime?
+  createdById        String? // set only for admin-composed manual sends (spec §12); null for system-triggered
+  providerMessageId  String?
+  failureReason      String?
+  retryCount         Int                 @default(0)
+  isTest             Boolean             @default(false) // spec §32 — excluded from analytics totals
+  createdAt          DateTime            @default(now())
+
+  profile   Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  proposal  Proposal?  @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  createdBy AdminUser? @relation(fields: [createdById], references: [id])
+
+  @@index([profileId, createdAt])
+  @@index([proposalId])
+  @@index([deliveryStatus])
+  @@index([providerMessageId])
+}
+
+// One row per profile (spec §10) — non-essential notification opt-in/out per
+// channel x category. Essential Account/Verification/Security types bypass
+// this entirely (see src/lib/notifications/classification.ts).
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  profileId String   @unique
+
+  inAppProposalUpdates      Boolean @default(true)
+  inAppMeetingUpdates       Boolean @default(true)
+  inAppFollowUpReminders    Boolean @default(true)
+  inAppMarketing            Boolean @default(false)
+
+  emailProposalUpdates      Boolean @default(true)
+  emailMeetingUpdates       Boolean @default(true)
+  emailFollowUpReminders    Boolean @default(true)
+  emailMarketing            Boolean @default(false)
+
+  smsProposalUpdates        Boolean @default(true)
+  smsMeetingUpdates         Boolean @default(true)
+  smsFollowUpReminders      Boolean @default(true)
+  smsMarketing              Boolean @default(false)
+
+  whatsappProposalUpdates   Boolean @default(true)
+  whatsappMeetingUpdates    Boolean @default(true)
+  whatsappFollowUpReminders Boolean @default(true)
+  whatsappMarketing         Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// Per-channel consent CURRENT STATE (spec §25) — distinct from preferences
+// above. In-app needs no consent row; only EMAIL/SMS/WHATSAPP are tracked
+// here at the application layer.
+model CommunicationConsent {
+  id            String              @id @default(cuid())
+  profileId     String
+  channel       NotificationChannel
+  status        ConsentStatus       @default(GRANTED)
+  consentedAt   DateTime            @default(now())
+  consentSource String
+  revokedAt     DateTime?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, channel])
+}
+
+// Admin-editable override for a (event, channel, language) combination
+// (spec §19). If no ACTIVE row exists, src/lib/notifications/template-resolver.ts
+// falls back to the built-in default-templates.ts dictionary, then to English.
+model NotificationTemplate {
+  id          String              @id @default(cuid())
+  name        String
+  event       String // matches an event key in src/lib/notifications/events.ts
+  channel     NotificationChannel
+  language    Locale
+  subject     String?
+  message     String
+  status      TemplateStatus      @default(ACTIVE)
+  variables   Json // allow-listed {{variable}} names only — never arbitrary/sensitive
+  updatedById String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  updatedBy AdminUser? @relation(fields: [updatedById], references: [id])
+
+  @@unique([event, channel, language])
+}
+
+// Idempotent webhook intake log (spec §28) — no real provider exists in this
+// environment; the admin "Simulate Webhook" action exercises this same path.
+model WebhookEvent {
+  id                String    @id @default(cuid())
+  provider          String
+  eventType         String // DELIVERED | READ | FAILED | BOUNCED
+  providerMessageId String?
+  idempotencyKey    String    @unique
+  payload           Json?
+  processedAt       DateTime?
+  createdAt         DateTime  @default(now())
 }
 
 // ---------- Support ----------

@@ -5,6 +5,7 @@ import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { nextProposalStatus } from "@/lib/proposal-workflow";
 import { writeAudit } from "@/lib/audit";
+import { notifyProposalResponseReceived } from "@/lib/notifications/events";
 import type { ProposalResponseType, ProposalDeclineReason } from "@prisma/client";
 
 const VALID_RESPONSES: ProposalResponseType[] = ["INTERESTED", "NOT_INTERESTED", "NEED_MORE_INFO"];
@@ -68,6 +69,16 @@ export async function POST(req: Request) {
     });
 
     await writeAudit({ action: "PROPOSAL_RESPONSE_SUBMITTED", targetProfileId: profileId, meta: { proposalId: proposal.id, response } });
+
+    await notifyProposalResponseReceived({
+      proposalId: proposal.id,
+      profileAId: proposal.profileAId,
+      profileBId: proposal.profileBId,
+      responderId: profileId,
+      response,
+      newStatus,
+      assignedToId: proposal.assignedToId,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

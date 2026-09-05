@@ -10,7 +10,7 @@ import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { parseDateOnly } from "@/lib/utils";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
-import { notificationService } from "@/lib/notifications";
+import { notifyProfileRegistered, notifyProfileSubmitted } from "@/lib/notifications/events";
 import { signProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
 
 const CONSENT_VERSION = "1.0";
@@ -268,12 +268,8 @@ export async function POST(req: Request) {
     });
 
     await writeAudit({ action: "PROFILE_CREATED", targetProfileId: profile.id, meta: { profileCode } });
-    await notificationService.send({
-      channel: "EMAIL",
-      to: value.contact.email,
-      subject: "Life Partner Pro — Profile Submitted for Verification",
-      body: "Thank you for registering. Your profile has been submitted for verification. You can track its status any time on My Verification.",
-    });
+    await notifyProfileRegistered(profile.id);
+    await notifyProfileSubmitted(profile.id);
 
     // Powers the private /my-status page for this browser — no accounts,
     // no URL/ID exposure, just a signed cookie scoped to this one profile.

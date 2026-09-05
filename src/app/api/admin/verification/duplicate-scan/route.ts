@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { findDuplicateSignals, type DuplicateCandidateProfile } from "@/lib/verification/duplicate-detection";
+import { notifyDuplicateScanSummary } from "@/lib/notifications/events";
 
 // Admin-triggered scan (spec §12) — never a background cron, matching the
 // project's existing match-caching deferral precedent. Never auto-deletes;
@@ -57,6 +58,7 @@ export async function POST() {
     }
 
     await writeAudit({ action: "DUPLICATE_SCAN_RUN", adminId: admin.id, meta: { profilesScanned: candidates.length, flagsCreated } });
+    await notifyDuplicateScanSummary(flagsCreated);
 
     return NextResponse.json({ profilesScanned: candidates.length, flagsCreated });
   } catch (error) {

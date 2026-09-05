@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { assertProposalAccess } from "@/lib/proposal-access";
+import { notifyMeetingScheduled } from "@/lib/notifications/events";
 import type { MeetingType } from "@prisma/client";
 
 const VALID_TYPES: MeetingType[] = ["FAMILY_MEETING", "INITIAL_MEETING", "ONLINE_MEETING", "PHONE_DISCUSSION", "IN_PERSON_MEETING", "OTHER"];
@@ -41,6 +42,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     await writeAudit({ action: "MEETING_CREATED", adminId: admin.id, targetProfileId: proposal.profileAId, meta: { proposalId: id, meetingId: meeting.id } });
+
+    await notifyMeetingScheduled(proposal.profileAId, proposal.profileBId, id);
 
     return NextResponse.json(meeting);
   } catch (error) {
