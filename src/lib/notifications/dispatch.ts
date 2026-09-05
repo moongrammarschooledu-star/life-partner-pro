@@ -26,7 +26,7 @@ export async function dispatchChannel(logId: string, channel: NotificationChanne
     const result = await provider.send(to, body, subject);
     await prisma.communicationLog.update({
       where: { id: logId },
-      data: { deliveryStatus: "SENT", sentAt: new Date(), providerMessageId: result.providerMessageId ?? null },
+      data: { deliveryStatus: "SENT", sentAt: new Date(), providerMessageId: result.providerMessageId ?? null, failureReason: null },
     });
   } catch (error) {
     await prisma.communicationLog.update({

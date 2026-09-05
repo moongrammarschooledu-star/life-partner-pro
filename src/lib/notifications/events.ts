@@ -25,6 +25,10 @@ export async function notifyProfileSuspended(profileId: string) {
   await sendNotification({ profileId, type: "ACCOUNT_SUSPENDED", data: {} });
 }
 
+export async function notifyProfileApproved(profileId: string) {
+  await sendNotification({ profileId, type: "PROFILE_APPROVED", data: {} });
+}
+
 export async function notifyProfileUpdateDecision(profileId: string, approved: boolean) {
   await sendNotification({ profileId, type: approved ? "PROFILE_UPDATE_APPROVED" : "PROFILE_UPDATE_REJECTED", data: {} });
 }

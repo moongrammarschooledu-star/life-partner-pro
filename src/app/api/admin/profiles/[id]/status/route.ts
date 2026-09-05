@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { notifyProfileApproved } from "@/lib/notifications/events";
 import type { ProfileStatus } from "@prisma/client";
 
 const VALID_STATUSES: ProfileStatus[] = [
@@ -35,6 +36,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     });
 
     await writeAudit({ action: "PROFILE_STATUS_CHANGED", adminId: admin.id, targetProfileId: id, meta: { status } });
+
+    if (status === "ACTIVE") {
+      await notifyProfileApproved(id);
+    }
 
     return NextResponse.json({ status: profile.status });
   } catch (error) {
