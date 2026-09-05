@@ -23,7 +23,11 @@ export async function GET(req: Request) {
 
     const totalProfiles = await prisma.profile.count({ where: { softDeleted: false } });
 
-    const statusCounts = await prisma.profileVerification.groupBy({ by: ["status"], _count: { status: true } });
+    const statusCounts = await prisma.profileVerification.groupBy({
+      by: ["status"],
+      _count: { status: true },
+      where: { profile: { softDeleted: false } },
+    });
     const countByStatus = Object.fromEntries(statusCounts.map((s) => [s.status, s._count.status])) as Record<VerificationStatus, number>;
 
     const kpis = {

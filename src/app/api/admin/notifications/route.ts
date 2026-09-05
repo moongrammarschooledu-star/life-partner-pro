@@ -49,8 +49,8 @@ export async function GET() {
     const newMatchesTotal = await prisma.match.count({ where: { status: "SUGGESTED", score: { gte: 80 }, createdAt: { gte: subDays(now, 2) } } });
     const mutualInterestTotal = await prisma.proposal.count({ where: { status: "BOTH_INTERESTED" } });
     const contactPermissionPendingTotal = await prisma.proposal.count({ where: { status: "CONTACT_PERMISSION_PENDING" } });
-    const reVerificationTotal = await prisma.profileVerification.count({ where: { status: "RE_VERIFICATION_REQUIRED" } });
-    const openDuplicateFlags = await prisma.securityFlag.count({ where: { flagType: "DUPLICATE_PROFILE_SUSPECTED", status: { in: ["OPEN", "INVESTIGATING"] } } });
+    const reVerificationTotal = await prisma.profileVerification.count({ where: { status: "RE_VERIFICATION_REQUIRED", profile: { softDeleted: false } } });
+    const openDuplicateFlags = await prisma.securityFlag.count({ where: { flagType: "DUPLICATE_PROFILE_SUSPECTED", status: { in: ["OPEN", "INVESTIGATING"] }, profile: { softDeleted: false } } });
 
     const entries: NotificationEntry[] = [];
     if (awaitingVerification > 0) {

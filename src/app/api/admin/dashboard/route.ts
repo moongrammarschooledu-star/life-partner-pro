@@ -94,9 +94,15 @@ export async function GET(req: Request) {
 
     // Trust & Verification KPIs (STEP 8 §26).
     const [verificationStatusCounts, suspendedCount, potentialDuplicates] = await Promise.all([
-      prisma.profileVerification.groupBy({ by: ["status"], _count: { status: true } }),
+      prisma.profileVerification.groupBy({
+        by: ["status"],
+        _count: { status: true },
+        where: { profile: { softDeleted: false } },
+      }),
       prisma.profile.count({ where: { status: "SUSPENDED", softDeleted: false } }),
-      prisma.securityFlag.count({ where: { flagType: "DUPLICATE_PROFILE_SUSPECTED", status: { in: ["OPEN", "INVESTIGATING"] } } }),
+      prisma.securityFlag.count({
+        where: { flagType: "DUPLICATE_PROFILE_SUSPECTED", status: { in: ["OPEN", "INVESTIGATING"] }, profile: { softDeleted: false } },
+      }),
     ]);
     const verificationCountByStatus = Object.fromEntries(verificationStatusCounts.map((v) => [v.status, v._count.status]));
     const trustKpis = {
