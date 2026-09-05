@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { notificationService } from "@/lib/notifications";
 import { generateOtpCode, generateEmailToken, maskPhone, maskEmail, expiresInMinutes, isExpired } from "@/lib/verification/otp";
+import { recomputeStoredCompleteness } from "@/lib/verification/status";
 import type { OtpChannel } from "@prisma/client";
 
 // DB-touching OTP orchestration shared by phone and email verification —
@@ -101,6 +102,7 @@ export async function confirmOtp(profileId: string, channel: "PHONE" | "EMAIL", 
   }
 
   await writeAudit({ action: channel === "PHONE" ? "OTP_VERIFIED" : "EMAIL_VERIFIED", targetProfileId: profileId, meta: { channel } });
+  await recomputeStoredCompleteness(profileId);
 
   return { ok: true };
 }

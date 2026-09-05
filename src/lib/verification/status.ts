@@ -2,7 +2,45 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { notificationService } from "@/lib/notifications";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
+import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import type { VerificationStatus } from "@prisma/client";
+
+// Profile.profileCompletion is set once at registration and otherwise
+// never recomputed — without this, verifying phone/email (which counts
+// toward the Contact category) would silently leave the stored value stale
+// while /my-verification and the admin review page (which both compute
+// fresh) show a higher, correct number. Called after any event that can
+// change the canonical inputs (currently: phone/email verification).
+export async function recomputeStoredCompleteness(profileId: string): Promise<void> {
+  const profile = await prisma.profile.findUnique({
+    where: { id: profileId },
+    include: { contact: true, education: true, profession: true, family: true, lifestyle: true, preference: true, photos: { select: { id: true } }, verification: true },
+  });
+  if (!profile) return;
+
+  const { percent } = computeProfileCompleteness({
+    fullName: profile.fullName,
+    gender: profile.gender,
+    dateOfBirth: profile.dateOfBirth,
+    maritalStatus: profile.maritalStatus,
+    heightCm: profile.heightCm,
+    city: profile.city,
+    country: profile.country,
+    nationality: profile.nationality,
+    area: profile.area,
+    contact: profile.contact,
+    phoneVerified: !!profile.verification?.phoneVerifiedAt,
+    emailVerified: !!profile.verification?.emailVerifiedAt,
+    education: profile.education,
+    profession: profile.profession,
+    family: profile.family,
+    lifestyle: profile.lifestyle,
+    preference: profile.preference,
+    hasPhoto: profile.photos.length > 0,
+  });
+
+  await prisma.profile.update({ where: { id: profileId }, data: { profileCompletion: percent } });
+}
 
 // Profiles registered before STEP 8 have no ProfileVerification row at all
 // (registration only started creating one going forward) — without this,
