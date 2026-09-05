@@ -316,9 +316,13 @@ structured so they can be added without restructuring anything else:
   HMAC verification and idempotent processing (`WebhookEvent.idempotencyKey`), but `NOTIFICATION_WEBHOOK_SECRET` is
   unset since no real provider exists to send a webhook here; the admin "Simulate Webhook" action in the
   Communication Center exercises the identical processing path for live verification.
-- **Vercel Cron reliability across plan tiers** — `vercel.json` schedules `/api/cron/notifications` every 15
-  minutes, but this hasn't been (and can't be, from this environment) verified to actually fire on a schedule; the
-  manual "Run Now" admin route is the tested path for meeting/follow-up/pending-proposal reminder logic.
+- **Vercel Cron reliability across plan tiers** — this project's Vercel account is on the Hobby plan, which rejects
+  any cron expression running more than once per day (confirmed by a real deployment failure:
+  `cron_jobs_limits_reached`). `vercel.json` schedules `/api/cron/notifications` once daily (`0 8 * * *`) as a
+  baseline safety net; a once-daily tick cannot deliver a genuinely useful "2 hours before" meeting reminder, so the
+  manual "Run Now" admin route (`POST /api/admin/cron/notifications/run`, calling the identical
+  `runScheduledNotifications()`) is the actually-reliable and tested path for all scheduled-reminder logic in this
+  environment. Upgrading to a Pro plan and tightening the schedule back to every 15 minutes requires no code change.
 - **Full ICU-style i18n** — `src/lib/notifications/default-templates.ts` is a flat English/Urdu dictionary with
   simple `{{variable}}` substitution, matching the existing registration-wizard i18n pattern; no pluralization,
   gendered forms, or additional languages.
