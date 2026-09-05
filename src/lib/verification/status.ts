@@ -1,7 +1,38 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { notificationService } from "@/lib/notifications";
+import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import type { VerificationStatus } from "@prisma/client";
+
+// Profiles registered before STEP 8 have no ProfileVerification row at all
+// (registration only started creating one going forward) — without this,
+// the Verification Center's queue/KPIs would silently show zero for every
+// pre-existing profile despite them being real, some already verified via
+// the old one-click action. Called from the dashboard route so the queue is
+// always complete; cheap no-op once every profile has a row.
+export async function ensureAllProfileVerifications(): Promise<void> {
+  const missing = await prisma.profile.findMany({
+    where: { verification: null, softDeleted: false },
+    select: { id: true, verified: true },
+  });
+  if (missing.length === 0) return;
+
+  await prisma.$transaction(
+    missing.map((p) =>
+      prisma.profileVerification.create({
+        data: {
+          profileId: p.id,
+          // Reflect the existing verified boolean rather than defaulting
+          // everyone to NOT_VERIFIED — an admin already verified some of
+          // these under the old system, and the new status display must
+          // not silently "unverify" them.
+          status: p.verified ? "VERIFIED" : "VERIFICATION_PENDING",
+          items: { create: CHECKLIST_KEYS.map((itemKey) => ({ itemKey })) },
+        },
+      })
+    )
+  );
+}
 
 // Secure notification copy per status (spec §27) — never includes rejection
 // reasons, internal notes, or any other sensitive detail; delivery goes

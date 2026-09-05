@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
+import { ensureAllProfileVerifications } from "@/lib/verification/status";
 import type { Prisma, VerificationStatus } from "@prisma/client";
 
 // Verification Center dashboard (spec §1): KPI counts + a filterable queue.
 export async function GET(req: Request) {
   try {
     await requireAdmin("verification:view");
+    await ensureAllProfileVerifications();
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const profileCode = searchParams.get("profileId");

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
+import { ensureAllProfileVerifications } from "@/lib/verification/status";
 import { subMonths, subDays, subWeeks, startOfMonth, startOfDay, endOfDay, format } from "date-fns";
 
 // Percentage change is only ever computed from a real, immutable event count
@@ -26,6 +27,7 @@ const PERIOD_DAYS: Record<string, number> = {
 export async function GET(req: Request) {
   try {
     await requireAdmin("profile:view");
+    await ensureAllProfileVerifications();
     const { searchParams } = new URL(req.url);
     const period = searchParams.get("period") ?? "6m";
     const days = PERIOD_DAYS[period] ?? 182;
