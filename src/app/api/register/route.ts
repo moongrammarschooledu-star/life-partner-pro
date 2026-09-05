@@ -8,7 +8,9 @@ import { savePhoto, UploadValidationError } from "@/lib/storage";
 import { writeAudit } from "@/lib/audit";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { parseDateOnly } from "@/lib/utils";
-import { computeCompletion } from "@/lib/profile-completion";
+import { computeProfileCompleteness } from "@/lib/verification/completeness";
+import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
+import { notificationService } from "@/lib/notifications";
 import { signProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
 
 const CONSENT_VERSION = "1.0";
@@ -77,17 +79,53 @@ export async function POST(req: Request) {
     }
 
     const profileCode = await nextProfileCode();
-    const { percent: profileCompletion } = computeCompletion({
-      hasPhoto: !!photoData,
-      area: value.basic.area,
+    // Canonical post-registration score (STEP 8 §10) — distinct from the
+    // wizard's own live per-step preview, see profile-completion.ts.
+    const { percent: profileCompletion } = computeProfileCompleteness({
+      fullName: value.basic.fullName,
+      gender: value.basic.gender,
+      dateOfBirth: value.basic.dateOfBirth,
+      maritalStatus: value.basic.maritalStatus,
+      heightCm: value.basic.heightCm,
+      city: value.basic.city,
+      country: value.basic.country,
       nationality: value.basic.nationality,
-      degree: value.educationProfession.degree,
-      institution: value.educationProfession.institution,
-      familyBackground: value.family.familyBackground,
-      aboutMe: value.lifestyle.aboutMe,
-      hobbies: value.lifestyle.hobbies,
-      personality: value.lifestyle.personality,
-      religion: value.lifestyle.religion,
+      area: value.basic.area,
+      contact: { mobileNumber: value.contact.mobileNumber, email: value.contact.email, whatsappNumber: value.contact.whatsappNumber },
+      phoneVerified: false,
+      emailVerified: false,
+      education: { level: value.educationProfession.educationLevel, degree: value.educationProfession.degree, institution: value.educationProfession.institution },
+      profession: {
+        profession: value.educationProfession.profession,
+        employmentType: value.educationProfession.employmentType,
+        monthlyIncome: value.educationProfession.monthlyIncome,
+        jobTitle: value.educationProfession.jobTitle,
+        businessDetails: value.educationProfession.businessDetails,
+      },
+      family: {
+        fatherOccupation: value.family.fatherOccupation,
+        motherOccupation: value.family.motherOccupation,
+        familyType: value.family.familyType,
+        familyLocation: value.family.familyLocation,
+        familyBackground: value.family.familyBackground,
+      },
+      lifestyle: {
+        religion: value.lifestyle.religion,
+        languages: value.lifestyle.languages,
+        hobbies: value.lifestyle.hobbies,
+        aboutMe: value.lifestyle.aboutMe,
+      },
+      preference: {
+        minAge: value.preference.minAge,
+        maxAge: value.preference.maxAge,
+        preferredCity: value.preference.preferredCity,
+        preferredCountry: value.preference.preferredCountry,
+        minEducation: value.preference.minEducation,
+        maritalStatusPreference: value.preference.maritalStatusPreference,
+        minHeightCm: value.preference.minHeightCm,
+        maxHeightCm: value.preference.maxHeightCm,
+      },
+      hasPhoto: !!photoData,
     });
 
     const showsChildren = ["DIVORCED", "WIDOWED", "SEPARATED"].includes(value.basic.maritalStatus);
@@ -218,7 +256,24 @@ export async function POST(req: Request) {
       },
     });
 
+    // A freshly-submitted profile is immediately awaiting an admin's
+    // verification action — VERIFICATION_PENDING, not the "hasn't started
+    // anything yet" NOT_VERIFIED state (STEP 8 §2).
+    await prisma.profileVerification.create({
+      data: {
+        profileId: profile.id,
+        status: "VERIFICATION_PENDING",
+        items: { create: CHECKLIST_KEYS.map((itemKey) => ({ itemKey })) },
+      },
+    });
+
     await writeAudit({ action: "PROFILE_CREATED", targetProfileId: profile.id, meta: { profileCode } });
+    await notificationService.send({
+      channel: "EMAIL",
+      to: value.contact.email,
+      subject: "Life Partner Pro — Profile Submitted for Verification",
+      body: "Thank you for registering. Your profile has been submitted for verification. You can track its status any time on My Verification.",
+    });
 
     // Powers the private /my-status page for this browser — no accounts,
     // no URL/ID exposure, just a signed cookie scoped to this one profile.

@@ -29,6 +29,7 @@ interface MatchConfig {
   enabled: EnabledCategories;
   maxMatchResults: number;
   excludeHardRequirementFailures: boolean;
+  allowPartiallyVerifiedManualMatch: boolean;
 }
 
 async function getMatchConfig(): Promise<MatchConfig> {
@@ -41,6 +42,7 @@ async function getMatchConfig(): Promise<MatchConfig> {
       enabled: {},
       maxMatchResults: 10,
       excludeHardRequirementFailures: false,
+      allowPartiallyVerifiedManualMatch: false,
     };
   }
   return {
@@ -50,6 +52,7 @@ async function getMatchConfig(): Promise<MatchConfig> {
     enabled: enabledCategoriesFromSettings(settings),
     maxMatchResults: settings.maxMatchResults,
     excludeHardRequirementFailures: settings.excludeHardRequirementFailures,
+    allowPartiallyVerifiedManualMatch: settings.allowPartiallyVerifiedManualMatch,
   };
 }
 
@@ -91,12 +94,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!seekerRecord) throw new ApiError(404, "Profile not found");
 
     const oppositeGender = seekerRecord.gender === "MALE" ? "FEMALE" : "MALE";
-    const { weights, hardRequirements, thresholds, enabled, maxMatchResults, excludeHardRequirementFailures } = await getMatchConfig();
+    const { weights, hardRequirements, thresholds, enabled, maxMatchResults, excludeHardRequirementFailures, allowPartiallyVerifiedManualMatch } =
+      await getMatchConfig();
     const limit = Math.min(Number(limitParam ?? maxMatchResults), 100);
 
+    // Spec §17 — Suspended/deleted/archived/rejected/married profiles are
+    // always excluded, even when an admin widens eligibility manually.
     const eligibilityStatus: Prisma.ProfileWhereInput["status"] = includeAllEligible
-      ? { notIn: ["ARCHIVED", "REJECTED", "MARRIED"] }
+      ? { notIn: ["ARCHIVED", "REJECTED", "MARRIED", "SUSPENDED"] }
       : "ACTIVE";
+
+    // Widening past `verified: true` is itself a Super-Admin-configurable
+    // policy, not a free per-search checkbox — includeAllEligible only
+    // relaxes the verified filter when allowPartiallyVerifiedManualMatch is
+    // on; otherwise every path still requires a fully verified profile.
+    const verifiedFilter =
+      includeAllEligible && allowPartiallyVerifiedManualMatch ? (verifiedOnly ? true : undefined) : true;
 
     const candidates = await prisma.profile.findMany({
       where: {
@@ -104,7 +117,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         gender: oppositeGender,
         softDeleted: false,
         status: activeOnly ? "ACTIVE" : eligibilityStatus,
-        verified: includeAllEligible ? (verifiedOnly ? true : undefined) : true,
+        verified: verifiedFilter,
+        // A profile with an unresolved high/critical security flag never
+        // enters the pool automatically, regardless of verification status.
+        securityFlags: { none: { status: { in: ["OPEN", "INVESTIGATING"] }, severity: { in: ["HIGH", "CRITICAL"] } } },
         ...(city ? { city: { equals: city, mode: "insensitive" } } : {}),
         ...(education ? { education: { level: { equals: education, mode: "insensitive" } } } : {}),
         ...(profession ? { profession: { profession: { contains: profession, mode: "insensitive" } } } : {}),

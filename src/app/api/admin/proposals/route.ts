@@ -65,7 +65,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const admin = await requireAdmin("proposal:create");
-    const { profileAId, profileBId, matchId, priority, note } = await req.json();
+    const { profileAId, profileBId, matchId, priority, note, verificationWarningAcknowledged } = await req.json();
 
     if (!profileAId || !profileBId || profileAId === profileBId) {
       throw new ApiError(400, "Two distinct profiles are required");
@@ -113,6 +113,18 @@ export async function POST(req: Request) {
     ]);
 
     await writeAudit({ action: "PROPOSAL_CREATED", adminId: admin.id, targetProfileId: profileAId, meta: { profileBId, proposalId: proposal.id, matchId } });
+
+    // Non-blocking trail (spec §29) — the UI only lets this flag be true
+    // when the admin explicitly clicked "Proceed anyway" past a verification
+    // warning; the gate itself is a warning, never a hard block.
+    if (verificationWarningAcknowledged) {
+      await writeAudit({
+        action: "PROPOSAL_CREATED_WITH_VERIFICATION_WARNING",
+        adminId: admin.id,
+        targetProfileId: profileAId,
+        meta: { profileBId, proposalId: proposal.id },
+      });
+    }
 
     return NextResponse.json(proposal);
   } catch (error) {

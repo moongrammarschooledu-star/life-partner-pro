@@ -130,6 +130,9 @@ export function MatchDetailPanel({
   const [proposalPriority, setProposalPriority] = useState("MEDIUM");
   const [proposalNote, setProposalNote] = useState("");
   const [creating, setCreating] = useState(false);
+  const [seekerIssue, setSeekerIssue] = useState(false);
+  const [candidateIssue, setCandidateIssue] = useState(false);
+  const [proceedAnyway, setProceedAnyway] = useState(false);
 
   useEffect(() => {
     if (!open || !match) return;
@@ -140,8 +143,16 @@ export function MatchDetailPanel({
     setNote("");
     setShowProposalForm(false);
     setProposalNote("");
+    setSeekerIssue(false);
+    setCandidateIssue(false);
+    setProceedAnyway(false);
     fetch(`/api/admin/profiles/${seekerId}`).then((r) => r.json()).then(setSeeker);
     fetch(`/api/admin/profiles/${match.profile.id}`).then((r) => r.json()).then(setCandidate);
+    const hasUnresolvedIssue = (v: { verification: { status: string }; flags: { severity: string; status: string }[] }) =>
+      ["VERIFICATION_REJECTED", "RE_VERIFICATION_REQUIRED", "VERIFICATION_EXPIRED"].includes(v.verification.status) ||
+      v.flags.some((f) => (f.severity === "HIGH" || f.severity === "CRITICAL") && (f.status === "OPEN" || f.status === "INVESTIGATING"));
+    fetch(`/api/admin/profiles/${seekerId}/verification`).then((r) => (r.ok ? r.json() : null)).then((v) => v && setSeekerIssue(hasUnresolvedIssue(v)));
+    fetch(`/api/admin/profiles/${match.profile.id}/verification`).then((r) => (r.ok ? r.json() : null)).then((v) => v && setCandidateIssue(hasUnresolvedIssue(v)));
     fetch(`/api/admin/profiles/${seekerId}/matches`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -152,6 +163,8 @@ export function MatchDetailPanel({
   }, [open, match, seekerId]);
 
   if (!match) return null;
+
+  const hasVerificationIssue = seekerIssue || candidateIssue;
 
   async function setMatchStatus(status: string) {
     if (!matchRecord) return;
@@ -207,6 +220,7 @@ export function MatchDetailPanel({
           matchId: matchRecord?.id,
           priority: proposalPriority,
           note: proposalNote || undefined,
+          verificationWarningAcknowledged: hasVerificationIssue ? true : undefined,
         }),
       });
       if (!res.ok) throw new Error();
@@ -231,7 +245,7 @@ export function MatchDetailPanel({
             <Button size="sm" variant="ghost" onClick={() => setShowProposalForm(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={createProposal} disabled={creating}>
+            <Button size="sm" onClick={createProposal} disabled={creating || (hasVerificationIssue && !proceedAnyway)}>
               {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Handshake className="h-4 w-4" />} Confirm & Create Proposal
             </Button>
           </div>
@@ -374,6 +388,26 @@ export function MatchDetailPanel({
                 <span className="text-muted">Potential Differences:</span> {match.differences.slice(0, 2).join("; ") || "None"}
               </p>
             </div>
+            {hasVerificationIssue && (
+              <div className="mb-3 space-y-2 rounded-lg border border-danger/30 bg-danger/5 p-3 text-xs text-danger">
+                <p className="flex items-center gap-1.5 font-medium">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Verification Review Required
+                </p>
+                <p>
+                  {seekerIssue && candidateIssue
+                    ? "Both profiles have"
+                    : seekerIssue
+                      ? "Profile A has"
+                      : "Profile B has"}{" "}
+                  an unresolved verification issue (rejected, expired, re-verification required, or an open high/critical security flag).
+                  Review the Verification Center before proceeding.
+                </p>
+                <label className="flex items-center gap-2 font-medium">
+                  <input type="checkbox" checked={proceedAnyway} onChange={(e) => setProceedAnyway(e.target.checked)} />
+                  Proceed anyway (recorded in the audit log)
+                </label>
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Priority" htmlFor="proposalPriority">
                 <Select id="proposalPriority" value={proposalPriority} onChange={(e) => setProposalPriority(e.target.value)}>

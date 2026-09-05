@@ -52,6 +52,12 @@ interface Settings {
   categoryEnabledLanguages: boolean;
   maxMatchResults: number;
   excludeHardRequirementFailures: boolean;
+  documentVerificationEnabled: boolean;
+  allowPartiallyVerifiedManualMatch: boolean;
+  removeFromPoolDuringReVerification: boolean;
+  autoReVerificationOnKeyFieldChange: boolean;
+  otpExpiryMinutes: number;
+  otpMaxAttempts: number;
 }
 
 const WEIGHT_FIELDS: { key: keyof Settings; label: string; hardKey: keyof Settings; enabledKey: keyof Settings }[] = [
@@ -232,6 +238,56 @@ export default function SettingsPage() {
             Algorithm Version: <span className="font-medium text-foreground">{ALGORITHM_VERSION}</span> (read-only — tied to the
             deployed scoring logic, not an editable preference).
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Verification &amp; Trust</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Checkbox
+            label="Enable document verification (optional identity/education/employment document review)"
+            checked={settings.documentVerificationEnabled}
+            onChange={(e) => setSettings({ ...settings, documentVerificationEnabled: e.target.checked })}
+          />
+          <Checkbox
+            label="Allow Super Admin to manually match partially-verified profiles (widens the Matching Center's 'Include all eligible statuses' override)"
+            checked={settings.allowPartiallyVerifiedManualMatch}
+            onChange={(e) => setSettings({ ...settings, allowPartiallyVerifiedManualMatch: e.target.checked })}
+          />
+          <Checkbox
+            label="Remove a profile from the active matching pool while re-verification is required"
+            checked={settings.removeFromPoolDuringReVerification}
+            onChange={(e) => setSettings({ ...settings, removeFromPoolDuringReVerification: e.target.checked })}
+          />
+          <Checkbox
+            label="Automatically require re-verification when contact information changes"
+            checked={settings.autoReVerificationOnKeyFieldChange}
+            onChange={(e) => setSettings({ ...settings, autoReVerificationOnKeyFieldChange: e.target.checked })}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="OTP Expiry (minutes)" htmlFor="otpExpiryMinutes">
+              <Input
+                id="otpExpiryMinutes"
+                type="number"
+                min={1}
+                max={60}
+                value={settings.otpExpiryMinutes}
+                onChange={(e) => setSettings({ ...settings, otpExpiryMinutes: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="OTP Max Attempts" htmlFor="otpMaxAttempts">
+              <Input
+                id="otpMaxAttempts"
+                type="number"
+                min={1}
+                max={10}
+                value={settings.otpMaxAttempts}
+                onChange={(e) => setSettings({ ...settings, otpMaxAttempts: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
         </CardContent>
       </Card>
 

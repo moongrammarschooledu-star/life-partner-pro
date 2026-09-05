@@ -4,7 +4,7 @@ import { requireAdmin, handleApiError } from "@/lib/route-guard";
 import { subDays, endOfDay } from "date-fns";
 
 export interface NotificationEntry {
-  type: "verification" | "follow_up" | "match" | "proposal" | "mutual_interest" | "contact_permission";
+  type: "verification" | "follow_up" | "match" | "proposal" | "mutual_interest" | "contact_permission" | "re_verification" | "duplicate_flag";
   label: string;
   count: number;
   href: string;
@@ -49,6 +49,8 @@ export async function GET() {
     const newMatchesTotal = await prisma.match.count({ where: { status: "SUGGESTED", score: { gte: 80 }, createdAt: { gte: subDays(now, 2) } } });
     const mutualInterestTotal = await prisma.proposal.count({ where: { status: "BOTH_INTERESTED" } });
     const contactPermissionPendingTotal = await prisma.proposal.count({ where: { status: "CONTACT_PERMISSION_PENDING" } });
+    const reVerificationTotal = await prisma.profileVerification.count({ where: { status: "RE_VERIFICATION_REQUIRED" } });
+    const openDuplicateFlags = await prisma.securityFlag.count({ where: { flagType: "DUPLICATE_PROFILE_SUSPECTED", status: { in: ["OPEN", "INVESTIGATING"] } } });
 
     const entries: NotificationEntry[] = [];
     if (awaitingVerification > 0) {
@@ -101,6 +103,13 @@ export async function GET() {
           href: `/admin/proposals/${p.id}`,
         })),
       });
+    }
+
+    if (reVerificationTotal > 0) {
+      entries.push({ type: "re_verification", label: "Profiles requiring re-verification", count: reVerificationTotal, href: "/admin/verification?status=RE_VERIFICATION_REQUIRED" });
+    }
+    if (openDuplicateFlags > 0) {
+      entries.push({ type: "duplicate_flag", label: "Potential duplicate profiles pending review", count: openDuplicateFlags, href: "/admin/security-flags" });
     }
 
     return NextResponse.json({ entries, total: entries.reduce((sum, e) => sum + e.count, 0) });

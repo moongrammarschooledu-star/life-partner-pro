@@ -57,6 +57,83 @@ enum ProfileStatus {
   MARRIED
   REJECTED
   ARCHIVED
+  SUSPENDED
+}
+
+// ---------- Verification & Trust (STEP 8) ----------
+
+enum VerificationStatus {
+  NOT_VERIFIED
+  VERIFICATION_PENDING
+  UNDER_REVIEW
+  VERIFICATION_REQUIRED
+  VERIFIED
+  VERIFICATION_REJECTED
+  VERIFICATION_EXPIRED
+  RE_VERIFICATION_REQUIRED
+}
+
+enum VerificationConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum VerificationItemStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  NOT_APPLICABLE
+}
+
+enum OtpChannel {
+  PHONE
+  EMAIL
+  WHATSAPP
+}
+
+enum OtpStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  FAILED
+}
+
+enum DocumentType {
+  IDENTITY
+  EDUCATION
+  EMPLOYMENT
+  OTHER
+}
+
+enum DocumentReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SecurityFlagType {
+  MULTIPLE_REGISTRATIONS
+  REPEATED_FAILED_OTP
+  UNUSUAL_UPDATE_ACTIVITY
+  SUSPICIOUS_ACCOUNT_BEHAVIOR
+  DUPLICATE_PROFILE_SUSPECTED
+  VERIFICATION_INCONSISTENCY
+  ABUSIVE_BEHAVIOR_REPORT
+}
+
+enum SecurityFlagSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SecurityFlagStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
 }
 
 enum ContactMethod {
@@ -239,6 +316,23 @@ enum AuditAction {
   PROPOSAL_MARRIED
   PROPOSAL_ARCHIVED
   PROPOSAL_ASSIGNED
+
+  VERIFICATION_STATUS_CHANGED
+  OTP_SENT
+  OTP_VERIFIED
+  OTP_FAILED
+  EMAIL_VERIFICATION_SENT
+  EMAIL_VERIFIED
+  DOCUMENT_UPLOADED
+  DOCUMENT_REVIEWED
+  ADMIN_ACCESSED_VERIFICATION_DOCUMENT
+  SECURITY_FLAG_RAISED
+  SECURITY_FLAG_UPDATED
+  SECURITY_FLAG_RESOLVED
+  DUPLICATE_SCAN_RUN
+  VERIFICATION_ASSIGNED
+  PROFILE_SUSPENDED
+  PROPOSAL_CREATED_WITH_VERIFICATION_WARNING
 }
 
 // ---------- Admin ----------
@@ -268,6 +362,13 @@ model AdminUser {
   meetingsCreated            Meeting[]
   familyCommunicationsLogged FamilyCommunication[]
   performedProposalEvents    ProposalEvent[]
+
+  verificationsAssigned      ProfileVerification[] @relation("VerificationAssignee")
+  verificationsReviewed      ProfileVerification[] @relation("VerificationReviewer")
+  verificationItemsCompleted VerificationItem[]
+  documentsReviewed          VerificationDocument[]
+  securityFlagsAssigned      SecurityFlag[]         @relation("SecurityFlagAssignee")
+  securityFlagsResolved      SecurityFlag[]         @relation("SecurityFlagResolver")
 }
 
 // ---------- Core profile ----------
@@ -324,6 +425,12 @@ model Profile {
   contactPermissions    ContactPermission[]
   familyCommunications  FamilyCommunication[]
   performedProposalEvents ProposalEvent[]
+
+  verification          ProfileVerification?
+  otpVerifications       OtpVerification[]
+  verificationDocuments  VerificationDocument[]
+  securityFlags          SecurityFlag[]         @relation("SecurityFlagProfile")
+  relatedSecurityFlags   SecurityFlag[]         @relation("SecurityFlagRelatedProfile")
 
   @@index([gender, status])
   @@index([city])
@@ -780,6 +887,133 @@ model ContactShareLog {
   @@index([profileBId])
 }
 
+// ---------- Verification & Trust (STEP 8) ----------
+
+// One-to-one with Profile — the real source of truth for verification state.
+// Profile.verified stays a derived, auto-synced boolean (see
+// src/lib/verification/status.ts's setVerificationStatus()) so every
+// existing `profile.verified` read across matching/proposals/badges keeps
+// working unchanged.
+model ProfileVerification {
+  id            String              @id @default(cuid())
+  profile       Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId     String              @unique
+  status        VerificationStatus  @default(NOT_VERIFIED)
+
+  assignedTo    AdminUser?          @relation("VerificationAssignee", fields: [assignedToId], references: [id])
+  assignedToId  String?
+
+  phoneVerifiedAt     DateTime?
+  emailVerifiedAt     DateTime?
+  whatsappVerifiedAt  DateTime? // stub — stays null until a real WhatsApp provider exists
+
+  // User-facing — shown verbatim on /my-verification (spec §15).
+  requestedInfoItems  String? // JSON array of checklist itemKeys
+
+  // Internal only — never serialized to any applicant-facing route (spec §16).
+  rejectionReasonCategory String?
+  rejectionNote           String?
+  suspensionReason        String?
+  reVerificationReason    String?
+
+  expiresAt           DateTime?
+  verificationVersion Int       @default(1)
+
+  lastReviewedAt   DateTime?
+  lastReviewedBy   AdminUser? @relation("VerificationReviewer", fields: [lastReviewedById], references: [id])
+  lastReviewedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     VerificationItem[]
+
+  @@index([status])
+  @@index([assignedToId])
+}
+
+model VerificationItem {
+  id                    String                  @id @default(cuid())
+  profileVerification   ProfileVerification     @relation(fields: [profileVerificationId], references: [id], onDelete: Cascade)
+  profileVerificationId String
+  itemKey               String // matches a key in src/lib/verification/checklist-catalog.ts
+  status                VerificationItemStatus  @default(PENDING)
+  document              VerificationDocument?   @relation(fields: [documentId], references: [id])
+  documentId            String?                 @unique
+  note                  String?
+  completedBy           AdminUser?              @relation(fields: [completedById], references: [id])
+  completedById         String?
+  completedAt           DateTime?
+
+  @@unique([profileVerificationId, itemKey])
+}
+
+// Covers both phone OTP (6-digit code) and email verification (long token) —
+// same hash-and-compare mechanism, distinguished by `channel`.
+model OtpVerification {
+  id                String     @id @default(cuid())
+  profile           Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId         String
+  channel           OtpChannel
+  codeHash          String // bcrypt hash — the raw code/token is never stored
+  destinationMasked String // e.g. "+92*****017" or "j***@example.com", display-only
+  attempts          Int        @default(0)
+  maxAttempts       Int        @default(5)
+  status            OtpStatus  @default(PENDING)
+  expiresAt         DateTime
+  verifiedAt        DateTime?
+  createdAt         DateTime   @default(now())
+
+  @@index([profileId, channel])
+}
+
+model VerificationDocument {
+  id                     String                @id @default(cuid())
+  profile                Profile               @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId              String
+  documentType           DocumentType
+  secureStorageReference String // Vercel Blob key — never sent to the client, see document-storage.ts
+  ivBase64               String // AES-256-GCM nonce
+  authTagBase64          String
+  mimeType               String
+  sizeBytes              Int
+  uploadedAt             DateTime              @default(now())
+  reviewStatus           DocumentReviewStatus  @default(PENDING)
+  reviewedBy             AdminUser?            @relation(fields: [reviewedById], references: [id])
+  reviewedById           String?
+  reviewedAt             DateTime?
+  reviewNote             String?
+  expiresAt              DateTime?
+
+  item                   VerificationItem?
+
+  @@index([profileId])
+}
+
+model SecurityFlag {
+  id              String                @id @default(cuid())
+  profile         Profile               @relation("SecurityFlagProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  profileId       String
+  flagType        SecurityFlagType
+  severity        SecurityFlagSeverity  @default(MEDIUM)
+  status          SecurityFlagStatus    @default(OPEN)
+  assignedTo      AdminUser?            @relation("SecurityFlagAssignee", fields: [assignedToId], references: [id])
+  assignedToId    String?
+  // The other profile in a suspected duplicate pair (spec §12 — no separate
+  // duplicate-detection table, a duplicate is just this flag type).
+  relatedProfile  Profile?              @relation("SecurityFlagRelatedProfile", fields: [relatedProfileId], references: [id])
+  relatedProfileId String?
+  description     String
+  resolution      String?
+  resolvedBy      AdminUser?            @relation("SecurityFlagResolver", fields: [resolvedById], references: [id])
+  resolvedById    String?
+  resolvedAt      DateTime?
+  createdAt       DateTime              @default(now())
+
+  @@index([profileId])
+  @@index([status])
+}
+
 // ---------- Audit ----------
 
 model AuditLog {
@@ -857,6 +1091,15 @@ model AppSettings {
   // Matching Center behavior (STEP 6 §19/§43).
   maxMatchResults                Int     @default(10)
   excludeHardRequirementFailures Boolean @default(false)
+
+  // Verification & Trust (STEP 8).
+  documentVerificationEnabled        Boolean @default(false)
+  acceptedDocumentTypes              String? // JSON array of DocumentType strings
+  allowPartiallyVerifiedManualMatch  Boolean @default(false)
+  removeFromPoolDuringReVerification Boolean @default(true)
+  autoReVerificationOnKeyFieldChange Boolean @default(true)
+  otpExpiryMinutes                   Int     @default(10)
+  otpMaxAttempts                     Int     @default(5)
 
   updatedAt             DateTime @updatedAt
 }

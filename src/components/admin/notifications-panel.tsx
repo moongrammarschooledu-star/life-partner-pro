@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, ShieldCheck, CalendarClock, Sparkles, MessageCircleHeart, Heart, Share2 } from "lucide-react";
+import { Bell, ShieldCheck, ShieldAlert, CalendarClock, Sparkles, MessageCircleHeart, Heart, Share2, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NotificationEntry } from "@/app/api/admin/notifications/route";
 
@@ -13,6 +13,8 @@ const ICONS: Record<NotificationEntry["type"], typeof Bell> = {
   proposal: MessageCircleHeart,
   mutual_interest: Heart,
   contact_permission: Share2,
+  re_verification: ShieldAlert,
+  duplicate_flag: Flag,
 };
 
 export function NotificationsPanel() {

@@ -16,6 +16,27 @@ const STATUS_VARIANT: Record<string, "default" | "success" | "warning" | "danger
   MARRIED: "success",
   REJECTED: "danger",
   ARCHIVED: "muted",
+  SUSPENDED: "danger",
+
+  // Verification & Trust statuses (STEP 8).
+  NOT_VERIFIED: "muted",
+  VERIFICATION_PENDING: "info",
+  VERIFICATION_REQUIRED: "warning",
+  VERIFICATION_REJECTED: "danger",
+  VERIFICATION_EXPIRED: "danger",
+  RE_VERIFICATION_REQUIRED: "warning",
+
+  // Security flag / document review statuses (STEP 8).
+  OPEN: "danger",
+  INVESTIGATING: "warning",
+  RESOLVED: "success",
+  DISMISSED: "muted",
+  PENDING: "muted",
+  APPROVED: "success",
+  LOW: "muted",
+  MEDIUM: "warning",
+  HIGH: "danger",
+  CRITICAL: "danger",
 
   // Proposal lifecycle statuses (STEP 7) — reuses this same badge/map so
   // both Profile and Proposal statuses render consistently.

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { setVerificationStatus } from "@/lib/verification/status";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -26,6 +27,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ]);
 
       await writeAudit({ action: "UPDATE_REQUEST_APPROVED", adminId: admin.id, targetProfileId: id });
+
+      // Contact info changing is the one field group STEP 8 §19's
+      // change-monitoring rule can actually observe today — nothing else
+      // is currently editable post-registration by anyone.
+      if (payload.contact) {
+        const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+        if (settings?.autoReVerificationOnKeyFieldChange ?? true) {
+          await setVerificationStatus(id, "RE_VERIFICATION_REQUIRED", {
+            adminId: admin.id,
+            reVerificationReason: "Contact information changed via an approved update request.",
+          });
+        }
+      }
     } else {
       await prisma.pendingUpdate.delete({ where: { profileId: id } });
       await writeAudit({ action: "UPDATE_REQUEST_REJECTED", adminId: admin.id, targetProfileId: id });

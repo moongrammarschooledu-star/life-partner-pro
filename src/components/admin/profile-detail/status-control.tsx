@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, Archive, ArchiveRestore } from "lucide-react";
+import Link from "next/link";
+import { ShieldCheck, Archive, ArchiveRestore, Ban } from "lucide-react";
 import { Select } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { formatEnumLabel } from "@/lib/utils";
@@ -11,7 +12,7 @@ import { formatEnumLabel } from "@/lib/utils";
 const STATUSES = [
   "NEW", "UNDER_REVIEW", "VERIFIED", "ACTIVE", "MATCHING", "PROPOSAL_SENT",
   "WAITING_FOR_RESPONSE", "INTERESTED", "NOT_INTERESTED", "MEETING_ARRANGED",
-  "FINALIZED", "MARRIED", "REJECTED", "ARCHIVED",
+  "FINALIZED", "MARRIED", "REJECTED", "ARCHIVED", "SUSPENDED",
 ];
 
 export function StatusControl({
@@ -29,6 +30,7 @@ export function StatusControl({
 }) {
   const { show } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmSuspend, setConfirmSuspend] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function changeStatus(newStatus: string) {
@@ -49,17 +51,22 @@ export function StatusControl({
     }
   }
 
-  async function verify() {
+  async function suspend() {
     setBusy(true);
     try {
-      const res = await fetch(`/api/admin/profiles/${profileId}/verify`, { method: "POST" });
+      const res = await fetch(`/api/admin/profiles/${profileId}/verification/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "suspend" }),
+      });
       if (!res.ok) throw new Error();
-      show("Profile verified", "success");
+      show("Profile suspended", "success");
       onChanged();
     } catch {
-      show("Could not verify profile.", "error");
+      show("Could not suspend profile.", "error");
     } finally {
       setBusy(false);
+      setConfirmSuspend(false);
     }
   }
 
@@ -95,9 +102,16 @@ export function StatusControl({
           </option>
         ))}
       </Select>
-      {!verified && (
-        <Button variant="secondary" size="sm" disabled={busy} onClick={verify}>
-          <ShieldCheck className="h-4 w-4" /> Verify
+      {/* The one-click Verify shortcut was replaced by a link to the full
+          Verification Review page (checklist, OTP status, documents,
+          flags) — a single button bypassing that whole workflow would
+          undermine the point of STEP 8. */}
+      <Link href={`/admin/verification/${profileId}`} className={buttonClass({ variant: verified ? "outline" : "secondary", size: "sm" })}>
+        <ShieldCheck className="h-4 w-4" /> Review Verification
+      </Link>
+      {status !== "SUSPENDED" && (
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => setConfirmSuspend(true)}>
+          <Ban className="h-4 w-4" /> Suspend
         </Button>
       )}
       <Button variant="outline" size="sm" disabled={busy} onClick={softDeleted ? archiveOrRestore : () => setConfirmDelete(true)}>
@@ -113,6 +127,16 @@ export function StatusControl({
         danger
         onConfirm={archiveOrRestore}
         onCancel={() => setConfirmDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmSuspend}
+        title="Suspend this profile?"
+        description="A suspended profile is removed from the active matching pool and treated as unverified until reinstated by an admin."
+        confirmLabel="Suspend"
+        danger
+        onConfirm={suspend}
+        onCancel={() => setConfirmSuspend(false)}
       />
     </div>
   );

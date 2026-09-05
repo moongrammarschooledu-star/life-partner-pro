@@ -90,6 +90,23 @@ export async function GET(req: Request) {
       prisma.meeting.count({ where: { status: "COMPLETED" } }),
     ]);
 
+    // Trust & Verification KPIs (STEP 8 §26).
+    const [verificationStatusCounts, suspendedCount, potentialDuplicates] = await Promise.all([
+      prisma.profileVerification.groupBy({ by: ["status"], _count: { status: true } }),
+      prisma.profile.count({ where: { status: "SUSPENDED", softDeleted: false } }),
+      prisma.securityFlag.count({ where: { flagType: "DUPLICATE_PROFILE_SUSPECTED", status: { in: ["OPEN", "INVESTIGATING"] } } }),
+    ]);
+    const verificationCountByStatus = Object.fromEntries(verificationStatusCounts.map((v) => [v.status, v._count.status]));
+    const trustKpis = {
+      awaitingVerification: verificationCountByStatus.VERIFICATION_PENDING ?? 0,
+      verified: verificationCountByStatus.VERIFIED ?? 0,
+      verificationRequired: verificationCountByStatus.VERIFICATION_REQUIRED ?? 0,
+      rejected: verificationCountByStatus.VERIFICATION_REJECTED ?? 0,
+      reVerificationRequired: verificationCountByStatus.RE_VERIFICATION_REQUIRED ?? 0,
+      suspended: suspendedCount,
+      potentialDuplicates,
+    };
+
     const ageBuckets: Record<string, number> = { "18-24": 0, "25-30": 0, "31-36": 0, "37-45": 0, "46+": 0 };
     for (const p of profiles) {
       const age = now.getFullYear() - p.dateOfBirth.getFullYear();
@@ -208,6 +225,8 @@ export async function GET(req: Request) {
         recentProposalResponses,
       },
       proposalKpis,
+      trustKpis,
+      verificationByStatus: Object.entries(verificationCountByStatus).map(([label, count]) => ({ label, count: count as number })),
       todaysBestMatches: todaysBestMatches.map((m) => ({
         id: m.id,
         profileACode: m.profileA.profileCode,

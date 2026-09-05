@@ -1,8 +1,15 @@
-// Profile-completion scoring, shared shape for both the wizard's live Review
-// preview (fields as controlled-input strings) and the server's persisted
-// value on submit. All the fields checked here are optional in the Zod
-// schema — this never blocks submission, it only informs a percentage +
-// suggestions (spec §14).
+// Profile-completion scoring for the registration wizard's live Review-step
+// preview only (fields as controlled-input strings, instant per-keystroke
+// feedback on partial, unpersisted form state). All the fields checked here
+// are optional in the Zod schema — this never blocks submission, it only
+// informs a percentage + suggestions (spec §14).
+//
+// This is deliberately NOT the same calculator used for the canonical,
+// persisted Profile.profileCompletion value post-registration — see
+// src/lib/verification/completeness.ts (STEP 8's category-weighted model,
+// which operates on a fully loaded Profile + relations). Keeping them
+// separate avoids coupling an in-progress form's instant feedback to a
+// heavier, relation-loading calculation.
 
 export interface CompletionInput {
   hasPhoto: boolean;

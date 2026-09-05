@@ -23,6 +23,9 @@ export function PublicNavbar() {
           <Link href="/#why-us" className="text-muted hover:text-foreground">
             Why Life Partner Pro
           </Link>
+          <Link href="/my-verification" className="text-muted hover:text-foreground">
+            My Verification
+          </Link>
           <Link href="/my-proposals" className="text-muted hover:text-foreground">
             My Proposals
           </Link>

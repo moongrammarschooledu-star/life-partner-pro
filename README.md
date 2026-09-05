@@ -172,6 +172,27 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   permission check — middleware alone is not sufficient authorization).
 - **Demo data:** 20 fictional profiles (10 male, 10 female) with varied cities, education, professions, and partner
   preferences — see `prisma/seed.ts`. Clearly fictional; no real photos are included.
+- **Verification & Trust System (STEP 8):** replaces the old one-click "Verify" boolean with a full 8-stage
+  lifecycle (`ProfileVerification`) — Not Verified → Verification Pending → Under Review → Verification Required →
+  Verified → Rejected → Expired → Re-Verification Required — reviewed via a 3-pane Verification Center detail page
+  against a fixed 17-item checklist (identity/basic, contact, profile info, photo). `Profile.verified` stays a
+  derived boolean, kept in sync by a single transaction helper (`src/lib/verification/status.ts`) so every existing
+  read of it (matching, proposals, badges) keeps working unchanged; the one exception is re-verification, whose
+  matching-pool-removal behavior is a Super-Admin-configurable policy rather than automatic. Phone and email
+  verification use a real OTP/token flow (bcrypt-hashed, rate-limited, expiring) with delivery through the same
+  console-log `NotificationService` stub every other notification in this app uses — no real SMS/email provider
+  exists anywhere in this codebase. An optional, admin-configurable document-review workflow (identity/education/
+  employment/other) encrypts uploaded files with AES-256-GCM before they ever reach Blob storage, keyed off
+  `NEXTAUTH_SECRET` rather than a new env var; documents are only ever readable through an authenticated,
+  audit-logged route gated by a stricter `verification:document:view` permission STAFF doesn't get by default. A
+  category-weighted Profile Completeness score (Personal/Contact/Education/Career/Family/Lifestyle/Partner
+  Requirements/Photo) and a separate internal Verification Confidence rating (High/Medium/Low, never shown to
+  applicants, never framed as proof of genuineness) are both computed fresh rather than cached. Duplicate detection
+  is an admin-triggered scan (never a background job) matching on mobile/email/name+DOB, surfacing results as the
+  same `SecurityFlag` model used for the other 6 flag types — no separate duplicate table. Matching eligibility now
+  also excludes `SUSPENDED` profiles and anyone with an open high/critical security flag. Proposal creation
+  (STEP 7) shows a "Verification Review Required" warning — not a hard block — when either profile has an
+  unresolved verification issue, and records a non-blocking audit entry if an admin proceeds anyway.
 
 ## Deferred / extension points
 
@@ -233,6 +254,29 @@ structured so they can be added without restructuring anything else:
 - **DB/permission-dependent proposal test scenarios** (staff row-level access, applicant response ownership checks,
   legacy-status handling) are verified live rather than as executable Vitest tests, for the same reason as the
   matching engine above. `src/lib/proposal-workflow.ts`'s pure status-transition logic does have real unit tests.
+- **Real SMS/WhatsApp/email delivery for OTP and verification notifications** — console-log stub only (`src/lib/
+  notifications.ts`), matching every other notification-triggering feature in this app. WhatsApp verification gets
+  only the `OtpChannel.WHATSAPP` enum value and the same modular `NotificationService` interface the spec asks be
+  "prepared" — no provider code, since none exists anywhere in this project.
+- **Malware/virus scanning of uploaded verification documents** — MIME/size allowlist only (JPEG/PNG/WebP/PDF,
+  10MB cap); no scanning service is available in this environment.
+- **Background cron for duplicate re-scanning or time-based verification expiry sweeps** — duplicate detection is
+  an admin-triggered scan (`POST /api/admin/verification/duplicate-scan`), mirroring the match-caching deferral
+  above; `VerificationDocument`/`OtpVerification` expiry is evaluated lazily on read, never swept by a job.
+- **Real KMS/customer-managed encryption for documents** — `src/lib/verification/document-crypto.ts` does
+  application-layer AES-256-GCM with a key derived from `NEXTAUTH_SECRET`, not a genuine HSM/KMS; documented as a
+  substitute given no such service is available on this deployment.
+- **A general profile-editing subsystem for DOB/marital-status/profession/income/family/photo** — re-verification
+  triggered by a field change is only reachable through the one field group (`contact`) that can actually change
+  post-registration today, via the existing `PendingUpdate` approval flow.
+- **Any ML/appearance-based photo authenticity, face-duplicate matching, or protected-characteristic inference** —
+  never built, per the spec's own hard ethical rules; duplicate detection stays field-text matching only (mobile,
+  email, name+date-of-birth).
+- **DB/permission-dependent verification test scenarios** (STAFF row-level review access, document-view permission
+  gating, the full registration→OTP→admin-review→active-pool workflow) are verified live rather than as executable
+  Vitest tests, for the same reason as matching/proposals above. The pure logic (`src/lib/verification/
+  completeness.ts`, `confidence.ts`, `otp.ts`, `duplicate-detection.ts`, `document-crypto.ts`) does have real unit
+  tests.
 
 ## Security notes
 

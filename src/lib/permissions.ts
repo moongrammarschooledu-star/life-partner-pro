@@ -15,7 +15,12 @@ export type Permission =
   | "communication:add"
   | "audit:view"
   | "settings:edit"
-  | "admin:manage";
+  | "admin:manage"
+  | "verification:view"
+  | "verification:review"
+  | "verification:document:view"
+  | "verification:flag:manage"
+  | "verification:duplicate:scan";
 
 const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -34,6 +39,11 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "audit:view",
     "settings:edit",
     "admin:manage",
+    "verification:view",
+    "verification:review",
+    "verification:document:view",
+    "verification:flag:manage",
+    "verification:duplicate:scan",
   ],
   ADMIN: [
     "profile:view",
@@ -48,6 +58,11 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "note:add",
     "communication:add",
     "audit:view",
+    "verification:view",
+    "verification:review",
+    "verification:document:view",
+    "verification:flag:manage",
+    "verification:duplicate:scan",
   ],
   STAFF: [
     "profile:view",
@@ -58,8 +73,11 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "proposal:edit", // row-gated: only proposals assigned to them — see src/lib/proposal-access.ts
     "note:add",
     "communication:add",
+    "verification:view",
+    "verification:review", // row-gated: only verifications assigned to them — see src/lib/verification-access.ts
+    "verification:flag:manage", // row-gated the same way
   ],
-  VIEWER: ["profile:view", "audit:view"],
+  VIEWER: ["profile:view", "audit:view", "verification:view"],
 };
 
 export function hasPermission(role: AdminRole, permission: Permission): boolean {
