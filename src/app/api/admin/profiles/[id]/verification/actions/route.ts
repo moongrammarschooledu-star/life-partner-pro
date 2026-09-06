@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { assertVerificationAccess } from "@/lib/verification-access";
 import { setVerificationStatus, suspendProfile } from "@/lib/verification/status";
+import { writeAudit } from "@/lib/audit";
+import { createAssignment } from "@/lib/admin-assignment";
+import { notifyVerificationAssigned } from "@/lib/notifications/events";
 
 const REJECTION_CATEGORIES = ["INFORMATION_INCOMPLETE", "INFORMATION_INCONSISTENT", "VERIFICATION_FAILED", "DUPLICATE_ACCOUNT_SUSPECTED", "POLICY_VIOLATION", "OTHER"];
 
@@ -55,8 +58,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         break;
       }
       case "assign": {
-        if (admin.role !== "SUPER_ADMIN" && admin.role !== "ADMIN") throw new ApiError(403, "Only Super Admin/Admin can assign verifications.");
-        await prisma.profileVerification.update({ where: { profileId: id }, data: { assignedToId: body.assignedToId || null } });
+        if (!admin.permissions.includes("verification:assign")) throw new ApiError(403, "You do not have permission to assign verifications.");
+        const assignedToId: string | null = body.assignedToId || null;
+        await prisma.profileVerification.update({ where: { profileId: id }, data: { assignedToId } });
+        await writeAudit({ action: "VERIFICATION_ASSIGNED", adminId: admin.id, targetProfileId: id, meta: { assignedToId } });
+        await notifyVerificationAssigned(id, assignedToId);
+        if (assignedToId) {
+          await createAssignment({ adminId: assignedToId, resourceType: "VERIFICATION", resourceId: id, createdById: admin.id });
+        }
         break;
       }
       default:

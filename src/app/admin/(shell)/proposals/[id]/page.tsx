@@ -162,6 +162,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const [consentGiven, setConsentGiven] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
+  const [shareConfirmOpen, setShareConfirmOpen] = useState(false);
 
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [meetingType, setMeetingType] = useState("INITIAL_MEETING");
@@ -647,7 +648,11 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
                 <Checkbox label="Email" checked={shareEmail} onChange={(e) => setShareEmail(e.target.checked)} />
               </div>
               <Checkbox label="Required consent has been received from both parties" checked={consentGiven} onChange={(e) => setConsentGiven(e.target.checked)} />
-              <Button size="sm" onClick={shareContact} disabled={!consentGiven || (!sharePhone && !shareWhatsapp && !shareEmail) || sharing}>
+              <Button
+                size="sm"
+                onClick={() => setShareConfirmOpen(true)}
+                disabled={!consentGiven || (!sharePhone && !shareWhatsapp && !shareEmail) || sharing}
+              >
                 {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Approve Contact Sharing
               </Button>
             </div>
@@ -1047,6 +1052,20 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         confirmDisabled={dangerBusy}
         onConfirm={() => runDangerAction({ status: "ARCHIVED" }, "Proposal archived")}
         onCancel={() => setArchiveOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={shareConfirmOpen}
+        title="Approve Contact Sharing"
+        description="This reveals real contact information (phone/WhatsApp/email) between these two profiles and is recorded in the audit log. This cannot be undone."
+        confirmLabel="Approve Contact Sharing"
+        danger
+        confirmDisabled={sharing}
+        onConfirm={() => {
+          setShareConfirmOpen(false);
+          shareContact();
+        }}
+        onCancel={() => setShareConfirmOpen(false)}
       />
     </div>
   );

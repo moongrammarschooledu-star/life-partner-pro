@@ -29,13 +29,18 @@ import {
   Flag,
   MessageSquare,
   FileText,
+  Users2,
+  KeyRound,
+  Building2,
+  ShieldAlert,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
-import { hasPermission, type Permission, type AdminRole } from "@/lib/permissions";
+import type { Permission, AdminRole } from "@/lib/permissions";
 import { GlobalSearch } from "@/components/admin/global-search";
 import { NotificationsPanel } from "@/components/admin/notifications-panel";
 import { AdminNotificationBell } from "@/components/admin/admin-notification-bell";
+import { ViewAsBanner } from "@/components/admin/view-as-banner";
 
 const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permission?: Permission }[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -52,18 +57,24 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/communication-center", label: "Communication Center", icon: MessageSquare, permission: "communication:view" },
   { href: "/admin/notification-templates", label: "Notification Templates", icon: FileText, permission: "notification:template:manage" },
   { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3, permission: "reports:view" },
+  { href: "/admin/team-workload", label: "Team Workload", icon: Users2, permission: "staff:view" },
   { href: "/admin/support", label: "Support", icon: Inbox },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, permission: "audit:view" },
   { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:edit" },
 ];
 
-const SUPER_ADMIN_NAV = [{ href: "/admin/admin-users", label: "Admin Users", icon: UserCog }];
+const SUPER_ADMIN_NAV = [
+  { href: "/admin/admin-users", label: "Admin Users", icon: UserCog },
+  { href: "/admin/permission-matrix", label: "Permission Matrix", icon: KeyRound },
+  { href: "/admin/departments", label: "Departments", icon: Building2 },
+  { href: "/admin/security-alerts", label: "Security Alerts", icon: ShieldAlert },
+];
 
 export function AdminShell({
   user,
   children,
 }: {
-  user: { name: string; email: string; role: string };
+  user: { name: string; email: string; role: string; permissions?: Permission[] };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -71,9 +82,10 @@ export function AdminShell({
   const { theme, toggle } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const role = user.role as AdminRole;
+  const permissions = user.permissions ?? [];
 
   const navItems = [
-    ...NAV.filter((item) => !item.permission || hasPermission(role, item.permission)),
+    ...NAV.filter((item) => !item.permission || permissions.includes(item.permission)),
     ...(role === "SUPER_ADMIN" ? SUPER_ADMIN_NAV : []),
   ];
 
@@ -169,6 +181,7 @@ export function AdminShell({
         <div className="border-b border-border bg-surface px-4 py-2 md:hidden">
           <GlobalSearch />
         </div>
+        <ViewAsBanner />
         <main className="flex-1 bg-background p-4 sm:p-6">{children}</main>
       </div>
     </div>

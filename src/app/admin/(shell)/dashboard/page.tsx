@@ -80,6 +80,47 @@ interface DashboardData {
   verificationByStatus: { label: string; count: number }[];
 }
 
+// Spec §10 — STAFF gets a reduced, assignment-derived payload from the same
+// route instead (see src/lib/dashboard/staff-dashboard.ts); the `role` field
+// on the response tells this page which shape it's holding.
+interface StaffDashboardData {
+  role: "STAFF";
+  assignedProfiles: number;
+  assignedProposals: number;
+  assignedVerifications: number;
+  pendingFollowUps: number;
+  upcomingMeetings: number;
+  overdueTasks: number;
+  pendingTasks: number;
+  completedTasksLast30Days: number;
+}
+
+function isStaffDashboard(data: DashboardData | StaffDashboardData): data is StaffDashboardData {
+  return (data as StaffDashboardData).role === "STAFF";
+}
+
+function StaffWorkloadDashboard({ data }: { data: StaffDashboardData }) {
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold">{greeting()}</h1>
+        <p className="text-sm text-muted">Your assigned workload. · {today}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard icon={Users} label="Assigned Profiles" value={data.assignedProfiles} />
+        <StatCard icon={MessageCircleHeart} label="Assigned Proposals" value={data.assignedProposals} accent="info" />
+        <StatCard icon={ShieldCheck} label="Pending Verifications" value={data.assignedVerifications} accent="warning" />
+        <StatCard icon={ClipboardList} label="Pending Follow-Ups" value={data.pendingFollowUps} accent="warning" />
+        <StatCard icon={CalendarCheck2} label="Upcoming Meetings" value={data.upcomingMeetings} accent="info" />
+        <StatCard icon={Award} label="Overdue Tasks" value={data.overdueTasks} accent={data.overdueTasks > 0 ? "warning" : "success"} />
+        <StatCard icon={ClipboardList} label="Pending Tasks" value={data.pendingTasks} />
+        <StatCard icon={UserRoundCheck} label="Completed (30 days)" value={data.completedTasksLast30Days} accent="success" />
+      </div>
+    </div>
+  );
+}
+
 function greeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Good Morning";
@@ -88,7 +129,7 @@ function greeting(): string {
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<DashboardData | StaffDashboardData | null>(null);
   const [period, setPeriod] = useState("6m");
 
   useEffect(() => {
@@ -96,6 +137,10 @@ export default function DashboardPage() {
       .then((r) => r.json())
       .then(setData);
   }, [period]);
+
+  if (data && isStaffDashboard(data)) {
+    return <StaffWorkloadDashboard data={data} />;
+  }
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 

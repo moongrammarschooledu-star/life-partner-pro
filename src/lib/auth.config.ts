@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
-import type { AdminRole } from "@/lib/permissions";
+import type { AdminRole, Permission } from "@/lib/permissions";
 
 declare module "next-auth" {
   interface Session {
@@ -8,10 +8,16 @@ declare module "next-auth" {
       name: string;
       email: string;
       role: AdminRole;
+      permissions: Permission[];
+      sid: string;
+      mustResetPassword: boolean;
     };
   }
   interface User {
     role: AdminRole;
+    permissions: Permission[];
+    sid: string;
+    mustResetPassword: boolean;
   }
 }
 
@@ -30,12 +36,18 @@ export const authConfig = {
       if (user) {
         token.id = user.id as string;
         token.role = (user as { role: AdminRole }).role;
+        token.permissions = (user as { permissions: Permission[] }).permissions;
+        token.sid = (user as { sid: string }).sid;
+        token.mustResetPassword = (user as { mustResetPassword: boolean }).mustResetPassword;
       }
       return token;
     },
     session: ({ session, token }) => {
       session.user.id = token.id as string;
       session.user.role = token.role as AdminRole;
+      session.user.permissions = (token.permissions as Permission[]) ?? [];
+      session.user.sid = token.sid as string;
+      session.user.mustResetPassword = (token.mustResetPassword as boolean) ?? false;
       return session;
     },
   },

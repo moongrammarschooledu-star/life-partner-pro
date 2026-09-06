@@ -21,7 +21,7 @@ function tierFor(total: number, thresholds: MatchThresholds) {
 // persisted, versioned scoring record (spec §29/§32).
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAdmin("match:run");
+    const admin = await requireAdmin("match:run");
     const { id } = await params;
 
     const match = await prisma.match.findUnique({
@@ -51,8 +51,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       recalculatedAt: match.recalculatedAt,
       createdAt: match.createdAt,
       createdByName: match.createdBy?.name ?? null,
-      profileA: toDetailDto(match.profileA),
-      profileB: toDetailDto(match.profileB),
+      profileA: toDetailDto(match.profileA, admin.id, admin.permissions),
+      profileB: toDetailDto(match.profileB, admin.id, admin.permissions),
     });
   } catch (error) {
     return handleApiError(error);

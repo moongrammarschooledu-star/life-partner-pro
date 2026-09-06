@@ -9,10 +9,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const admin = await requireAdmin("admin:manage");
     const { id } = await params;
-    const { role, active } = await req.json();
+    const { role, active, departmentId, customRoleId, twoFactorEnabled } = await req.json();
 
     if (id === admin.id && active === false) {
       throw new ApiError(400, "You cannot deactivate your own account");
+    }
+    if (active === false) {
+      // Deactivation goes through the dedicated endpoint (spec §21) so open
+      // assignments get reassigned/queued first and a password step-up is
+      // required (spec §16) — this plain toggle only ever reactivates.
+      throw new ApiError(400, "Use the Deactivate action to disable an account — it handles reassigning open work first.");
     }
     if (role && !VALID_ROLES.includes(role)) throw new ApiError(400, "Invalid role");
 
@@ -21,8 +27,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       data: {
         ...(role ? { role } : {}),
         ...(typeof active === "boolean" ? { active } : {}),
+        ...(departmentId !== undefined ? { departmentId: departmentId || null } : {}),
+        ...(customRoleId !== undefined ? { customRoleId: customRoleId || null } : {}),
+        ...(typeof twoFactorEnabled === "boolean" ? { twoFactorEnabled } : {}),
       },
-      select: { id: true, name: true, email: true, role: true, active: true },
+      select: { id: true, name: true, email: true, role: true, active: true, twoFactorEnabled: true },
     });
 
     if (role) {
@@ -30,6 +39,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (typeof active === "boolean") {
       await writeAudit({ action: "ADMIN_USER_STATUS_CHANGED", adminId: admin.id, meta: { targetAdminId: id, active } });
+    }
+    if (typeof twoFactorEnabled === "boolean") {
+      await writeAudit({ action: twoFactorEnabled ? "TWO_FACTOR_ENABLED" : "TWO_FACTOR_DISABLED", adminId: admin.id, meta: { targetAdminId: id } });
     }
 
     return NextResponse.json(updated);

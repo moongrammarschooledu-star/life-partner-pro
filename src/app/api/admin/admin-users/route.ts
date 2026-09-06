@@ -9,7 +9,17 @@ export async function GET() {
     await requireAdmin("admin:manage");
 
     const admins = await prisma.adminUser.findMany({
-      select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        active: true,
+        createdAt: true,
+        twoFactorEnabled: true,
+        department: { select: { id: true, name: true } },
+        customRole: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: "asc" },
     });
 
@@ -33,17 +43,27 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const admin = await requireAdmin("admin:manage");
-    const { name, email, password, role } = await req.json();
+    const { name, email, password, role, departmentId, customRoleId } = await req.json();
 
     if (!name || !email || !password) throw new ApiError(400, "Name, email, and password are required");
-    if (password.length < 8) throw new ApiError(400, "Password must be at least 8 characters");
+
+    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const minLength = settings?.passwordMinLength ?? 8;
+    if (password.length < minLength) throw new ApiError(400, `Password must be at least ${minLength} characters`);
 
     const existing = await prisma.adminUser.findUnique({ where: { email: email.toLowerCase() } });
     if (existing) throw new ApiError(409, "An admin with this email already exists");
 
     const passwordHash = await bcrypt.hash(password, 12);
     const created = await prisma.adminUser.create({
-      data: { name, email: email.toLowerCase(), passwordHash, role: role ?? "STAFF" },
+      data: {
+        name,
+        email: email.toLowerCase(),
+        passwordHash,
+        role: role ?? "STAFF",
+        departmentId: departmentId || null,
+        customRoleId: customRoleId || null,
+      },
       select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
     });
 

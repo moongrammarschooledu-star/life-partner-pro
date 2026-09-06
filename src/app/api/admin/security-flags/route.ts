@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     });
 
     await writeAudit({ action: "SECURITY_FLAG_RAISED", adminId: admin.id, targetProfileId: profileId, meta: { flagId: flag.id, flagType } });
-    await notifySecurityFlagRaised(profileId, flagType === "DUPLICATE_PROFILE_SUSPECTED");
+    await notifySecurityFlagRaised(profileId, flagType === "DUPLICATE_PROFILE_SUSPECTED", flag.id);
 
     return NextResponse.json(flag);
   } catch (error) {

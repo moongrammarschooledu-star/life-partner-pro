@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { notifyProfileApproved } from "@/lib/notifications/events";
+import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 import type { ProfileStatus } from "@prisma/client";
 
 const VALID_STATUSES: ProfileStatus[] = [
@@ -15,6 +16,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const admin = await requireAdmin("profile:status");
     const { id } = await params;
+    await assertProfileAssignmentAccess(admin, id);
     const { status } = await req.json();
 
     if (!VALID_STATUSES.includes(status)) throw new ApiError(400, "Invalid status");

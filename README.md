@@ -251,13 +251,43 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   old Reports route used; the new `reports:view` permission is granted to every role, closing a pre-existing gap
   where STAFF could see the "Reports" nav link but got a 403 from the underlying route.
 
+- **STEP 11 — Super Admin, Staff Management & Role-Based Permission System**: the flat 4-role permission model
+  (`src/lib/permissions.ts`) is now layered with real, database-backed custom roles (`CustomRole`/`PermissionDef`/
+  `CustomRolePermission`) an admin can build from the Permission Matrix page — always STAFF- or VIEWER-shaped for
+  row-scoping, resolved once at login into `session.user.permissions` (no per-request DB read). Sessions are now
+  revocable: `AdminSession` rows back the JWT's `sid` claim, checked on every `requireAdmin()` call (Node-only —
+  the Edge-safe `auth.config.ts` stays untouched to preserve the existing bundle-size split with `middleware.ts`).
+  Login gets real 2FA (email OTP) via a precheck → verify-otp → signIn flow (`src/lib/auth.ts`), durable lockout
+  and a full `AdminLoginHistory` ledger (deliberately not the in-memory `rateLimit()` helper, which doesn't survive
+  cold starts). A new unified `AdminAssignment` table sits additively alongside the existing per-domain
+  `assignedToId` columns (Proposal/ProfileVerification/SecurityFlag are untouched) and is the sole backing store
+  for two brand-new assignment types — general Profile assignment and FollowUp assignment — each with its own
+  STAFF-only row-scoping helper mirroring the established `proposal-access.ts` pattern; a matching `SecurityFlag`
+  helper closes a real pre-existing gap (an `assignedToId` column with no access check at all). `AdminTask` rows
+  auto-create at the same six STEP 9 notification trigger points that already fire for actionable admin work,
+  so a task and its notification can never drift apart. The dashboard is now genuinely role-adaptive server-side
+  (STAFF gets a reduced, assignment-derived payload from `computeStaffDashboard()`, not just hidden nav buttons),
+  and a new non-competitive Team Workload page (`staff:view`, ADMIN+SUPER_ADMIN) sits alongside STEP 10's existing
+  SUPER_ADMIN-only Staff Performance report. Two confirmed field-level gaps are closed: `monthlyIncome`/
+  `annualIncome` were visible to every role including STAFF on both the profile list and detail views (only
+  STEP 10's Reports export path redacted income) — now gated by a new `sensitive:income:view` permission; private
+  admin notes had zero visibility control at all (any `note:add` holder could view *and hard-delete* any note on
+  any profile) — now filtered to the author only unless the viewer holds `sensitive:notes:view`, with the
+  PATCH/DELETE route enforcing the same rule. A read-only, time-limited (15 min), fully-audited View-As support
+  mode lets a Super Admin see the app as another admin would — secure-by-default via an opt-in
+  `{allowViewAs:true}` flag on `requireAdmin()` rather than trying to block mutations by sniffing the HTTP method
+  after the fact, so every route not explicitly flagged (the other ~75+ existing ones) simply 403s while a grant
+  is active. Security Alerts and the Permission Matrix's system-role view are both computed on demand rather than
+  stored, matching STEP 10's own no-job-queue precedent.
+
 ## Deferred / extension points
 
 Per the original spec's own "Future Features" section, these are intentionally *not* implemented, but the code is
 structured so they can be added without restructuring anything else:
 
-- **Two-factor admin authentication** — `AdminUser.twoFactorEnabled` exists in the schema and a toggle appears in
-  Settings, but it is not enforced at login.
+- **TOTP/authenticator-app 2FA** — implemented as of STEP 11 for email OTP (real, enforced at login); an
+  authenticator-app method is architecturally reachable (`AdminOtpChallenge.purpose`) but not built — no QR/secret
+  library exists in this project.
 - **CSV / Excel / PDF export** — implemented as of STEP 10 (`/admin/reports/custom` and every report export route).
 - **Real email / SMS / WhatsApp delivery** — `src/lib/notifications.ts` defines a `NotificationService` interface
   with a console-only implementation. Swap in a real provider by implementing that interface; nothing else in the
@@ -265,8 +295,8 @@ structured so they can be added without restructuring anything else:
 - **Multi-language UI, native mobile apps, payments/subscriptions, CNIC/document verification** — not started.
 - **Admin-side manual "Add Profile"** — profiles are still only created through the public registration wizard;
   there's no admin-facing manual-entry form.
-- **Global search beyond profiles** — the topbar/Matching Center search covers profiles only (name / Profile ID /
-  phone / city / profession), not proposals, matches, or follow-ups.
+- **Global search beyond profiles and proposals** — extended to proposal codes as of STEP 11 (STAFF-row-filtered);
+  matches and follow-ups are not covered — Match has no natural human-searchable key.
 - **Full per-category Matching Center filters** — the filter bar covers minimum score, city, education, profession,
   age range, marital status, family type, religion, minimum completeness, and verified/active-only; height, income,
   lifestyle, and languages aren't yet broken out as their own dedicated filter controls.
@@ -304,8 +334,6 @@ structured so they can be added without restructuring anything else:
 - **Applicant-visible photos of the other profile** — matrimonial platforms conventionally gate photo visibility
   behind mutual interest/consent; nothing in the schema tracks that distinction yet, so `/my-proposals` shows no
   photos for now.
-- **Global search extended to proposal codes** — would need a discriminated result type in the topbar search
-  component; the dedicated Proposals list page already has its own code/name search and status/date/score filters.
 - **True background/async job processing for report exports** — at the current data scale (dozens of profiles,
   single-digit admins) synchronous generation within the request/response cycle is fast enough; a "Report is being
   prepared…" client-side loading state satisfies the UX intent without inventing queue infrastructure this codebase
@@ -370,6 +398,26 @@ structured so they can be added without restructuring anything else:
 - **Full ICU-style i18n** — `src/lib/notifications/default-templates.ts` is a flat English/Urdu dictionary with
   simple `{{variable}}` substitution, matching the existing registration-wizard i18n pattern; no pluralization,
   gendered forms, or additional languages.
+- **Department-scoped permission inheritance (STEP 11)** — `Department` exists structurally
+  (`AdminUser.departmentId`, a filter dropdown on Admin Users/Team Workload) but permissions are never derived
+  from it; the spec itself hedges this as optional ("permissions CAN be associated with departments").
+- **Configurable session duration (STEP 11)** — NextAuth's JWT `maxAge` is fixed at Edge config construction time
+  in `src/lib/auth.config.ts`, which deliberately has no Prisma access to keep Vercel Edge Middleware under its
+  1MB bundle limit; a DB-configurable session length would need to break that split. The 30-day default stays.
+  `AppSettings.loginMaxAttempts`/`loginLockoutMinutes`/`passwordMinLength`/`twoFactorRequiredRoles` are all
+  genuinely configurable — only session duration specifically is not.
+- **TOTP/authenticator-app 2FA (STEP 11)** — see the "Two-factor admin authentication" note above; email OTP is
+  real and enforced, TOTP is not built.
+- **Real-time/pushed security alerts (STEP 11)** — `src/lib/security-alerts.ts` computes alerts fresh on every
+  page load from existing data (login history, exports, audit log); no `SecurityAlert` table, no push/websocket
+  delivery — consistent with this codebase having no background job queue anywhere.
+- **Postgres row-level security policies (STEP 11)** — every access check in this project, including the new
+  assignment-based ones, is an application-layer check in a route handler, never a DB-level policy.
+- **View-As coverage beyond a small read-route allowlist (STEP 11)** — Dashboard, Profiles (list+detail),
+  Proposals (list+detail), and Team Workload resolve the impersonated identity when a grant is active; the other
+  ~75+ existing admin routes intentionally do not opt in, so a View-As session sees a meaningfully useful but not
+  exhaustive slice of what the target admin could — enforced by `requireAdmin()`'s secure-by-default 403 on any
+  route that doesn't pass `{allowViewAs:true}`.
 
 ## Security notes
 

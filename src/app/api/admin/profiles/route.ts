@@ -6,7 +6,7 @@ import { profileListInclude, toListDto } from "@/lib/serializers";
 
 export async function GET(req: Request) {
   try {
-    await requireAdmin("profile:view");
+    const admin = await requireAdmin("profile:view", { allowViewAs: true });
 
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
     ]);
 
     return NextResponse.json({
-      items: profiles.map(toListDto),
+      items: profiles.map((p) => toListDto(p, admin.permissions)),
       page,
       pageSize,
       total,

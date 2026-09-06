@@ -47,7 +47,7 @@ const AUDIT_ACTION_FOR_STATUS: Partial<Record<ProposalStatus, AuditAction>> = {
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAdmin("proposal:create");
+    const admin = await requireAdmin("proposal:create", { allowViewAs: true });
     const { id } = await params;
 
     const proposal = await prisma.proposal.findUnique({ where: { id }, include: proposalDetailInclude });
@@ -58,8 +58,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({
       ...proposal,
       proposalCode,
-      profileA: toDetailDto(proposal.profileA),
-      profileB: toDetailDto(proposal.profileB),
+      profileA: toDetailDto(proposal.profileA, admin.id, admin.permissions),
+      profileB: toDetailDto(proposal.profileB, admin.id, admin.permissions),
       breakdown: proposal.match ? JSON.parse(proposal.match.breakdown) : null,
     });
   } catch (error) {

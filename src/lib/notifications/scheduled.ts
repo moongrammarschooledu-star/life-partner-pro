@@ -88,10 +88,10 @@ async function sendOverdueFollowUpAlerts(now: Date) {
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * MINUTES);
   const overdue = await prisma.followUp.findMany({
     where: { status: "PENDING", dueDate: { lt: oneDayAgo } },
-    select: { id: true, profileId: true },
+    select: { id: true, profileId: true, adminId: true },
   });
   for (const followUp of overdue) {
-    await notifyOverdueFollowUp(followUp.profileId, followUp.id);
+    await notifyOverdueFollowUp(followUp.profileId, followUp.id, followUp.adminId);
   }
   return overdue.length;
 }

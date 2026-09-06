@@ -19,7 +19,7 @@ const proposalListInclude = {
 
 export async function GET(req: Request) {
   try {
-    await requireAdmin("proposal:create");
+    await requireAdmin("proposal:create", { allowViewAs: true });
     const { searchParams } = new URL(req.url);
     const statusGroup = searchParams.get("statusGroup");
     const status = searchParams.get("status");

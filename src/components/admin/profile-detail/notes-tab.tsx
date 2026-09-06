@@ -39,6 +39,7 @@ interface Note {
   pinned: boolean;
   createdAt: string | Date;
   adminName: string;
+  isOwnNote?: boolean;
 }
 
 export function NotesTab({ profileId, notes: initialNotes }: { profileId: string; notes: Note[] }) {
@@ -162,21 +163,24 @@ export function NotesTab({ profileId, notes: initialNotes }: { profileId: string
                 <div key={n.id} className={cn("rounded-lg border p-3 text-sm", n.pinned ? "border-accent bg-accent/5" : "border-border")}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="flex-1">{n.text}</p>
-                    <div className="flex shrink-0 gap-1">
-                      <button
-                        onClick={() => togglePin(n)}
-                        title={n.pinned ? "Unpin" : "Pin"}
-                        className="text-muted hover:text-accent"
-                      >
-                        {n.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                      </button>
-                      <button onClick={() => setDeleteTarget(n.id)} title="Delete" className="text-muted hover:text-danger">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    {n.isOwnNote !== false && (
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          onClick={() => togglePin(n)}
+                          title={n.pinned ? "Unpin" : "Pin"}
+                          className="text-muted hover:text-accent"
+                        >
+                          {n.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                        </button>
+                        <button onClick={() => setDeleteTarget(n.id)} title="Delete" className="text-muted hover:text-danger">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <p className="mt-1 text-xs text-muted">
                     {n.adminName} &middot; {formatDateTime(n.createdAt)}
+                    {n.isOwnNote === false && " · Private to author"}
                   </p>
                 </div>
               ))

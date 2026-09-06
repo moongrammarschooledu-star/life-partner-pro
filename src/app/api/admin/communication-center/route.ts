@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
-import { hasPermission } from "@/lib/permissions";
 
 // Cross-profile search + history over the automated CommunicationLog
 // (spec §11/§26) — distinct from the existing manual Communication log shown
@@ -43,7 +42,7 @@ export async function GET(req: Request) {
       take: 200,
     });
 
-    const canViewBody = hasPermission(admin.role, "communication:message:view");
+    const canViewBody = admin.permissions.includes("communication:message:view");
     const items = logs.map((log) => ({
       id: log.id,
       profile: log.profile,

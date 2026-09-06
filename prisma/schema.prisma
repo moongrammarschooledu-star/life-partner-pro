@@ -22,6 +22,53 @@ enum AdminRole {
   VIEWER
 }
 
+// ---------- Staff Management & Permissions (STEP 11) ----------
+
+enum AssignmentResourceType {
+  PROPOSAL
+  VERIFICATION
+  SECURITY_FLAG
+  FOLLOW_UP
+  PROFILE
+}
+
+enum AssignmentPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  WAITING
+  COMPLETED
+  REASSIGNED
+}
+
+enum AdminTaskType {
+  NEW_PROFILE_REVIEW
+  VERIFICATION_REQUEST
+  PROPOSAL_FOLLOWUP
+  MEETING_TASK
+  CONTACT_REQUEST_TASK
+  FOLLOW_UP_DUE
+}
+
+enum AdminTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum LoginHistoryEvent {
+  SUCCESS
+  FAILURE
+  LOCKED
+}
+
 enum Gender {
   MALE
   FEMALE
@@ -351,6 +398,28 @@ enum AuditAction {
   SCHEDULED_REPORT_CREATED
   SCHEDULED_REPORT_UPDATED
   SCHEDULED_REPORT_RUN
+
+  // ---------- Staff Management & Permissions (STEP 11) ----------
+  CUSTOM_ROLE_CREATED
+  CUSTOM_ROLE_UPDATED
+  CUSTOM_ROLE_PERMISSIONS_CHANGED
+  ADMIN_USER_PASSWORD_RESET
+  ADMIN_USER_DEACTIVATED
+  ADMIN_LOGIN_FAILED
+  ADMIN_ACCOUNT_LOCKED
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+  ADMIN_SESSION_REVOKED
+  ASSIGNMENT_CREATED
+  ASSIGNMENT_REASSIGNED
+  TASK_REASSIGNED
+  TASK_COMPLETED
+  DEPARTMENT_CREATED
+  DEPARTMENT_UPDATED
+  SECURITY_SETTINGS_CHANGED
+  VIEW_AS_STARTED
+  VIEW_AS_ENDED
+  VIEW_AS_ACCESS
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -470,8 +539,16 @@ model AdminUser {
   twoFactorEnabled  Boolean   @default(false)
   active            Boolean   @default(true)
   lastLoginAt       DateTime?
+  mustResetPassword Boolean   @default(false)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  // STEP 11 — custom role overrides the flat role-based permission set when
+  // set; department is structural only (no permission inheritance wired).
+  customRole   CustomRole? @relation(fields: [customRoleId], references: [id])
+  customRoleId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
 
   notes             ProfileNote[]
   communications    Communication[]
@@ -500,6 +577,16 @@ model AdminUser {
 
   reportExecutions  ReportExecution[]
   scheduledReports  ScheduledReport[]
+
+  // ---------- Staff Management & Permissions (STEP 11) ----------
+  sessions            AdminSession[]
+  loginHistory        AdminLoginHistory[]
+  otpChallenges       AdminOtpChallenge[]
+  assignmentsReceived AdminAssignment[]    @relation("AdminAssignmentAssignee")
+  assignmentsCreated  AdminAssignment[]    @relation("AdminAssignmentCreator")
+  tasksAssigned       AdminTask[]
+  viewAsInitiated     ViewAsSession[]      @relation("ViewAsInitiator")
+  viewAsTargeted      ViewAsSession[]      @relation("ViewAsTarget")
 }
 
 // ---------- Core profile ----------
@@ -1275,6 +1362,16 @@ model AppSettings {
   incomeRangeBuckets   Json?
   professionCategories Json?
 
+  // Staff Management & Permissions (STEP 11). Session duration is NOT
+  // configurable here — NextAuth's JWT maxAge is fixed at Edge config
+  // construction time (src/lib/auth.config.ts) and can't do a DB read there
+  // without breaking the Edge/Node split that keeps middleware under
+  // Vercel's bundle limit; the 30-day default stays hardcoded.
+  loginMaxAttempts       Int     @default(5)
+  loginLockoutMinutes    Int     @default(15)
+  twoFactorRequiredRoles Json? // array of AdminRole strings
+  passwordMinLength      Int     @default(8)
+
   updatedAt             DateTime @updatedAt
 }
 
@@ -1494,6 +1591,171 @@ model ScheduledReport {
   updatedAt         DateTime         @updatedAt
 
   @@index([active, nextRunAt])
+}
+
+// ---------- Staff Management & Permissions (STEP 11) ----------
+
+// Metadata-only registry for the Permission Matrix UI's checkbox grid — NOT
+// the authorization source of truth (that's the `Permission` TS union in
+// src/lib/permissions.ts). Keys must match those strings exactly.
+model PermissionDef {
+  key         String @id
+  module      String
+  action      String
+  description String?
+
+  customRoles CustomRolePermission[]
+}
+
+// Additive on top of the 4 hardcoded system roles (SUPER_ADMIN/ADMIN/STAFF/
+// VIEWER) — see src/lib/effective-permissions.ts. baseRole determines
+// row-scoping shape (STAFF-style assigned-only access) and must be STAFF or
+// VIEWER, enforced in the API route, not the DB.
+model CustomRole {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  baseRole    AdminRole @default(STAFF)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  permissions CustomRolePermission[]
+  admins      AdminUser[]
+}
+
+model CustomRolePermission {
+  customRole    CustomRole    @relation(fields: [customRoleId], references: [id], onDelete: Cascade)
+  customRoleId  String
+  permission    PermissionDef @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+  permissionKey String
+
+  @@id([customRoleId, permissionKey])
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  admins AdminUser[]
+}
+
+// Tracks a live JWT session for revocation (spec §13) — the JWT itself
+// embeds this row's id as `sid`; requireAdmin() checks it on every request
+// (see src/lib/route-guard.ts). Not read by the Edge-safe auth callbacks.
+model AdminSession {
+  id           String    @id @default(cuid())
+  admin        AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  adminId      String
+  deviceInfo   String?
+  userAgent    String?
+  ipAddress    String?
+  lastActiveAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  revokedById  String?
+
+  @@index([adminId])
+}
+
+// Durable login-attempt ledger (spec §14) — also the source of truth for
+// lockout (see src/lib/auth.ts's precheck), deliberately not the in-memory
+// rateLimit() helper, which doesn't survive serverless cold starts.
+model AdminLoginHistory {
+  id        String            @id @default(cuid())
+  admin     AdminUser?        @relation(fields: [adminId], references: [id])
+  adminId   String?
+  email     String
+  event     LoginHistoryEvent
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime          @default(now())
+
+  @@index([adminId])
+  @@index([email, createdAt])
+}
+
+// Email-OTP 2FA challenge (spec §12) — mirrors STEP 8's
+// src/lib/verification/otp.ts hashed-code/expiry/max-attempts convention.
+model AdminOtpChallenge {
+  id          String    @id @default(cuid())
+  admin       AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  adminId     String
+  purpose     String    @default("LOGIN_2FA")
+  codeHash    String
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([adminId])
+}
+
+// Unified assignment-tracking table (spec §7/§8/§20) — additive alongside
+// the existing Proposal/ProfileVerification/SecurityFlag assignedToId
+// columns (those + their access-check helpers are untouched). This is the
+// ONLY backing store for Profile and FollowUp assignment, which have no FK
+// column of their own.
+model AdminAssignment {
+  id           String                 @id @default(cuid())
+  admin        AdminUser              @relation("AdminAssignmentAssignee", fields: [adminId], references: [id])
+  adminId      String
+  resourceType AssignmentResourceType
+  resourceId   String
+  priority     AssignmentPriority     @default(NORMAL)
+  status       AssignmentStatus       @default(ASSIGNED)
+  assignedAt   DateTime               @default(now())
+  dueAt        DateTime?
+  notes        String?
+  createdBy    AdminUser              @relation("AdminAssignmentCreator", fields: [createdById], references: [id])
+  createdById  String
+
+  @@index([adminId, resourceType])
+  @@index([resourceType, resourceId])
+  @@index([status])
+}
+
+// Discrete staff work items (spec §23/§24), auto-created at existing STEP 9
+// notification trigger points — see src/lib/admin-tasks.ts.
+model AdminTask {
+  id           String                 @id @default(cuid())
+  assignedTo   AdminUser?             @relation(fields: [assignedToId], references: [id])
+  assignedToId String?
+  taskType     AdminTaskType
+  resourceType AssignmentResourceType
+  resourceId   String
+  priority     AssignmentPriority     @default(NORMAL)
+  status       AdminTaskStatus        @default(PENDING)
+  dueAt        DateTime?
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime               @default(now())
+
+  @@index([assignedToId, status])
+  @@index([resourceType, resourceId])
+  @@index([status, dueAt])
+}
+
+// Controlled, time-limited, read-only support-impersonation grant (spec
+// §18) — see src/lib/view-as.ts. Never grants access to passwords or OTPs.
+model ViewAsSession {
+  id            String    @id @default(cuid())
+  superAdmin    AdminUser @relation("ViewAsInitiator", fields: [superAdminId], references: [id])
+  superAdminId  String
+  targetAdmin   AdminUser @relation("ViewAsTarget", fields: [targetAdminId], references: [id])
+  targetAdminId String
+  reason        String
+  startedAt     DateTime  @default(now())
+  expiresAt     DateTime
+  endedAt       DateTime?
+
+  @@index([superAdminId])
+  @@index([targetAdminId])
 }
 
 // ---------- Support ----------

@@ -1,4 +1,5 @@
 import { sendNotification, notifyAdmins } from "@/lib/notifications/notification-service";
+import { createTask } from "@/lib/admin-tasks";
 import type { NotificationType, ProposalResponseType, MeetingStatus } from "@prisma/client";
 
 // One named wrapper per spec §18 reusable event — lifecycle-transition
@@ -34,7 +35,10 @@ export async function notifyProfileUpdateDecision(profileId: string, approved: b
 }
 
 export async function notifyAdminProfileUpdatePending(profileId: string) {
-  await notifyAdmins({ type: "ADMIN_PROFILE_UPDATE_PENDING", data: { relatedProfileId: profileId } });
+  await Promise.all([
+    notifyAdmins({ type: "ADMIN_PROFILE_UPDATE_PENDING", data: { relatedProfileId: profileId } }),
+    createTask({ taskType: "NEW_PROFILE_REVIEW", resourceType: "PROFILE", resourceId: profileId }),
+  ]);
 }
 
 export async function notifyMatchIdentified(profileId: string) {
@@ -64,6 +68,13 @@ export async function notifyProposalResponseReceived(params: {
       sendNotification({ profileId: params.profileAId, type: "PROPOSAL_MUTUAL_INTEREST", data: { relatedProposalId: params.proposalId } }),
       sendNotification({ profileId: params.profileBId, type: "PROPOSAL_MUTUAL_INTEREST", data: { relatedProposalId: params.proposalId } }),
       notifyAdmins({ type: "ADMIN_MUTUAL_INTEREST", data: { relatedProposalId: params.proposalId }, assignedAdminId: params.assignedToId }),
+      createTask({
+        assignedToId: params.assignedToId,
+        taskType: "PROPOSAL_FOLLOWUP",
+        resourceType: "PROPOSAL",
+        resourceId: params.proposalId,
+        priority: "HIGH",
+      }),
     ]);
     return;
   }
@@ -78,7 +89,10 @@ export async function notifyContactPermissionAction(profileId: string, proposalI
 }
 
 export async function notifyAdminContactPermissionRequest(proposalId: string, assignedToId: string | null) {
-  await notifyAdmins({ type: "ADMIN_CONTACT_PERMISSION_REQUEST", data: { relatedProposalId: proposalId }, assignedAdminId: assignedToId });
+  await Promise.all([
+    notifyAdmins({ type: "ADMIN_CONTACT_PERMISSION_REQUEST", data: { relatedProposalId: proposalId }, assignedAdminId: assignedToId }),
+    createTask({ assignedToId, taskType: "CONTACT_REQUEST_TASK", resourceType: "PROPOSAL", resourceId: proposalId }),
+  ]);
 }
 
 export async function notifyContactApproved(profileAId: string, profileBId: string, proposalId: string) {
@@ -109,7 +123,10 @@ export async function notifyMeetingUpdated(profileAId: string, profileBId: strin
     sendNotification({ profileId: profileAId, type, data: { relatedProposalId: proposalId } }),
     sendNotification({ profileId: profileBId, type, data: { relatedProposalId: proposalId } }),
     newStatus === "CONFIRMED"
-      ? notifyAdmins({ type: "ADMIN_MEETING_CONFIRMATION", data: { relatedProposalId: proposalId }, assignedAdminId: assignedToId })
+      ? Promise.all([
+          notifyAdmins({ type: "ADMIN_MEETING_CONFIRMATION", data: { relatedProposalId: proposalId }, assignedAdminId: assignedToId }),
+          createTask({ assignedToId, taskType: "MEETING_TASK", resourceType: "PROPOSAL", resourceId: proposalId }),
+        ])
       : Promise.resolve(),
   ]);
 }
@@ -117,6 +134,16 @@ export async function notifyMeetingUpdated(profileAId: string, profileBId: strin
 export async function notifyProposalAssigned(proposalId: string, assignedToId: string | null) {
   if (!assignedToId) return;
   await notifyAdmins({ type: "ADMIN_ASSIGNMENT_CHANGED", data: { relatedProposalId: proposalId }, assignedAdminId: assignedToId });
+}
+
+export async function notifyVerificationAssigned(profileId: string, assignedToId: string | null) {
+  if (!assignedToId) return;
+  await notifyAdmins({ type: "ADMIN_ASSIGNMENT_CHANGED", data: { relatedProfileId: profileId }, assignedAdminId: assignedToId });
+}
+
+export async function notifySecurityFlagAssigned(profileId: string, assignedToId: string | null) {
+  if (!assignedToId) return;
+  await notifyAdmins({ type: "ADMIN_ASSIGNMENT_CHANGED", data: { relatedProfileId: profileId }, assignedAdminId: assignedToId });
 }
 
 export async function notifyProposalStatusChanged(proposal: { id: string; profileAId: string; profileBId: string }, newStatus: string) {
@@ -127,11 +154,14 @@ export async function notifyProposalStatusChanged(proposal: { id: string; profil
   ]);
 }
 
-export async function notifySecurityFlagRaised(profileId: string, isDuplicate: boolean) {
-  await notifyAdmins({
-    type: isDuplicate ? "ADMIN_DUPLICATE_PROFILE_ALERT" : "ADMIN_SUSPICIOUS_ACTIVITY",
-    data: { relatedProfileId: profileId },
-  });
+export async function notifySecurityFlagRaised(profileId: string, isDuplicate: boolean, flagId?: string) {
+  await Promise.all([
+    notifyAdmins({
+      type: isDuplicate ? "ADMIN_DUPLICATE_PROFILE_ALERT" : "ADMIN_SUSPICIOUS_ACTIVITY",
+      data: { relatedProfileId: profileId },
+    }),
+    flagId ? createTask({ taskType: "VERIFICATION_REQUEST", resourceType: "SECURITY_FLAG", resourceId: flagId, priority: "HIGH" }) : Promise.resolve(),
+  ]);
 }
 
 // One summary notification per scan run, rather than one per flag, so a scan
@@ -141,8 +171,11 @@ export async function notifyDuplicateScanSummary(flagsCreated: number) {
   await notifyAdmins({ type: "ADMIN_DUPLICATE_PROFILE_ALERT", data: {} });
 }
 
-export async function notifyOverdueFollowUp(profileId: string, followUpId: string) {
-  await notifyAdmins({ type: "ADMIN_OVERDUE_FOLLOWUP", data: { relatedProfileId: profileId, templateVars: { profile_id: followUpId } } });
+export async function notifyOverdueFollowUp(profileId: string, followUpId: string, assignedToId?: string | null) {
+  await Promise.all([
+    notifyAdmins({ type: "ADMIN_OVERDUE_FOLLOWUP", data: { relatedProfileId: profileId, templateVars: { profile_id: followUpId } } }),
+    createTask({ assignedToId, taskType: "FOLLOW_UP_DUE", resourceType: "FOLLOW_UP", resourceId: followUpId, priority: "HIGH" }),
+  ]);
 }
 
 export async function notifyFollowupReminder(profileId: string) {

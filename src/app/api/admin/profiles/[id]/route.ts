@@ -3,18 +3,20 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { profileDetailInclude, toDetailDto } from "@/lib/serializers";
 import { writeAudit } from "@/lib/audit";
+import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const admin = await requireAdmin("profile:view");
+    const admin = await requireAdmin("profile:view", { allowViewAs: true });
     const { id } = await params;
+    await assertProfileAssignmentAccess(admin, id);
 
     const profile = await prisma.profile.findUnique({ where: { id }, include: profileDetailInclude });
     if (!profile) throw new ApiError(404, "Profile not found");
 
     await writeAudit({ action: "PROFILE_VIEWED", adminId: admin.id, targetProfileId: id });
 
-    return NextResponse.json(toDetailDto(profile));
+    return NextResponse.json(toDetailDto(profile, admin.id, admin.permissions));
   } catch (error) {
     return handleApiError(error);
   }
@@ -24,6 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const admin = await requireAdmin("profile:edit");
     const { id } = await params;
+    await assertProfileAssignmentAccess(admin, id);
     const body = await req.json();
 
     const existing = await prisma.profile.findUnique({ where: { id } });
@@ -48,7 +51,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     await writeAudit({ action: "PROFILE_EDITED", adminId: admin.id, targetProfileId: id });
 
-    return NextResponse.json(toDetailDto(profile));
+    return NextResponse.json(toDetailDto(profile, admin.id, admin.permissions));
   } catch (error) {
     return handleApiError(error);
   }

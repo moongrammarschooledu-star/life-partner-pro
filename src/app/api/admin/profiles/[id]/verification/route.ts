@@ -10,7 +10,7 @@ import { computeConfidence } from "@/lib/verification/confidence";
 // profile summary, checklist, documents, open flags, and history.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireAdmin("verification:view");
+    const admin = await requireAdmin("verification:view");
     const { id } = await params;
 
     const profile = await prisma.profile.findUnique({ where: { id }, include: profileDetailInclude });
@@ -90,7 +90,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     });
 
     return NextResponse.json({
-      profile: toDetailDto(profile),
+      profile: toDetailDto(profile, admin.id, admin.permissions),
       profileStatus: profile.status,
       registeredAt: profile.createdAt,
       verification: {

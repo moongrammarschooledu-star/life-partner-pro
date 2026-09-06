@@ -70,7 +70,13 @@ interface Settings {
   notificationRetryLimit: number;
   quietHoursStart: number | null;
   quietHoursEnd: number | null;
+  loginMaxAttempts: number;
+  loginLockoutMinutes: number;
+  twoFactorRequiredRoles: string[] | null;
+  passwordMinLength: number;
 }
+
+const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "VIEWER"];
 
 const WEIGHT_FIELDS: { key: keyof Settings; label: string; hardKey: keyof Settings; enabledKey: keyof Settings }[] = [
   { key: "weightAge", label: "Age", hardKey: "hardRequirementAge", enabledKey: "categoryEnabledAge" },
@@ -97,6 +103,7 @@ export default function SettingsPage() {
   const { show } = useToast();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingSecurity, setSavingSecurity] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -119,6 +126,42 @@ export default function SettingsPage() {
       show("Could not save settings.", "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveSecurity() {
+    if (!settings) return;
+    const password = window.prompt("Re-enter your password to change security settings:");
+    if (!password) return;
+    setSavingSecurity(true);
+    try {
+      const reauth = await fetch("/api/admin/auth/reauth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const reauthJson = await reauth.json();
+      if (!reauth.ok) {
+        show(reauthJson.error ?? "Incorrect password.", "error");
+        return;
+      }
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          loginMaxAttempts: settings.loginMaxAttempts,
+          loginLockoutMinutes: settings.loginLockoutMinutes,
+          passwordMinLength: settings.passwordMinLength,
+          twoFactorRequiredRoles: settings.twoFactorRequiredRoles,
+          stepUpToken: reauthJson.token,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      show("Security settings saved", "success");
+    } catch {
+      show("Could not save security settings.", "error");
+    } finally {
+      setSavingSecurity(false);
     }
   }
 
@@ -411,15 +454,62 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Coming Soon</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Lock className="h-4 w-4" /> Security & Access
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted">
-          <p className="flex items-center gap-2">
-            <Lock className="h-4 w-4" /> Two-Factor Authentication — not yet enforced
-          </p>
-          <p className="flex items-center gap-2">
-            <Lock className="h-4 w-4" /> CSV / Excel / PDF export
-          </p>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted">Changing these requires re-entering your password.</p>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Login Lockout After (attempts)" htmlFor="loginMaxAttempts">
+              <Input
+                id="loginMaxAttempts"
+                type="number"
+                min={1}
+                value={settings.loginMaxAttempts}
+                onChange={(e) => setSettings({ ...settings, loginMaxAttempts: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Lockout Duration (minutes)" htmlFor="loginLockoutMinutes">
+              <Input
+                id="loginLockoutMinutes"
+                type="number"
+                min={1}
+                value={settings.loginLockoutMinutes}
+                onChange={(e) => setSettings({ ...settings, loginLockoutMinutes: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Minimum Password Length" htmlFor="passwordMinLength">
+              <Input
+                id="passwordMinLength"
+                type="number"
+                min={6}
+                value={settings.passwordMinLength}
+                onChange={(e) => setSettings({ ...settings, passwordMinLength: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-medium">Require 2FA for these roles</p>
+            <div className="flex flex-wrap gap-3">
+              {ADMIN_ROLES.map((r) => (
+                <Checkbox
+                  key={r}
+                  label={r}
+                  checked={(settings.twoFactorRequiredRoles ?? []).includes(r)}
+                  onChange={(e) => {
+                    const current = new Set(settings.twoFactorRequiredRoles ?? []);
+                    if (e.target.checked) current.add(r);
+                    else current.delete(r);
+                    setSettings({ ...settings, twoFactorRequiredRoles: Array.from(current) });
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          <Button onClick={saveSecurity} disabled={savingSecurity} variant="outline">
+            {savingSecurity ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Security Settings
+          </Button>
         </CardContent>
       </Card>
 

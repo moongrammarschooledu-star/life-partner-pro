@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Search, Loader2 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 
-interface SearchResult {
+interface ProfileResult {
+  type: "profile";
   id: string;
   profileCode: string;
   fullName: string;
@@ -16,10 +17,20 @@ interface SearchResult {
   profession: string | null;
 }
 
+interface ProposalResult {
+  type: "proposal";
+  id: string;
+  proposalCode: string;
+  status: string;
+  profileAName: string;
+  profileBName: string;
+}
+
 export function GlobalSearch() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [results, setResults] = useState<ProfileResult[] | null>(null);
+  const [proposalResults, setProposalResults] = useState<ProposalResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -27,13 +38,17 @@ export function GlobalSearch() {
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults(null);
+      setProposalResults([]);
       return;
     }
     setLoading(true);
     const handle = setTimeout(() => {
       fetch(`/api/admin/search?q=${encodeURIComponent(query.trim())}`)
         .then((r) => r.json())
-        .then((data) => setResults(data.results ?? []))
+        .then((data) => {
+          setResults(data.results ?? []);
+          setProposalResults(data.proposalResults ?? []);
+        })
         .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(handle);
@@ -47,6 +62,14 @@ export function GlobalSearch() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  function go(path: string) {
+    router.push(path);
+    setOpen(false);
+    setQuery("");
+  }
+
+  const hasResults = (results?.length ?? 0) > 0 || proposalResults.length > 0;
+
   return (
     <div ref={containerRef} className="relative">
       <div className="relative">
@@ -58,36 +81,49 @@ export function GlobalSearch() {
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search name, Profile ID, phone, city, profession…"
+          placeholder="Search name, Profile ID, Proposal ID, phone, city…"
           className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
         {loading && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted" />}
       </div>
       {open && results !== null && (
         <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-80 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
-          {results.length === 0 ? (
-            <p className="p-4 text-sm text-muted">No profiles found.</p>
+          {!hasResults ? (
+            <p className="p-4 text-sm text-muted">No results found.</p>
           ) : (
-            results.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => {
-                  router.push(`/admin/profiles/${r.id}`);
-                  setOpen(false);
-                  setQuery("");
-                }}
-                className="flex w-full items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-left text-sm last:border-0 hover:bg-surface-muted"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{r.fullName}</p>
-                  <p className="truncate text-xs text-muted">
-                    {r.profileCode} · {r.age} yrs · {r.city}
-                    {r.profession ? ` · ${r.profession}` : ""}
-                  </p>
-                </div>
-                <StatusBadge status={r.status} />
-              </button>
-            ))
+            <>
+              {results!.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => go(`/admin/profiles/${r.id}`)}
+                  className="flex w-full items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-left text-sm last:border-0 hover:bg-surface-muted"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{r.fullName}</p>
+                    <p className="truncate text-xs text-muted">
+                      {r.profileCode} · {r.age} yrs · {r.city}
+                      {r.profession ? ` · ${r.profession}` : ""}
+                    </p>
+                  </div>
+                  <StatusBadge status={r.status} />
+                </button>
+              ))}
+              {proposalResults.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => go(`/admin/proposals/${r.id}`)}
+                  className="flex w-full items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-left text-sm last:border-0 hover:bg-surface-muted"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{r.proposalCode}</p>
+                    <p className="truncate text-xs text-muted">
+                      {r.profileAName} &amp; {r.profileBName}
+                    </p>
+                  </div>
+                  <StatusBadge status={r.status} />
+                </button>
+              ))}
+            </>
           )}
         </div>
       )}

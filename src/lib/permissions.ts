@@ -29,9 +29,16 @@ export type Permission =
   | "reports:export"
   | "reports:income:view"
   | "reports:staff-performance:view"
-  | "reports:schedule:manage";
+  | "reports:schedule:manage"
+  // ---------- Staff Management & Permissions (STEP 11) ----------
+  | "sensitive:income:view"
+  | "sensitive:notes:view"
+  | "sensitive:family:view"
+  | "staff:view"
+  | "profile:assign"
+  | "verification:assign";
 
-const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
+export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
     "profile:view",
     "profile:edit",
@@ -62,6 +69,12 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:income:view",
     "reports:staff-performance:view",
     "reports:schedule:manage",
+    "sensitive:income:view",
+    "sensitive:notes:view",
+    "sensitive:family:view",
+    "staff:view",
+    "profile:assign",
+    "verification:assign",
   ],
   ADMIN: [
     "profile:view",
@@ -88,6 +101,12 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:view",
     "reports:export",
     "reports:income:view",
+    "sensitive:income:view",
+    "sensitive:notes:view",
+    "sensitive:family:view",
+    "staff:view",
+    "profile:assign",
+    "verification:assign",
   ],
   STAFF: [
     "profile:view",
@@ -105,6 +124,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send", // row-gated: only proposals/profiles assigned to them — see src/lib/communication-access.ts
     "reports:view",
     "reports:export",
+    "sensitive:family:view", // Family Coordination department staff need this; income/notes stay restricted
   ],
   VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view"],
 };
