@@ -25,6 +25,12 @@ interface ScheduledReportRow {
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Table labels this column "(UTC)" — toLocaleString() would silently render
+// in the viewer's local timezone instead, so format in UTC explicitly.
+function formatUtc(iso: string): string {
+  return `${new Date(iso).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
 // Spec §25 — Super Admin only.
 export default function ScheduledReportsPage() {
   const { show } = useToast();
@@ -183,7 +189,7 @@ export default function ScheduledReportsPage() {
                   <th className="pb-2">Name</th>
                   <th className="pb-2">Frequency</th>
                   <th className="pb-2">Next Run (UTC)</th>
-                  <th className="pb-2">Last Run</th>
+                  <th className="pb-2">Last Run (UTC)</th>
                   <th className="pb-2">Recipients</th>
                   <th className="pb-2">Status</th>
                   <th className="pb-2 text-right">Action</th>
@@ -194,8 +200,8 @@ export default function ScheduledReportsPage() {
                   <tr key={r.id} className="border-t border-border">
                     <td className="py-2">{r.name}</td>
                     <td className="py-2 text-muted">{r.frequency}</td>
-                    <td className="py-2 text-muted">{new Date(r.nextRunAt).toLocaleString()}</td>
-                    <td className="py-2 text-muted">{r.lastRunAt ? new Date(r.lastRunAt).toLocaleString() : "Never"}</td>
+                    <td className="py-2 text-muted">{formatUtc(r.nextRunAt)}</td>
+                    <td className="py-2 text-muted">{r.lastRunAt ? formatUtc(r.lastRunAt) : "Never"}</td>
                     <td className="py-2 text-muted">{r.recipientAdminIds.length}</td>
                     <td className="py-2">{r.active ? "Active" : "Disabled"}</td>
                     <td className="py-2 text-right">
