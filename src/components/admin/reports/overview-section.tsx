@@ -20,12 +20,12 @@ const CARDS: { key: keyof OverviewData["kpis"]; label: string; href?: string }[]
   { key: "totalMatches", label: "Total Matches", href: "/admin/matches" },
   { key: "highCompatMatches", label: "High Compatibility", href: "/admin/matches" },
   { key: "totalProposals", label: "Total Proposals", href: "/admin/proposals" },
-  { key: "mutualInterest", label: "Mutual Interest", href: "/admin/proposals?status=BOTH_INTERESTED" },
+  { key: "mutualInterest", label: "Mutual Interest", href: "/admin/proposals?statusGroup=mutual_interest" },
   { key: "meetingsScheduled", label: "Meetings Scheduled", href: "/admin/meetings" },
-  { key: "accepted", label: "Accepted", href: "/admin/proposals?status=ACCEPTED" },
-  { key: "finalized", label: "Finalized Rishtas", href: "/admin/proposals?status=FINALIZED" },
-  { key: "married", label: "Married Outcomes", href: "/admin/proposals?status=MARRIED" },
-  { key: "rejected", label: "Rejected Proposals", href: "/admin/proposals?status=REJECTED" },
+  { key: "accepted", label: "Accepted", href: "/admin/proposals?statusGroup=outcome" },
+  { key: "finalized", label: "Finalized Rishtas", href: "/admin/proposals?statusGroup=outcome" },
+  { key: "married", label: "Married Outcomes", href: "/admin/proposals?statusGroup=outcome" },
+  { key: "rejected", label: "Rejected Proposals", href: "/admin/proposals?statusGroup=outcome" },
 ];
 
 export function OverviewSection({ queryString, enabled }: { queryString: string; enabled: boolean }) {

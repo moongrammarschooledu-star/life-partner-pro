@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Handshake, Filter } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -42,10 +43,14 @@ interface Filters {
 const emptyFilters: Filters = { city: "", minScore: "", createdFrom: "", createdTo: "", responseStatus: "", meetingStatus: "" };
 
 export default function ProposalsPage() {
+  const searchParams = useSearchParams();
+  // Seeds from drill-down links (e.g. Reports & Analytics' funnel/KPI cards
+  // linking to ?statusGroup=mutual_interest, ?city=Lahore) — only read once
+  // on first mount, matching the same pattern /admin/profiles uses.
   const [proposals, setProposals] = useState<ProposalItem[] | null>(null);
-  const [group, setGroup] = useState("all");
+  const [group, setGroup] = useState(() => searchParams.get("statusGroup") ?? "all");
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [filters, setFilters] = useState<Filters>(() => ({ ...emptyFilters, city: searchParams.get("city") ?? "" }));
   const [search, setSearch] = useState("");
 
   function load() {

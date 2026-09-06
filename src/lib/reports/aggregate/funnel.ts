@@ -32,11 +32,11 @@ export async function computeFunnelAnalytics(filters: ReportFilters) {
       { key: "active", label: "Active Profiles", count: active, href: "/admin/profiles?status=ACTIVE" },
       { key: "suitableMatches", label: "Suitable Matches", count: suitableMatches, href: "/admin/matches" },
       { key: "proposals", label: "Proposals", count: totalProposals, href: "/admin/proposals" },
-      { key: "mutualInterest", label: "Mutual Interest", count: sumProposalStatuses(countByStatus, "mutualInterest"), href: "/admin/proposals?status=BOTH_INTERESTED" },
+      { key: "mutualInterest", label: "Mutual Interest", count: sumProposalStatuses(countByStatus, "mutualInterest"), href: "/admin/proposals?statusGroup=mutual_interest" },
       { key: "meetings", label: "Meetings", count: meetingsCount, href: "/admin/meetings" },
-      { key: "accepted", label: "Accepted", count: sumProposalStatuses(countByStatus, "accepted"), href: "/admin/proposals?status=ACCEPTED" },
-      { key: "finalized", label: "Finalized", count: sumProposalStatuses(countByStatus, "finalized"), href: "/admin/proposals?status=FINALIZED" },
-      { key: "married", label: "Married", count: sumProposalStatuses(countByStatus, "married"), href: "/admin/proposals?status=MARRIED" },
+      { key: "accepted", label: "Accepted", count: sumProposalStatuses(countByStatus, "accepted"), href: "/admin/proposals?statusGroup=outcome" },
+      { key: "finalized", label: "Finalized", count: sumProposalStatuses(countByStatus, "finalized"), href: "/admin/proposals?statusGroup=outcome" },
+      { key: "married", label: "Married", count: sumProposalStatuses(countByStatus, "married"), href: "/admin/proposals?statusGroup=outcome" },
     ],
   };
 }

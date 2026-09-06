@@ -12,13 +12,17 @@ import type { ProfileListDto } from "@/lib/serializers";
 
 export default function ProfilesPage() {
   const searchParams = useSearchParams();
-  // Seeds from the nav's "New Profiles" / "Verified Profiles" preset links
-  // (?status=NEW, ?verified=true) — only read once on first mount so the
-  // filter panel remains the source of truth afterwards.
+  // Seeds from preset drill-down links — the nav's "New Profiles" /
+  // "Verified Profiles" (?status=NEW, ?verified=true) and Reports &
+  // Analytics' chart/KPI links (?city=, ?gender=, etc.) — only read once on
+  // first mount so the filter panel remains the source of truth afterwards.
   const [filters, setFilters] = useState<ProfileFilters>(() => ({
     ...emptyFilters,
-    status: searchParams.get("status") ?? "",
-    verified: searchParams.get("verified") ?? "",
+    ...(Object.fromEntries(
+      (Object.keys(emptyFilters) as (keyof ProfileFilters)[])
+        .map((key) => [key, searchParams.get(key) ?? ""])
+        .filter(([, value]) => value)
+    ) as Partial<ProfileFilters>),
   }));
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ProfileListDto[]>([]);
