@@ -24,7 +24,12 @@ export type Permission =
   | "communication:view"
   | "communication:send"
   | "communication:message:view"
-  | "notification:template:manage";
+  | "notification:template:manage"
+  | "reports:view"
+  | "reports:export"
+  | "reports:income:view"
+  | "reports:staff-performance:view"
+  | "reports:schedule:manage";
 
 const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -52,6 +57,11 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     "communication:message:view",
     "notification:template:manage",
+    "reports:view",
+    "reports:export",
+    "reports:income:view",
+    "reports:staff-performance:view",
+    "reports:schedule:manage",
   ],
   ADMIN: [
     "profile:view",
@@ -75,6 +85,9 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     "communication:message:view",
     "notification:template:manage",
+    "reports:view",
+    "reports:export",
+    "reports:income:view",
   ],
   STAFF: [
     "profile:view",
@@ -90,8 +103,10 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "verification:flag:manage", // row-gated the same way
     "communication:view",
     "communication:send", // row-gated: only proposals/profiles assigned to them — see src/lib/communication-access.ts
+    "reports:view",
+    "reports:export",
   ],
-  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view"],
+  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view"],
 };
 
 export function hasPermission(role: AdminRole, permission: Permission): boolean {

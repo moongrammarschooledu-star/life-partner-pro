@@ -1,249 +1,141 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Download } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { BarChart } from "@/components/admin/bar-chart";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { FileSpreadsheet, History, CalendarClock } from "lucide-react";
+import { Tabs } from "@/components/ui/tabs";
+import { buttonClass } from "@/components/ui/button";
+import { ReportFilterBar, EMPTY_REPORT_FILTERS, type ReportFilterState } from "@/components/admin/report-filter-bar";
+import { DateRangePicker } from "@/components/admin/date-range-picker";
+import type { DateRangePreset } from "@/lib/reports/types";
+import { OverviewSection } from "@/components/admin/reports/overview-section";
+import { RegistrationSection } from "@/components/admin/reports/registration-section";
+import { DemographicsSection } from "@/components/admin/reports/demographics-section";
+import { IncomeSection } from "@/components/admin/reports/income-section";
+import { VerificationSection } from "@/components/admin/reports/verification-section";
+import { CompletenessSection } from "@/components/admin/reports/completeness-section";
+import { MatchingSection } from "@/components/admin/reports/matching-section";
+import { ProposalsSection } from "@/components/admin/reports/proposals-section";
+import { MeetingsSection } from "@/components/admin/reports/meetings-section";
+import { OutcomesFunnelSection } from "@/components/admin/reports/outcomes-funnel-section";
+import { StaffPerformanceSection } from "@/components/admin/reports/staff-performance-section";
+import { CommunicationsSection } from "@/components/admin/reports/communications-section";
+import { FollowupsSection } from "@/components/admin/reports/followups-section";
 
-interface DashboardData {
-  byCity: { label: string; count: number }[];
-  byEducation: { label: string; count: number }[];
-  byProfession: { label: string; count: number }[];
-  byAge: { label: string; count: number }[];
-  monthlyRegistrations: { month: string; count: number }[];
-}
+type Tab =
+  | "overview" | "registration" | "demographics" | "income" | "verification" | "completeness"
+  | "matching" | "proposals" | "meetings" | "outcomes" | "staff" | "communications" | "followups";
 
-interface ReportsData {
-  conversionRate: number;
-  totalProfiles: number;
-  finalizedOrMarried: number;
-  adminPerformance: { name: string; notes: number; communications: number }[];
-  incomeDistribution: { label: string; count: number }[];
-  matchingPerformance: {
-    averageMatchScore: number;
-    matchesGenerated: number;
-    matchesReviewed: number;
-    proposalsCreated: number;
-    finalizedMatches: number;
-    matchToProposalRate: number;
-    proposalToMeetingRate: number;
-    meetingToFinalizationRate: number;
-  };
-  proposalPerformance: {
-    proposalsByMonth: { month: string; count: number }[];
-    interestRate: number;
-    mutualInterestRate: number;
-    meetingConversionRate: number;
-    finalizationRate: number;
-    marriageOutcomeRate: number;
-  };
-}
-
-function downloadExport(type: string) {
-  window.open(`/api/admin/reports/export?type=${type}`, "_blank");
-}
+const ALL_TABS: { value: Tab; label: string }[] = [
+  { value: "overview", label: "Overview" },
+  { value: "registration", label: "Registration" },
+  { value: "demographics", label: "Demographics" },
+  { value: "income", label: "Income" },
+  { value: "verification", label: "Verification" },
+  { value: "completeness", label: "Completeness" },
+  { value: "matching", label: "Matching" },
+  { value: "proposals", label: "Proposals" },
+  { value: "meetings", label: "Meetings" },
+  { value: "outcomes", label: "Outcomes & Funnel" },
+  { value: "staff", label: "Staff Performance" },
+  { value: "communications", label: "Communications" },
+  { value: "followups", label: "Follow-Ups" },
+];
 
 export default function ReportsPage() {
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [reports, setReports] = useState<ReportsData | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("overview");
+  const [visited, setVisited] = useState<Set<Tab>>(new Set(["overview"]));
+  const [filters, setFilters] = useState<ReportFilterState>(EMPTY_REPORT_FILTERS);
+  const [preset, setPreset] = useState<DateRangePreset>("30d");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [admins, setAdmins] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
-    fetch("/api/admin/dashboard").then((r) => r.json()).then(setDashboard);
-    fetch("/api/admin/reports").then((r) => r.json()).then(setReports);
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => setRole(s?.user?.role ?? null))
+      .catch(() => setRole(null));
+    fetch("/api/admin/reports/admins")
+      .then((r) => r.json())
+      .then((j) => setAdmins(j.items ?? []))
+      .catch(() => {});
   }, []);
 
-  if (!dashboard || !reports) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted" />
-      </div>
-    );
+  function selectTab(next: string) {
+    const t = next as Tab;
+    setTab(t);
+    setVisited((prev) => new Set(prev).add(t));
   }
+
+  function handleDateChange(nextPreset: DateRangePreset, from: string, to: string) {
+    setPreset(nextPreset);
+    setCustomFrom(from);
+    setCustomTo(to);
+  }
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("preset", preset);
+    if (preset === "custom") {
+      if (customFrom) params.set("from", customFrom);
+      if (customTo) params.set("to", customTo);
+    }
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v) params.set(k, v);
+    });
+    return params.toString();
+  }, [filters, preset, customFrom, customTo]);
+
+  const visibleTabs = ALL_TABS.filter((t) => {
+    if (t.value === "income") return role === "SUPER_ADMIN" || role === "ADMIN";
+    if (t.value === "staff") return role === "SUPER_ADMIN";
+    return true;
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl font-semibold">Reports</h1>
-          <p className="text-sm text-muted">Registration, matching, and admin activity reports.</p>
+          <h1 className="font-heading text-2xl font-semibold">Reports & Analytics</h1>
+          <p className="text-sm text-muted">Real-time, filterable analytics across every part of the platform.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => downloadExport("profiles")}>
-            <Download className="h-4 w-4" /> Export Profiles (CSV)
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadExport("proposals")}>
-            <Download className="h-4 w-4" /> Export Proposals (CSV)
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent>
-            <p className="text-3xl font-semibold text-primary">{reports.totalProfiles}</p>
-            <p className="text-sm text-muted">Total Registrations</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <p className="text-3xl font-semibold text-success">{reports.finalizedOrMarried}</p>
-            <p className="text-sm text-muted">Finalized Rishtas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <p className="text-3xl font-semibold text-accent">{reports.conversionRate}%</p>
-            <p className="text-sm text-muted">Conversion Rate</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Registrations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={dashboard.monthlyRegistrations.map((m) => ({ label: m.month, count: m.count }))} title="" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>City Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={dashboard.byCity} title="" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Age Group Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={dashboard.byAge} title="" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Income Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={reports.incomeDistribution} title="" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Education Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={dashboard.byEducation} title="" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Profession Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={dashboard.byProfession} title="" />
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Matching Performance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-xs text-muted">
-            A compatibility score is a suggestion for admin review — it does not predict marriage success. These are activity and
-            conversion metrics only.
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: "Avg Match Score", value: `${reports.matchingPerformance.averageMatchScore}%` },
-              { label: "Matches Generated", value: reports.matchingPerformance.matchesGenerated },
-              { label: "Matches Reviewed", value: reports.matchingPerformance.matchesReviewed },
-              { label: "Proposals Created", value: reports.matchingPerformance.proposalsCreated },
-              { label: "Finalized Matches", value: reports.matchingPerformance.finalizedMatches },
-              { label: "Match → Proposal Rate", value: `${reports.matchingPerformance.matchToProposalRate}%` },
-              { label: "Proposal → Meeting Rate", value: `${reports.matchingPerformance.proposalToMeetingRate}%` },
-              { label: "Meeting → Finalization Rate", value: `${reports.matchingPerformance.meetingToFinalizationRate}%` },
-            ].map((m) => (
-              <div key={m.label} className="rounded-lg border border-border p-3 text-center">
-                <p className="text-xl font-semibold">{m.value}</p>
-                <p className="mt-1 text-xs text-muted">{m.label}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Proposals by Month</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BarChart data={reports.proposalPerformance.proposalsByMonth.map((m) => ({ label: m.month, count: m.count }))} title="" />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Proposal Outcomes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-xs text-muted">
-            Rates reflect proposals that ever reached each stage — not a prediction of future outcomes for any single proposal.
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {[
-              { label: "Interest Rate", value: `${reports.proposalPerformance.interestRate}%` },
-              { label: "Mutual Interest Rate", value: `${reports.proposalPerformance.mutualInterestRate}%` },
-              { label: "Meeting Conversion", value: `${reports.proposalPerformance.meetingConversionRate}%` },
-              { label: "Finalization Rate", value: `${reports.proposalPerformance.finalizationRate}%` },
-              { label: "Marriage Outcomes", value: `${reports.proposalPerformance.marriageOutcomeRate}%` },
-            ].map((m) => (
-              <div key={m.label} className="rounded-lg border border-border p-3 text-center">
-                <p className="text-xl font-semibold">{m.value}</p>
-                <p className="mt-1 text-xs text-muted">{m.label}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Admin Performance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {reports.adminPerformance.length === 0 ? (
-            <p className="text-sm text-muted">No admin activity logged yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-                    <th className="py-2">Admin</th>
-                    <th className="py-2">Notes Added</th>
-                    <th className="py-2">Communications Logged</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reports.adminPerformance.map((p) => (
-                    <tr key={p.name} className="border-b border-border last:border-0">
-                      <td className="py-2 font-medium">{p.name}</td>
-                      <td className="py-2">{p.notes}</td>
-                      <td className="py-2">{p.communications}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/reports/custom" className={buttonClass({ variant: "outline", size: "sm" })}>
+            <FileSpreadsheet className="h-4 w-4" /> Custom Report
+          </Link>
+          <Link href="/admin/reports/history" className={buttonClass({ variant: "outline", size: "sm" })}>
+            <History className="h-4 w-4" /> History
+          </Link>
+          {role === "SUPER_ADMIN" && (
+            <Link href="/admin/reports/scheduled" className={buttonClass({ variant: "outline", size: "sm" })}>
+              <CalendarClock className="h-4 w-4" /> Scheduled Reports
+            </Link>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <DateRangePicker preset={preset} from={customFrom} to={customTo} onChange={handleDateChange} />
+      <ReportFilterBar filters={filters} onChange={setFilters} onReset={() => setFilters(EMPTY_REPORT_FILTERS)} adminOptions={admins} />
+
+      <Tabs tabs={visibleTabs} value={tab} onChange={selectTab} />
+
+      <div>
+        {tab === "overview" && <OverviewSection queryString={queryString} enabled={visited.has("overview")} />}
+        {tab === "registration" && <RegistrationSection queryString={queryString} enabled={visited.has("registration")} />}
+        {tab === "demographics" && <DemographicsSection queryString={queryString} enabled={visited.has("demographics")} />}
+        {tab === "income" && <IncomeSection queryString={queryString} enabled={visited.has("income")} />}
+        {tab === "verification" && <VerificationSection queryString={queryString} enabled={visited.has("verification")} />}
+        {tab === "completeness" && <CompletenessSection queryString={queryString} enabled={visited.has("completeness")} />}
+        {tab === "matching" && <MatchingSection queryString={queryString} enabled={visited.has("matching")} />}
+        {tab === "proposals" && <ProposalsSection queryString={queryString} enabled={visited.has("proposals")} />}
+        {tab === "meetings" && <MeetingsSection queryString={queryString} enabled={visited.has("meetings")} />}
+        {tab === "outcomes" && <OutcomesFunnelSection queryString={queryString} enabled={visited.has("outcomes")} />}
+        {tab === "staff" && <StaffPerformanceSection queryString={queryString} enabled={visited.has("staff")} />}
+        {tab === "communications" && <CommunicationsSection queryString={queryString} enabled={visited.has("communications")} />}
+        {tab === "followups" && <FollowupsSection queryString={queryString} enabled={visited.has("followups")} />}
+      </div>
     </div>
   );
 }

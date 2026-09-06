@@ -221,6 +221,35 @@ No third-party API keys are required or referenced anywhere in the codebase (see
   identical code path. The Communication Center (`/admin/communication-center`) provides cross-profile search,
   delivery analytics, a capped/controlled Retry action for `FAILED` sends, and a Test Mode that requires a
   manually-typed destination so a test send can never reach a real applicant.
+- **Advanced Admin Reports & Analytics (STEP 10):** the existing `/admin/reports` page and its two API routes
+  (previously all-time, filter-less, CSV-only) were rebuilt into a fully filterable analytics surface — 11 filters
+  (city/area/gender/age/profession/education/marital status/profile status/verification status/staff/proposal
+  status) plus 7 date-range presets, all URL-query-string-driven, feeding 13 lazily-loaded section endpoints under
+  `/api/admin/reports/*` that share one `parseReportFilters()`/`buildXWhere()` layer
+  (`src/lib/reports/where-builders.ts`) so every number on the page reflects the same active filter set. KPI cards
+  show a genuine prior-period comparison (`src/lib/reports/kpi.ts`), never a fabricated percentage — every rate
+  calculation across all 13 sections goes through one `safeRate()` gate (`MIN_SAMPLE_SIZE = 5`) that returns `null`
+  ("Not enough data available for this report") rather than a misleading 0%/100% on a thin sample, extending the
+  main dashboard's existing `trendPercent()` null-safety convention. A new generic `TrendChart` component
+  (multi-series, e.g. new-vs-verified-vs-active-vs-rejected) sits alongside the existing `BarChart` (now with an
+  optional click-to-drill-down handler) and a new `FunnelChart` for the 10-stage success funnel — all three remain
+  hand-rolled div/SVG components, matching this codebase's zero-charting-library convention;
+  `registration-trend-chart.tsx`'s hardcoded male/female shape (a hard Dashboard dependency) was left untouched. The
+  Custom Report Builder (`/admin/reports/custom`) and every export route share one whitelisted `REPORT_DEFINITIONS`
+  registry (`src/lib/reports/columns.ts`) — never a free-form query builder — so a column flagged `sensitive`
+  (mobile/WhatsApp/email/income/family background/private notes) is excluded at the query layer itself for
+  STAFF/VIEWER, identically whether the data is viewed on screen or exported. CSV export keeps the pre-existing
+  hand-rolled string-builder; Excel (`exceljs`) and PDF (`pdf-lib`, chosen over `pdfkit` specifically to avoid a
+  known font-loading break under Next.js serverless bundling) are new, minimal dependencies. Every export writes a
+  `ReportExecution` row (Report History, regenerable) and a `REPORT_EXPORTED` audit entry, and is rate-limited per
+  admin per hour through the existing `rateLimit()` helper. Scheduled Reports (`ScheduledReport`, Super-Admin-only)
+  piggyback on the one existing once-daily Vercel Cron tick rather than a second cron job — this account's Hobby
+  plan hard-rejects more than one cron entry, let alone a more-frequent one — with a manual "Run Due Reports Now"
+  admin button as the actually-tested delivery path, matching STEP 9's own cron-limitation precedent exactly.
+  Income and Staff Performance are gated by two new dedicated permissions (`reports:income:view`,
+  `reports:staff-performance:view`, the latter Super-Admin-only per spec) rather than the coarse `audit:view` the
+  old Reports route used; the new `reports:view` permission is granted to every role, closing a pre-existing gap
+  where STAFF could see the "Reports" nav link but got a 403 from the underlying route.
 
 ## Deferred / extension points
 
@@ -229,7 +258,7 @@ structured so they can be added without restructuring anything else:
 
 - **Two-factor admin authentication** — `AdminUser.twoFactorEnabled` exists in the schema and a toggle appears in
   Settings, but it is not enforced at login.
-- **CSV / Excel / PDF export** — no export logic is wired up.
+- **CSV / Excel / PDF export** — implemented as of STEP 10 (`/admin/reports/custom` and every report export route).
 - **Real email / SMS / WhatsApp delivery** — `src/lib/notifications.ts` defines a `NotificationService` interface
   with a console-only implementation. Swap in a real provider by implementing that interface; nothing else in the
   app should ever import a provider SDK directly.
@@ -277,6 +306,21 @@ structured so they can be added without restructuring anything else:
   photos for now.
 - **Global search extended to proposal codes** — would need a discriminated result type in the topbar search
   component; the dedicated Proposals list page already has its own code/name search and status/date/score filters.
+- **True background/async job processing for report exports** — at the current data scale (dozens of profiles,
+  single-digit admins) synchronous generation within the request/response cycle is fast enough; a "Report is being
+  prepared…" client-side loading state satisfies the UX intent without inventing queue infrastructure this codebase
+  doesn't otherwise have.
+- **Materialized views / DB-side reporting views** — skipped at this scale; the `src/lib/reports/aggregate/*.ts`
+  functions are the optimization unit for now, not the schema.
+- **Intra-day scheduled-report cadence** — this Vercel account's Hobby plan caps cron jobs at once-daily; Daily/
+  Weekly/Monthly (the actual spec ask) all fit within that single tick, but nothing finer-grained is possible
+  without a paid plan.
+- **Per-proposal admin "average response time"** — no clean created→acted timestamp pair exists on `Proposal` in the
+  current schema; Staff Performance measures follow-up responsiveness (`FollowUp.createdAt` → `completedAt`)
+  instead, documented as such rather than approximated from a weaker proxy.
+- **Match/proposal counts cross-tabulated per education/profession bucket** — the Demographics section reports
+  count + verified-count per bucket; a full match/proposal cross-tab per bucket would need an expensive per-bucket
+  join for marginal reporting value at this data scale.
 - **DB/permission-dependent proposal test scenarios** (staff row-level access, applicant response ownership checks,
   legacy-status handling) are verified live rather than as executable Vitest tests, for the same reason as the
   matching engine above. `src/lib/proposal-workflow.ts`'s pure status-transition logic does have real unit tests.

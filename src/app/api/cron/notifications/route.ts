@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runScheduledNotifications } from "@/lib/notifications/scheduled";
+import { runDueScheduledReports } from "@/lib/reports/scheduler";
 
 // Vercel Cron target (see vercel.json). This account is on the Hobby plan,
 // which rejects any cron expression running more than once per day — the
@@ -10,6 +11,10 @@ import { runScheduledNotifications } from "@/lib/notifications/scheduled";
 // later requires no code change. The manual "Run Now" admin route
 // (/api/admin/cron/notifications/run) calls the same underlying function
 // and is the actually-reliable, tested path for live verification.
+//
+// STEP 10's Scheduled Reports (spec §25) also piggyback on this same
+// once-daily tick rather than a second cron entry — this Hobby-plan account
+// cannot have more than one cron job at all, let alone a more-frequent one.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (secret) {
@@ -19,6 +24,6 @@ export async function GET(req: Request) {
     }
   }
 
-  const result = await runScheduledNotifications();
-  return NextResponse.json(result);
+  const [notifications, reports] = await Promise.all([runScheduledNotifications(), runDueScheduledReports()]);
+  return NextResponse.json({ notifications, reports });
 }

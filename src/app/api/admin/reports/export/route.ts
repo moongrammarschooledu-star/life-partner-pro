@@ -1,83 +1,79 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
-import { calculateAge, formatEnumLabel } from "@/lib/utils";
+import { parseReportFilters } from "@/lib/reports/where-builders";
+import { runCustomReport } from "@/lib/reports/custom-query";
+import { REPORT_DEFINITIONS, type DataSource } from "@/lib/reports/columns";
+import { buildCsv } from "@/lib/reports/export/csv";
+import { buildExcelBuffer } from "@/lib/reports/export/excel";
+import { buildPdfBuffer } from "@/lib/reports/export/pdf";
+import { checkExportRateLimit } from "@/lib/reports/export-rate-limit";
+import { prisma } from "@/lib/prisma";
+import { writeAudit } from "@/lib/audit";
 
-// CSV only for now — Excel/PDF need extra dependencies and are deferred
-// (see README "Deferred / extension points"). Never includes contact info,
-// consistent with the rest of the admin API surface.
-function toCsv(rows: (string | number)[][]): string {
-  return rows
-    .map((row) =>
-      row
-        .map((cell) => {
-          const str = String(cell ?? "");
-          return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-        })
-        .join(",")
-    )
-    .join("\n");
-}
+const CONTENT_TYPES: Record<string, string> = {
+  CSV: "text/csv",
+  EXCEL: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  PDF: "application/pdf",
+};
 
-export async function GET(req: Request) {
+// Spec §23 — CSV/Excel/PDF export, role-permission-respecting. Rebuilt from
+// the previous GET-only, filter-less, CSV-only version. Reuses
+// runCustomReport() so the exported file is byte-identical in redaction to
+// whatever the Custom Report Builder shows on screen for the same inputs.
+export async function POST(req: Request) {
   try {
-    await requireAdmin("audit:view");
-    const { searchParams } = new URL(req.url);
-    const type = searchParams.get("type") ?? "profiles";
-
-    let csv: string;
-    let filename: string;
-
-    if (type === "profiles") {
-      const profiles = await prisma.profile.findMany({
-        where: { softDeleted: false },
-        include: { education: true, profession: true },
-        orderBy: { createdAt: "desc" },
-      });
-      csv = toCsv([
-        ["Profile ID", "Name", "Gender", "Age", "City", "Country", "Education", "Profession", "Status", "Verified", "Created"],
-        ...profiles.map((p) => [
-          p.profileCode,
-          p.fullName,
-          formatEnumLabel(p.gender),
-          calculateAge(p.dateOfBirth),
-          p.city,
-          p.country,
-          p.education?.level ?? "",
-          p.profession?.profession ?? "",
-          formatEnumLabel(p.status),
-          p.verified ? "Yes" : "No",
-          p.createdAt.toISOString().slice(0, 10),
-        ]),
-      ]);
-      filename = "profiles.csv";
-    } else if (type === "proposals") {
-      const proposals = await prisma.proposal.findMany({
-        include: {
-          profileA: { select: { profileCode: true, fullName: true } },
-          profileB: { select: { profileCode: true, fullName: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-      csv = toCsv([
-        ["Proposal ID", "Profile A", "Profile B", "Status", "Created"],
-        ...proposals.map((p) => [
-          p.id,
-          `${p.profileA.fullName} (${p.profileA.profileCode})`,
-          `${p.profileB.fullName} (${p.profileB.profileCode})`,
-          formatEnumLabel(p.status),
-          p.createdAt.toISOString().slice(0, 10),
-        ]),
-      ]);
-      filename = "proposals.csv";
-    } else {
-      throw new ApiError(400, "Unknown export type");
+    const admin = await requireAdmin("reports:export");
+    if (!checkExportRateLimit(admin.id)) {
+      throw new ApiError(429, "Export rate limit reached. Please try again later.");
     }
 
-    return new NextResponse(csv, {
+    const body = await req.json();
+    const { dataSource, columns, filters: rawFilters, format, groupBy, sortBy } = body as {
+      dataSource: DataSource;
+      columns?: string[];
+      filters?: Record<string, string>;
+      format: "CSV" | "EXCEL" | "PDF";
+      groupBy?: string;
+      sortBy?: string;
+    };
+
+    if (!dataSource || !REPORT_DEFINITIONS[dataSource]) throw new ApiError(400, "A valid dataSource is required");
+    if (!format || !CONTENT_TYPES[format]) throw new ApiError(400, "A valid format is required");
+
+    const filters = parseReportFilters(new URLSearchParams(rawFilters ?? {}));
+    const result = await runCustomReport(dataSource, filters, columns ?? [], admin.role, groupBy, sortBy);
+
+    const columnDefs = result.columns as { key: string; label: string }[];
+    let fileBuffer: Buffer | string;
+    if (format === "CSV") {
+      fileBuffer = buildCsv(columnDefs.map((c) => ({ ...c, sensitive: false })), result.rows);
+    } else if (format === "EXCEL") {
+      fileBuffer = await buildExcelBuffer(columnDefs.map((c) => ({ ...c, sensitive: false })), result.rows, dataSource);
+    } else {
+      fileBuffer = await buildPdfBuffer(columnDefs.map((c) => ({ ...c, sensitive: false })), result.rows, `${dataSource} Report`);
+    }
+
+    await prisma.reportExecution.create({
+      data: {
+        name: `${dataSource} export (${format})`,
+        reportKey: "custom",
+        dataSource,
+        filters: rawFilters ?? {},
+        columns: result.columns.map((c) => c.key),
+        groupBy: groupBy || null,
+        sortBy: sortBy || null,
+        exportType: format,
+        recordCount: result.recordCount,
+        createdById: admin.id,
+      },
+    });
+    await writeAudit({ action: "REPORT_EXPORTED", adminId: admin.id, meta: { dataSource, format, recordCount: result.recordCount } });
+
+    const ext = format === "CSV" ? "csv" : format === "EXCEL" ? "xlsx" : "pdf";
+    return new NextResponse(fileBuffer as never, {
       headers: {
-        "Content-Type": "text/csv",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Type": CONTENT_TYPES[format],
+        "Content-Disposition": `attachment; filename="${dataSource.toLowerCase()}-report.${ext}"`,
       },
     });
   } catch (error) {

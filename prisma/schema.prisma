@@ -343,6 +343,14 @@ enum AuditAction {
   WEBHOOK_SIMULATED
   NOTIFICATION_TEST_SENT
   NOTIFICATION_RETRY_TRIGGERED
+
+  // ---------- Reports & Analytics (STEP 10) ----------
+  REPORT_GENERATED
+  REPORT_EXPORTED
+  REPORT_REGENERATED
+  SCHEDULED_REPORT_CREATED
+  SCHEDULED_REPORT_UPDATED
+  SCHEDULED_REPORT_RUN
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -489,6 +497,9 @@ model AdminUser {
   notificationsReceived      Notification[]         @relation("NotificationRecipientAdmin")
   communicationLogsSent      CommunicationLog[]
   notificationTemplatesEdited NotificationTemplate[]
+
+  reportExecutions  ReportExecution[]
+  scheduledReports  ScheduledReport[]
 }
 
 // ---------- Core profile ----------
@@ -1258,6 +1269,12 @@ model AppSettings {
   quietHoursStart              Int? // hour of day, 0-23 — applied only to cron-triggered non-essential reminders
   quietHoursEnd                Int?
 
+  // Reports & Analytics (STEP 10) — admin-configurable bucket definitions;
+  // null means "use the built-in defaults" (see src/lib/reports/buckets.ts).
+  ageRangeBuckets      Json?
+  incomeRangeBuckets   Json?
+  professionCategories Json?
+
   updatedAt             DateTime @updatedAt
 }
 
@@ -1413,6 +1430,70 @@ model WebhookEvent {
   payload           Json?
   processedAt       DateTime?
   createdAt         DateTime  @default(now())
+}
+
+// ---------- Reports & Analytics (STEP 10) ----------
+
+enum ReportExportType {
+  CSV
+  EXCEL
+  PDF
+}
+
+enum ReportFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+// One row per generated/exported report (spec §24 "Report History"). Never
+// stores the actual exported file bytes — only enough metadata to audit and
+// regenerate (spec §24 "do not store unnecessary sensitive copies").
+model ReportExecution {
+  id          String            @id @default(cuid())
+  name        String
+  reportKey   String // "overview" | "registration" | ... | "custom"
+  dataSource  String? // set only when reportKey="custom": Profiles|Verification|Matches|Proposals|Meetings|Communications|FollowUps
+  filters     Json
+  columns     Json?
+  groupBy     String?
+  sortBy      String?
+  exportType  ReportExportType?
+  recordCount Int
+  createdById String
+  createdBy   AdminUser         @relation(fields: [createdById], references: [id])
+  createdAt   DateTime          @default(now())
+
+  @@index([createdById])
+  @@index([createdAt])
+  @@index([reportKey])
+}
+
+// Super-Admin-configured recurring report delivery (spec §25). Evaluated by
+// the existing once-daily notifications cron tick (this Vercel account's
+// Hobby plan rejects any more-frequent cron job) — see
+// src/lib/reports/scheduler.ts.
+model ScheduledReport {
+  id                String           @id @default(cuid())
+  name              String
+  reportKey         String
+  dataSource        String?
+  filters           Json
+  frequency         ReportFrequency
+  dayOfWeek         Int? // 0-6, WEEKLY only
+  dayOfMonth        Int? // 1-28, MONTHLY only (capped to dodge month-length edge cases)
+  hourUtc           Int
+  exportType        ReportExportType @default(CSV)
+  recipientAdminIds Json // string[] of AdminUser ids
+  lastRunAt         DateTime?
+  nextRunAt         DateTime
+  active            Boolean          @default(true)
+  createdById       String
+  createdBy         AdminUser        @relation(fields: [createdById], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([active, nextRunAt])
 }
 
 // ---------- Support ----------
