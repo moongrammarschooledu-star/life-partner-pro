@@ -10,8 +10,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
+    // Always defaults to light regardless of the visiting device's OS/browser
+    // dark-mode setting — the site previously auto-switched to dark based on
+    // `prefers-color-scheme`, which is why it looked dark/black on some
+    // desktops, laptops, and phones with system dark mode on. Dark mode is
+    // now opt-in only, via the in-app toggle (stored in localStorage).
     const stored = localStorage.getItem("lpp-theme") as Theme | null;
-    const preferred = stored ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const preferred = stored ?? "light";
     setTheme(preferred);
     document.documentElement.classList.toggle("dark", preferred === "dark");
   }, []);
