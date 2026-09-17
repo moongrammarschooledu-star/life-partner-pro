@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-
-  const profile = await prisma.profile.findUnique({ where: { id: profileId }, select: { softDeleted: true } });
-  if (!profile || profile.softDeleted) return NextResponse.json({ error: "Not found." }, { status: 401 });
 
   const [notifications, unreadCount] = await Promise.all([
     prisma.notification.findMany({

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { CHECKLIST_CATALOG } from "@/lib/verification/checklist-catalog";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
 
@@ -9,8 +8,7 @@ import { computeProfileCompleteness } from "@/lib/verification/completeness";
 // %, and the requirement checklist as plain ✓/⏳/⚠ — never internal
 // verification-confidence scores, admin notes, or investigation details.
 export async function GET() {
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const profile = await prisma.profile.findUnique({

@@ -261,4 +261,32 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Profile Restriction Applied", body: "A restriction has been applied to a profile." },
     UR: { title: "پروفائل پر پابندی لاگو", body: "ایک پروفائل پر پابندی لاگو کی گئی ہے۔" },
   },
+
+  // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+  // Deliberately generic — spec §34/§35 — never any account, deletion-mode,
+  // or export-content detail in an externally-sent preview.
+  ACCOUNT_DEACTIVATED: {
+    EN: { title: "Account Deactivated", subject: "Your Account Has Been Deactivated", body: "Your Life Partner Pro account has been deactivated. Please log in to review your account." },
+    UR: { title: "اکاؤنٹ غیر فعال", subject: "آپ کا اکاؤنٹ غیر فعال کر دیا گیا ہے", body: "آپ کا لائف پارٹنر پرو اکاؤنٹ غیر فعال کر دیا گیا ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  ACCOUNT_REACTIVATED: {
+    EN: { title: "Account Reactivated", subject: "Your Account Has Been Reactivated", body: "Your Life Partner Pro account has been reactivated. Please log in to review your account." },
+    UR: { title: "اکاؤنٹ دوبارہ فعال", subject: "آپ کا اکاؤنٹ دوبارہ فعال کر دیا گیا ہے", body: "آپ کا لائف پارٹنر پرو اکاؤنٹ دوبارہ فعال کر دیا گیا ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  DELETION_REQUEST_RECEIVED: {
+    EN: { title: "Deletion Request Received", subject: "We Received Your Deletion Request", body: "Your Life Partner Pro account has a new update. Please log in to review your account." },
+    UR: { title: "حذف کی درخواست موصول", subject: "آپ کی حذف کی درخواست موصول ہو گئی", body: "آپ کے لائف پارٹنر پرو اکاؤنٹ میں ایک نئی اپ ڈیٹ ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  DELETION_COMPLETED: {
+    EN: { title: "Deletion Request Completed", subject: "Your Deletion Request Has Been Completed", body: "Your account deletion request has been completed." },
+    UR: { title: "حذف کی درخواست مکمل", subject: "آپ کی حذف کی درخواست مکمل ہو گئی", body: "آپ کے اکاؤنٹ کو حذف کرنے کی درخواست مکمل ہو گئی ہے۔" },
+  },
+  DATA_EXPORT_READY: {
+    EN: { title: "Your Data Export Is Ready", subject: "Your Data Export Is Ready", body: "Your requested data export is ready to download. Please log in to review your account." },
+    UR: { title: "آپ کا ڈیٹا ایکسپورٹ تیار ہے", subject: "آپ کا ڈیٹا ایکسپورٹ تیار ہے", body: "آپ کا درخواست کردہ ڈیٹا ایکسپورٹ ڈاؤن لوڈ کے لیے تیار ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  PRIVACY_REQUEST_UPDATED: {
+    EN: { title: "Privacy Request Updated", subject: "Your Privacy Request Has Been Updated", body: "Your Life Partner Pro account has a new update. Please log in to review your account." },
+    UR: { title: "پرائیویسی درخواست میں تبدیلی", subject: "آپ کی پرائیویسی درخواست میں تبدیلی ہوئی ہے", body: "آپ کے لائف پارٹنر پرو اکاؤنٹ میں ایک نئی اپ ڈیٹ ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
 };

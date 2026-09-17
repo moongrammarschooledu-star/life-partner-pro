@@ -69,7 +69,29 @@ export type Permission =
   | "sensitive:case:notes:view"
   | "sensitive:case:restricted-profile:view"
   | "profile:restrict"
-  | "profile:suspend";
+  | "profile:suspend"
+  // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+  | "privacy:view"
+  | "privacy:manage"
+  | "privacy:consent:view"
+  | "privacy:consent:manage"
+  | "privacy:requests:view"
+  | "privacy:requests:manage"
+  | "privacy:export:view"
+  | "privacy:export:create"
+  | "privacy:delete:manage"
+  | "privacy:retention:view"
+  | "privacy:retention:manage"
+  | "privacy:hold:view"
+  | "privacy:hold:manage"
+  | "privacy:incidents:view"
+  | "privacy:incidents:manage"
+  | "privacy:break-glass:manage"
+  | "contact:reveal:override"
+  | "sensitive:photos:view"
+  | "privacy_incidents:view"
+  | "privacy_incidents:review"
+  | "privacy_incidents:resolve";
 
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -140,6 +162,27 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "sensitive:case:restricted-profile:view",
     "profile:restrict",
     "profile:suspend",
+    "privacy:view",
+    "privacy:manage",
+    "privacy:consent:view",
+    "privacy:consent:manage",
+    "privacy:requests:view",
+    "privacy:requests:manage",
+    "privacy:export:view",
+    "privacy:export:create",
+    "privacy:delete:manage",
+    "privacy:retention:view",
+    "privacy:retention:manage",
+    "privacy:hold:view",
+    "privacy:hold:manage",
+    "privacy:incidents:view",
+    "privacy:incidents:manage",
+    "privacy:break-glass:manage",
+    "contact:reveal:override",
+    "sensitive:photos:view",
+    "privacy_incidents:view",
+    "privacy_incidents:review",
+    "privacy_incidents:resolve",
   ],
   ADMIN: [
     "profile:view",
@@ -204,6 +247,27 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "profile:suspend",
     // ADMIN deliberately lacks cases:merge and cases:staff-conduct:view —
     // SUPER_ADMIN only, per the STEP 12 plan's conflict-of-interest design.
+    "privacy:view",
+    "privacy:manage",
+    "privacy:consent:view",
+    "privacy:consent:manage",
+    "privacy:requests:view",
+    "privacy:requests:manage",
+    "privacy:export:view",
+    "privacy:export:create",
+    "privacy:retention:view",
+    "privacy:retention:manage",
+    "privacy:hold:view",
+    "privacy:hold:manage",
+    "privacy:incidents:view",
+    "privacy:incidents:manage",
+    "contact:reveal:override",
+    "sensitive:photos:view",
+    "privacy_incidents:view",
+    "privacy_incidents:review",
+    "privacy_incidents:resolve",
+    // ADMIN deliberately lacks privacy:delete:manage and
+    // privacy:break-glass:manage — SUPER_ADMIN only, per STEP 13's plan.
   ],
   STAFF: [
     "profile:view",
@@ -232,6 +296,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "complaints:view", // row-gated
     "safety_cases:view", // row-gated
     "sensitive:case:evidence:view", // still row-gated by case assignment — this only lifts the flat permission floor
+    "privacy:consent:view", // row-gated: only profiles they're assigned to
+    "privacy:requests:view", // row-gated the same way
+    "privacy_incidents:view", // row-gated: only incidents assigned to them — see src/lib/case-access.ts
   ],
   VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view"],
 };

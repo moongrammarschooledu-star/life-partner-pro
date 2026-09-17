@@ -103,6 +103,16 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   CASE_CLOSED: ESSENTIAL,
   CASE_REOPENED: ESSENTIAL,
   ADMIN_PROFILE_RESTRICTED: ESSENTIAL,
+
+  // Data Privacy, Consent, Account Management & Retention (STEP 13) —
+  // essential. Account/deletion/export notices are account-security-adjacent,
+  // matching ACCOUNT_SUSPENDED's treatment above.
+  ACCOUNT_DEACTIVATED: ESSENTIAL,
+  ACCOUNT_REACTIVATED: ESSENTIAL,
+  DELETION_REQUEST_RECEIVED: ESSENTIAL,
+  DELETION_COMPLETED: ESSENTIAL,
+  DATA_EXPORT_READY: ESSENTIAL,
+  PRIVACY_REQUEST_UPDATED: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

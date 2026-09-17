@@ -39,6 +39,7 @@ const RESTRICTION_TYPES = ["CANNOT_MATCH", "CANNOT_RECEIVE_PROPOSAL", "CANNOT_CO
 export function RestrictionsTab({ profileId }: { profileId: string }) {
   const { show } = useToast();
   const [restrictions, setRestrictions] = useState<Restriction[] | null>(null);
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [cases, setCases] = useState<RelatedCase[] | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
   const [restrictionType, setRestrictionType] = useState(RESTRICTION_TYPES[0]);
@@ -48,7 +49,7 @@ export function RestrictionsTab({ profileId }: { profileId: string }) {
   const [busy, setBusy] = useState(false);
 
   function load() {
-    fetch(`/api/admin/profiles/${profileId}/restrictions`).then((r) => r.json()).then((j) => setRestrictions(j.items ?? []));
+    fetch(`/api/admin/profiles/${profileId}/restrictions`).then((r) => r.json()).then((j) => { setRestrictions(j.items ?? []); setAccountStatus(j.accountStatus ?? "ACTIVE"); });
     fetch(`/api/admin/cases?relatedToProfileId=${profileId}`).then((r) => r.json()).then((j) => setCases(j.items ?? [])).catch(() => setCases([]));
   }
 
@@ -105,6 +106,11 @@ export function RestrictionsTab({ profileId }: { profileId: string }) {
 
   return (
     <div className="space-y-4">
+      {accountStatus && accountStatus !== "ACTIVE" && (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
+          Account status: <Badge variant="warning">{formatEnumLabel(accountStatus)}</Badge>
+        </div>
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2"><ShieldOff className="h-4 w-4" /> Restrictions</CardTitle>

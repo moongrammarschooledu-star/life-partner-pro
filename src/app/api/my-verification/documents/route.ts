@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { saveVerificationDocument, DocumentUploadError } from "@/lib/verification/document-storage";
 import { writeAudit } from "@/lib/audit";
@@ -13,8 +12,7 @@ const VALID_TYPES: DocumentType[] = ["IDENTITY", "EDUCATION", "EMPLOYMENT", "OTH
 // ever *reviews*, never uploads on a user's behalf). Gated by the same
 // AppSettings toggle the admin Settings page controls.
 export async function GET() {
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const documents = await prisma.verificationDocument.findMany({
@@ -31,8 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many uploads. Please try again in a minute." }, { status: 429 });
   }
 
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });

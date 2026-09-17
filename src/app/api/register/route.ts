@@ -11,7 +11,8 @@ import { parseDateOnly } from "@/lib/utils";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { notifyProfileRegistered, notifyProfileSubmitted } from "@/lib/notifications/events";
-import { signProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { signProfileToken, signSessionId, APPLICANT_COOKIE, APPLICANT_SESSION_ID_COOKIE } from "@/lib/applicant-session";
+import { createProfileSession } from "@/lib/profile-session";
 
 const CONSENT_VERSION = "1.0";
 const GENERIC_ERROR = "Your profile could not be submitted. Please check the highlighted fields.";
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
       );
     }
 
-    let photoData: { storageKey: string; mimeType: string; sizeBytes: number } | null = null;
+    let photoData: { storageKey: string; mimeType: string; sizeBytes: number; ivBase64: string; authTagBase64: string } | null = null;
     const photo = formData.get("photo");
     if (photo instanceof File && photo.size > 0) {
       const buffer = Buffer.from(await photo.arrayBuffer());
@@ -248,6 +249,8 @@ export async function POST(req: Request) {
                   storageKey: photoData.storageKey,
                   mimeType: photoData.mimeType,
                   sizeBytes: photoData.sizeBytes,
+                  ivBase64: photoData.ivBase64,
+                  authTagBase64: photoData.authTagBase64,
                   isPrimary: true,
                 },
               },
@@ -275,6 +278,15 @@ export async function POST(req: Request) {
     // no URL/ID exposure, just a signed cookie scoped to this one profile.
     const cookieStore = await cookies();
     cookieStore.set(APPLICANT_COOKIE, signProfileToken(profile.id), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
+
+    const session = await createProfileSession(profile.id, undefined, req.headers.get("user-agent") ?? undefined);
+    cookieStore.set(APPLICANT_SESSION_ID_COOKIE, signSessionId(session.id), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/route-guard";
 import { getCurrentAssigneeId } from "@/lib/admin-assignment";
+import { hasActiveBreakGlass } from "@/lib/privacy/break-glass";
 import type { AdminRole, Permission } from "@/lib/permissions";
 import type { Case } from "@prisma/client";
 
@@ -39,6 +40,10 @@ export async function resolveCaseAccessLevel(admin: AccessAdmin, caseRecord: Pic
     where: { caseId_adminId: { caseId: caseRecord.id, adminId: admin.id } },
   });
   if (grant) return grant.level; // "VIEW" | "COMMENT" | "EDIT"
+
+  // Break-glass (STEP 13 spec §31) — scoped, audited, time-limited emergency
+  // access; never a hidden bypass, since it only ever grants VIEW.
+  if (await hasActiveBreakGlass(admin.id, "CASE", caseRecord.id)) return "VIEW";
 
   return "NONE";
 }

@@ -22,10 +22,11 @@ import { StaffPerformanceSection } from "@/components/admin/reports/staff-perfor
 import { CommunicationsSection } from "@/components/admin/reports/communications-section";
 import { FollowupsSection } from "@/components/admin/reports/followups-section";
 import { CasesSection } from "@/components/admin/reports/cases-section";
+import { PrivacySection } from "@/components/admin/reports/privacy-section";
 
 type Tab =
   | "overview" | "registration" | "demographics" | "income" | "verification" | "completeness"
-  | "matching" | "proposals" | "meetings" | "outcomes" | "staff" | "communications" | "followups" | "cases";
+  | "matching" | "proposals" | "meetings" | "outcomes" | "staff" | "communications" | "followups" | "cases" | "privacy";
 
 const ALL_TABS: { value: Tab; label: string }[] = [
   { value: "overview", label: "Overview" },
@@ -42,6 +43,7 @@ const ALL_TABS: { value: Tab; label: string }[] = [
   { value: "communications", label: "Communications" },
   { value: "followups", label: "Follow-Ups" },
   { value: "cases", label: "Cases" },
+  { value: "privacy", label: "Privacy" },
 ];
 
 export default function ReportsPage() {
@@ -94,6 +96,7 @@ export default function ReportsPage() {
     if (t.value === "income") return role === "SUPER_ADMIN" || role === "ADMIN";
     if (t.value === "staff") return role === "SUPER_ADMIN";
     if (t.value === "cases") return role !== "VIEWER";
+    if (t.value === "privacy") return role !== "VIEWER";
     return true;
   });
 
@@ -139,6 +142,7 @@ export default function ReportsPage() {
         {tab === "communications" && <CommunicationsSection queryString={queryString} enabled={visited.has("communications")} />}
         {tab === "followups" && <FollowupsSection queryString={queryString} enabled={visited.has("followups")} />}
         {tab === "cases" && <CasesSection queryString={queryString} enabled={visited.has("cases")} />}
+        {tab === "privacy" && <PrivacySection queryString={queryString} enabled={visited.has("privacy")} />}
       </div>
     </div>
   );

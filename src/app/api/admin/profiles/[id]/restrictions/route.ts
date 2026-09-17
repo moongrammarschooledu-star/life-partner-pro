@@ -11,12 +11,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   try {
     await requireAdmin("profile:restrict");
     const { id } = await params;
-    const items = await prisma.profileRestriction.findMany({
-      where: { profileId: id },
-      include: { appliedBy: { select: { name: true } }, liftedBy: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
-    });
-    return NextResponse.json({ items });
+    const [items, profile] = await Promise.all([
+      prisma.profileRestriction.findMany({
+        where: { profileId: id },
+        include: { appliedBy: { select: { name: true } }, liftedBy: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.profile.findUnique({ where: { id }, select: { accountStatus: true } }),
+    ]);
+    return NextResponse.json({ items, accountStatus: profile?.accountStatus ?? "ACTIVE" });
   } catch (error) {
     return handleApiError(error);
   }

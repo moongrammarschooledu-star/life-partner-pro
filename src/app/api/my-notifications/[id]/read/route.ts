@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const { id } = await params;

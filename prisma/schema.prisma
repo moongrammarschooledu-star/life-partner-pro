@@ -78,6 +78,7 @@ enum CaseType {
   COMPLAINT
   SAFETY_REPORT
   INTERNAL
+  PRIVACY_INCIDENT
 }
 
 // One merged enum since a Case has exactly one category regardless of type —
@@ -124,6 +125,19 @@ enum CaseCategory {
   PRIVACY_VIOLATION
   SUSPICIOUS_MEETING_BEHAVIOR
   OTHER_SAFETY_CONCERN
+
+  // Privacy Incidents (STEP 13 spec §27) — own curated list, not folded into
+  // INTERNAL's open-ended set, matching the SUPPORT/COMPLAINT/SAFETY pattern.
+  UNAUTHORIZED_DATA_ACCESS
+  CONTACT_DATA_EXPOSURE
+  PHOTO_EXPOSURE
+  DOCUMENT_EXPOSURE
+  INCORRECT_PERMISSION
+  DATA_EXPORT_ISSUE
+  NOTIFICATION_PRIVACY_ISSUE
+  STAFF_ACCESS_VIOLATION
+  SECURITY_BREACH
+  OTHER_PRIVACY_INCIDENT
 }
 
 enum CaseStatus {
@@ -571,6 +585,31 @@ enum AuditAction {
   CASE_REOPENED
   CASE_MERGED
   CASE_LINKED
+
+  // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+  CONSENT_GRANTED
+  CONSENT_REVOKED
+  PRIVACY_REQUEST_CREATED
+  DATA_EXPORT_REQUESTED
+  DATA_EXPORT_CREATED
+  DATA_EXPORT_DOWNLOADED
+  ACCOUNT_DEACTIVATED
+  ACCOUNT_REACTIVATED
+  DELETION_REQUESTED
+  DELETION_STARTED
+  DATA_DELETED
+  DATA_ANONYMIZED
+  RETENTION_ACTION_EXECUTED
+  DATA_HOLD_CREATED
+  DATA_HOLD_RELEASED
+  SENSITIVE_DATA_VIEWED
+  SENSITIVE_DATA_EXPORTED
+  CONTACT_SHARE_REVOKED
+  PHOTO_VIEWED
+  PRIVACY_INCIDENT_CREATED
+  BREAK_GLASS_GRANTED
+  BREAK_GLASS_USED
+  PROFILE_SESSION_REVOKED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -692,6 +731,141 @@ enum NotificationType {
   CASE_CLOSED
   CASE_REOPENED
   ADMIN_PROFILE_RESTRICTED
+
+  // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+  ACCOUNT_DEACTIVATED
+  ACCOUNT_REACTIVATED
+  DELETION_REQUEST_RECEIVED
+  DELETION_COMPLETED
+  DATA_EXPORT_READY
+  PRIVACY_REQUEST_UPDATED
+}
+
+// ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+// See src/lib/privacy/ for the logic consuming these. Deliberately additive —
+// none of Steps 1-12's existing ConsentRecord/CommunicationConsent/
+// NotificationPreference/ProfileRestriction models or enforcement are touched.
+
+enum DataClassification {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  HIGHLY_SENSITIVE
+  RESTRICTED
+}
+
+// Spec §3 — 15 granular consent categories. Distinct from the existing
+// ConsentRecord (registration-time privacy/matchmaking/contact/terms) and
+// CommunicationConsent (per-channel email/sms/whatsapp) — both keep
+// enforcing exactly what they enforce today. ConsentGrant is the new,
+// append-only history ledger the Consent Center reads/writes; for the two
+// categories already owned by an existing table, granting/revoking here
+// also drives that table via src/lib/privacy/consent.ts.
+enum ConsentCategory {
+  ACCOUNT_CREATION
+  MATRIMONIAL_PROFILE_PROCESSING
+  PROFILE_MATCHING
+  PROPOSAL_PARTICIPATION
+  CONTACT_SHARING
+  PHOTO_PROCESSING
+  VERIFICATION_PROCESSING
+  NOTIFICATIONS
+  EMAIL_COMMUNICATION
+  SMS_COMMUNICATION
+  WHATSAPP_COMMUNICATION
+  ANALYTICS
+  AI_ASSISTED_MATCHING
+  DATA_RETENTION
+  TERMS_AND_PRIVACY_POLICY
+}
+
+enum ConsentGrantStatus {
+  GRANTED
+  REVOKED
+}
+
+// Orthogonal to ProfileStatus (which drives the 22-stage proposal/matching
+// lifecycle and is not touched here) — mirrors how `verified`/`softDeleted`
+// are already independent flags on Profile today.
+enum AccountStatus {
+  ACTIVE
+  DEACTIVATED
+  DELETION_REQUESTED
+  DELETION_PROCESSING
+  DELETED
+}
+
+enum DataCategory {
+  ACCOUNT_DATA
+  PROFILE_DATA
+  CONTACT_DATA
+  PHOTOS
+  VERIFICATION_DOCUMENTS
+  CONSENT_RECORDS
+  PROPOSAL_RECORDS
+  MEETING_RECORDS
+  COMMUNICATION_RECORDS
+  SUPPORT_CASES
+  SAFETY_CASES
+  AUDIT_LOGS
+  SECURITY_LOGS
+  FINANCIAL_RECORDS // stored but inapplicable — no payment/financial system exists in this app
+}
+
+enum RetentionAction {
+  DELETE
+  ANONYMIZE
+  ARCHIVE
+  REVIEW_REQUIRED
+  RETAIN
+}
+
+enum DeletionRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum DeletionMode {
+  DELETE
+  ANONYMIZE
+}
+
+enum PrivacyRequestType {
+  ACCESS
+  CORRECTION
+  DELETION
+  RESTRICT_PROCESSING
+  WITHDRAW_CONSENT
+  EXPORT
+  REPORT_ISSUE
+  OTHER
+}
+
+enum PrivacyRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+// Spec §7 — graded contact-sharing access. HIDDEN/ADMIN_ONLY are permission-
+// based (contact:reveal); the rest require the actual ContactPermission
+// consent workflow this enum's own resolver closes the enforcement gap on.
+enum ContactAccessLevel {
+  HIDDEN
+  ADMIN_ONLY
+  STAFF_AUTHORIZED
+  USER_APPROVED
+  PROPOSAL_APPROVED
+  FAMILY_CONTACT_APPROVED
 }
 
 // ---------- Admin ----------
@@ -770,6 +944,15 @@ model AdminUser {
   caseAccessLogs            CaseAccessLog[]
   restrictionsApplied       ProfileRestriction[] @relation("RestrictionAppliedBy")
   restrictionsLifted        ProfileRestriction[] @relation("RestrictionLiftedBy")
+
+  // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+  deletionRequestsReviewed  AccountDeletionRequest[]
+  privacyRequestsHandled    PrivacyRequest[]
+  retentionPoliciesUpdated  RetentionPolicy[]
+  dataHoldsPlaced           DataHold[]              @relation("DataHoldPlacedBy")
+  dataHoldsLifted           DataHold[]              @relation("DataHoldLiftedBy")
+  breakGlassGrants          BreakGlassAccess[]
+  privacyAccessLogs         PrivacyAccessLog[]
 }
 
 // ---------- Core profile ----------
@@ -795,6 +978,8 @@ model Profile {
   status        ProfileStatus @default(NEW)
   verified      Boolean       @default(false)
   softDeleted   Boolean       @default(false)
+  // Orthogonal to `status` (STEP 13) — see AccountStatus enum comment.
+  accountStatus AccountStatus @default(ACTIVE)
   profileCompletion Int       @default(0) // 0-100, recomputed whenever the profile or its sections are written
   preferredLanguage Locale    @default(EN) // drives server-side notification template language (STEP 9)
 
@@ -846,6 +1031,13 @@ model Profile {
   caseComments   CaseComment[]
   caseEvidence   CaseEvidence[]
   restrictions   ProfileRestriction[]
+
+  // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+  consentGrants           ConsentGrant[]
+  deletionRequests        AccountDeletionRequest[]
+  privacyRequests         PrivacyRequest[]
+  dataExportRequests      DataExportRequest[]
+  sessions                ProfileSession[]
 
   @@index([gender, status])
   @@index([city])
@@ -976,6 +1168,10 @@ model ProfilePhoto {
   sizeBytes     Int
   isPrimary     Boolean  @default(true)
   createdAt     DateTime @default(now())
+  // STEP 13 — AES-256-GCM, nullable so existing pre-STEP-13 photos keep
+  // working unencrypted until next replaced (see src/lib/privacy/photo-crypto.ts).
+  ivBase64      String?
+  authTagBase64 String?
 
   @@index([profileId])
 }
@@ -2227,4 +2423,203 @@ model SupportMessage {
   createdAt   DateTime @default(now())
 
   @@index([resolved])
+}
+
+// ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+
+// Append-only consent history ledger (spec §3/§4/§5) — never updated or
+// deleted; a revocation is a new row with status=REVOKED, not an edit to the
+// original grant. Additive to (not a replacement for) ConsentRecord and
+// CommunicationConsent/NotificationPreference, which keep enforcing exactly
+// what they enforce today — see src/lib/privacy/consent.ts.
+model ConsentGrant {
+  id         String             @id @default(cuid())
+  profile    Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId  String
+  category   ConsentCategory
+  status     ConsentGrantStatus
+  version    String
+  source     String // "REGISTRATION" | "CONSENT_CENTER" | "BACKFILL" | ...
+  ipHash     String?
+  recordedAt DateTime           @default(now())
+
+  @@index([profileId, category, recordedAt])
+}
+
+// LPP-DEL-###### (spec §14/§15).
+model AccountDeletionRequest {
+  id              String                @id @default(cuid())
+  requestCode     String                @unique
+  profile         Profile               @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId       String
+  status          DeletionRequestStatus @default(SUBMITTED)
+  mode            DeletionMode?
+  reason          String?
+  submittedAt     DateTime              @default(now())
+  reviewedBy      AdminUser?            @relation(fields: [reviewedById], references: [id])
+  reviewedById    String?
+  reviewedAt      DateTime?
+  scheduledFor    DateTime?
+  completedAt     DateTime?
+  rejectionReason String?
+
+  @@index([profileId])
+  @@index([status])
+}
+
+// LPP-PRIV-###### (spec §22) — a thin router: for request types with their
+// own dedicated flow (Deletion/Export/Correction/Withdraw-Consent), this row
+// tracks status and links to the underlying record rather than duplicating
+// its logic. See src/lib/privacy/privacy-request.ts.
+model PrivacyRequest {
+  id               String               @id @default(cuid())
+  requestCode      String               @unique
+  profile          Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId        String
+  type             PrivacyRequestType
+  status           PrivacyRequestStatus @default(SUBMITTED)
+  description      String?
+  linkedRecordType String?
+  linkedRecordId   String?
+  handledBy        AdminUser?           @relation(fields: [handledById], references: [id])
+  handledById      String?
+  resolutionNote   String?
+  submittedAt      DateTime             @default(now())
+  resolvedAt       DateTime?
+
+  @@index([profileId])
+  @@index([status])
+}
+
+// Super-Admin configured per category (spec §16) — no hard-coded periods.
+model RetentionPolicy {
+  id            String          @id @default(cuid())
+  category      DataCategory    @unique
+  retentionDays Int
+  action        RetentionAction
+  isActive      Boolean         @default(true)
+  updatedBy     AdminUser?      @relation(fields: [updatedById], references: [id])
+  updatedById   String?
+  updatedAt     DateTime        @updatedAt
+}
+
+// Legal/administrative hold (spec §18) — either profile-scoped or targeted
+// at a specific record type+id. Lazy-checked by the retention job, no cron
+// sweep of its own, mirroring ProfileRestriction's lazy-expiry precedent.
+model DataHold {
+  id         String    @id @default(cuid())
+  profileId  String?
+  recordType String?
+  recordId   String?
+  reason     String
+  placedBy   AdminUser @relation("DataHoldPlacedBy", fields: [placedById], references: [id])
+  placedById String
+  placedAt   DateTime  @default(now())
+  liftedBy   AdminUser? @relation("DataHoldLiftedBy", fields: [liftedById], references: [id])
+  liftedById String?
+  liftedAt   DateTime?
+  active     Boolean   @default(true)
+
+  @@index([profileId, active])
+  @@index([recordType, recordId, active])
+}
+
+// One row per record per retention-job outcome (spec §19) — never a
+// destructive cross-record transaction; each record's action succeeds or
+// fails independently and is logged here regardless.
+model RetentionActionLog {
+  id         String          @id @default(cuid())
+  category   DataCategory
+  recordType String
+  recordId   String
+  action     RetentionAction
+  outcome    String // "APPLIED" | "SKIPPED_HOLD" | "SKIPPED_ERROR" | "REVIEW_FLAGGED"
+  detail     String?
+  runAt      DateTime        @default(now())
+
+  @@index([category, runAt])
+}
+
+// "Download My Data" (spec §20/§21) — encrypted like case evidence; the
+// "temporary secure download URL" is an HMAC-signed short-lived token (see
+// src/lib/privacy/data-export.ts), not a stored, sweep-cleaned token row.
+model DataExportRequest {
+  id                     String    @id @default(cuid())
+  profile                Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId              String
+  format                 String // "JSON" | "CSV" | "PDF"
+  secureStorageReference String?
+  ivBase64               String?
+  authTagBase64          String?
+  status                 String    @default("PENDING") // PENDING | READY | DOWNLOADED | EXPIRED | FAILED
+  expiresAt              DateTime?
+  requestedAt            DateTime  @default(now())
+  downloadedAt           DateTime?
+
+  @@index([profileId])
+}
+
+// Focused, queryable-without-scanning-AuditLog access trail for
+// high-sensitivity touchpoints (spec §30) — mirrors STEP 12's CaseAccessLog
+// precedent. dataCategory is looked up from the static
+// src/lib/privacy/data-classification.ts reference table, not computed by a
+// runtime policy engine.
+model PrivacyAccessLog {
+  id              String             @id @default(cuid())
+  actorAdmin      AdminUser?         @relation(fields: [actorAdminId], references: [id])
+  actorAdminId    String?
+  actorProfileId  String?
+  action          String // "CONTACT_VIEWED" | "EXPORT_DOWNLOADED" | "PHOTO_VIEWED" | ...
+  dataCategory    DataClassification
+  targetProfileId String?
+  reason          String?
+  createdAt       DateTime           @default(now())
+
+  @@index([targetProfileId, createdAt])
+  @@index([actorAdminId, createdAt])
+}
+
+// Scoped narrowly to contact-reveal and case/privacy-incident access only
+// (spec §31, scope confirmed with user) — not a platform-wide bypass. Fully
+// audited, auto-expiring, lazy-checked like ProfileRestriction.
+model BreakGlassAccess {
+  id         String    @id @default(cuid())
+  admin      AdminUser @relation(fields: [adminId], references: [id])
+  adminId    String
+  reason     String
+  recordType String // "CONTACT" | "CASE"
+  recordId   String
+  grantedAt  DateTime  @default(now())
+  expiresAt  DateTime
+  usedAt     DateTime?
+
+  @@index([adminId])
+  @@index([recordType, recordId])
+}
+
+// Makes "Active Sessions"/"Log Out Other Sessions" (spec §10/§32) real
+// rather than cosmetic — mirrors AdminSession's shape. The applicant's
+// signed cookie embeds this row's id; src/lib/profile-session.ts checks
+// revocation on every request, same as AdminSession does for admins today.
+model ProfileSession {
+  id           String    @id @default(cuid())
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId    String
+  deviceInfo   String?
+  userAgent    String?
+  ipAddress    String?
+  lastActiveAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  @@index([profileId])
+}
+
+// Generic row-per-key counter shared by LPP-DEL-###### and LPP-PRIV-######
+// codes — mirrors CaseCodeCounter's exact shape with a reusable key instead
+// of two near-identical single-purpose tables. See src/lib/privacy/codes.ts.
+model SequenceCounter {
+  key     String @id
+  lastSeq Int    @default(0)
 }

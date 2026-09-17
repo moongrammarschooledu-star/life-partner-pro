@@ -43,6 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await notifyContactPermissionAction(profileId, id, "approve");
     } else if (action === "revoke") {
       await prisma.contactPermission.updateMany({ where: { proposalId: id, profileId }, data: { revokedAt: new Date() } });
+      await writeAudit({ action: "CONTACT_SHARE_REVOKED", adminId: admin.id, targetProfileId: profileId, meta: { proposalId: id } });
       await notifyContactPermissionAction(profileId, id, "revoke");
     } else {
       throw new ApiError(400, "Invalid action");

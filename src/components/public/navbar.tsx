@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Moon, Sun, ShieldCheck } from "lucide-react";
+import { Moon, Sun, ShieldCheck, Lock } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { buttonClass } from "@/components/ui/button";
 import { NotificationBell } from "@/components/public/notification-bell";
@@ -35,6 +35,9 @@ export function PublicNavbar() {
           </Link>
           <Link href="/my-cases" className="text-muted hover:text-foreground">
             Help &amp; Support
+          </Link>
+          <Link href="/account-settings" className="flex items-center gap-1 text-muted hover:text-foreground">
+            <Lock className="h-4 w-4" /> Account &amp; Privacy
           </Link>
           <Link href="/support" className="text-muted hover:text-foreground">
             Contact Us

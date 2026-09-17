@@ -30,4 +30,12 @@ describe("typePermissionFor", () => {
     expect(typePermissionFor("INTERNAL", "create")).toBeNull();
     expect(typePermissionFor("INTERNAL", "resolve")).toBeNull();
   });
+
+  it("maps PRIVACY_INCIDENT view/review/resolve to privacy_incidents:* permissions (STEP 13)", () => {
+    expect(typePermissionFor("PRIVACY_INCIDENT", "view")).toBe("privacy_incidents:view");
+    expect(typePermissionFor("PRIVACY_INCIDENT", "review")).toBe("privacy_incidents:review");
+    expect(typePermissionFor("PRIVACY_INCIDENT", "resolve")).toBe("privacy_incidents:resolve");
+    expect(typePermissionFor("PRIVACY_INCIDENT", "create")).toBeNull();
+    expect(typePermissionFor("PRIVACY_INCIDENT", "close")).toBeNull();
+  });
 });

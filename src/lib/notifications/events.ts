@@ -268,3 +268,29 @@ export async function notifyCaseReopened(reporterProfileId: string | null, assig
 export async function notifyProfileRestricted(profileId: string) {
   await notifyAdmins({ type: "ADMIN_PROFILE_RESTRICTED", data: { relatedProfileId: profileId } });
 }
+
+// ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
+
+export async function notifyAccountDeactivated(profileId: string) {
+  await sendNotification({ profileId, type: "ACCOUNT_DEACTIVATED", data: {} });
+}
+
+export async function notifyAccountReactivated(profileId: string) {
+  await sendNotification({ profileId, type: "ACCOUNT_REACTIVATED", data: {} });
+}
+
+export async function notifyDeletionRequestReceived(profileId: string, requestCode: string) {
+  await sendNotification({ profileId, type: "DELETION_REQUEST_RECEIVED", data: { templateVars: { requestCode } } });
+}
+
+export async function notifyDeletionCompleted(profileId: string, requestCode: string) {
+  await sendNotification({ profileId, type: "DELETION_COMPLETED", data: { templateVars: { requestCode } } });
+}
+
+export async function notifyDataExportReady(profileId: string) {
+  await sendNotification({ profileId, type: "DATA_EXPORT_READY", data: {} });
+}
+
+export async function notifyPrivacyRequestUpdated(profileId: string, requestCode: string) {
+  await sendNotification({ profileId, type: "PRIVACY_REQUEST_UPDATED", data: { templateVars: { requestCode } } });
+}

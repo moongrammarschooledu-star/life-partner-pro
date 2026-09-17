@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { notifyAdminProfileUpdatePending } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
@@ -23,8 +22,7 @@ async function findProfileByCodeAndEmail(profileCode: string, email: string) {
 }
 
 async function findProfileBySessionCookie() {
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return null;
   return prisma.profile.findUnique({ where: { id: profileId }, include: { contact: true, preference: true } });
 }
@@ -68,14 +66,28 @@ export async function POST(req: Request) {
       if (await hasActiveRestriction(profile.id, "CANNOT_UPDATE_FIELDS")) {
         return NextResponse.json({ error: "This profile is currently restricted from submitting update requests." }, { status: 403 });
       }
-      const { contact, preference } = body;
+      // STEP 13 spec §23 — extended beyond contact/preference to cover
+      // name/DOB/education/profession/family corrections. A resubmission
+      // MERGES field groups into any existing pending payload (shallow, by
+      // top-level key) rather than replacing it wholesale, so a name
+      // correction no longer silently discards an already-pending contact
+      // correction.
+      const { contact, preference, personal, education, profession, family } = body;
+      const incoming = { contact, preference, personal, education, profession, family };
+      const existing = await prisma.pendingUpdate.findUnique({ where: { profileId: profile.id } });
+      const existingPayload = existing ? JSON.parse(existing.payload) : {};
+      const merged = { ...existingPayload };
+      for (const [key, value] of Object.entries(incoming)) {
+        if (value !== undefined) merged[key] = value;
+      }
+
       await prisma.pendingUpdate.upsert({
         where: { profileId: profile.id },
-        update: { payload: JSON.stringify({ contact, preference }), submittedAt: new Date() },
-        create: { profileId: profile.id, payload: JSON.stringify({ contact, preference }) },
+        update: { payload: JSON.stringify(merged), submittedAt: new Date() },
+        create: { profileId: profile.id, payload: JSON.stringify(merged) },
       });
 
-      await writeAudit({ action: "UPDATE_REQUEST_SUBMITTED", targetProfileId: profile.id });
+      await writeAudit({ action: "UPDATE_REQUEST_SUBMITTED", targetProfileId: profile.id, meta: { fieldGroups: Object.keys(incoming).filter((k) => incoming[k as keyof typeof incoming] !== undefined) } });
       await notifyAdminProfileUpdatePending(profile.id);
 
       return NextResponse.json({ ok: true });

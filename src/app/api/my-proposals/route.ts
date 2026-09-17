@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { ensureProposalCode } from "@/lib/proposal-code";
 import { APPLICANT_STATUS_LABEL } from "@/lib/proposal-status-labels";
 import { deriveApplicantHighlights } from "@/lib/proposal-workflow";
@@ -22,12 +21,8 @@ function tierLabelFor(total: number, thresholds: MatchThresholds): string {
 // cookie-verification pattern exactly — re-checks the profile still exists
 // and isn't soft-deleted rather than trusting the cookie payload alone.
 export async function GET() {
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-
-  const me = await prisma.profile.findUnique({ where: { id: profileId }, select: { id: true, softDeleted: true } });
-  if (!me || me.softDeleted) return NextResponse.json({ error: "Not found." }, { status: 401 });
 
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   const thresholds = settings ? thresholdsFromSettings(settings) : DEFAULT_THRESHOLDS;

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
-import { signProfileToken, verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { signProfileToken, signSessionId, APPLICANT_COOKIE, APPLICANT_SESSION_ID_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
+import { createProfileSession } from "@/lib/profile-session";
 
 // Deliberately narrow: status/verification/completion only, never contact,
 // income, family, photo, or partner-preference data (spec §18/§34) — this is
@@ -18,8 +20,7 @@ function statusPayload(profile: { profileCode: string; status: string; verified:
 }
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const profile = await prisma.profile.findUnique({
@@ -53,6 +54,15 @@ export async function POST(req: Request) {
 
     const cookieStore = await cookies();
     cookieStore.set(APPLICANT_COOKIE, signProfileToken(profile.id), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+    });
+
+    const session = await createProfileSession(profile.id, undefined, req.headers.get("user-agent") ?? undefined, clientKeyFromRequest(req));
+    cookieStore.set(APPLICANT_SESSION_ID_COOKIE, signSessionId(session.id), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

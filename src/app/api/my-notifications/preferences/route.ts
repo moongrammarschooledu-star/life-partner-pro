@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { writeAudit } from "@/lib/audit";
 import type { NotificationChannel } from "@prisma/client";
 
@@ -14,13 +13,8 @@ const PREFERENCE_FIELDS = [
 
 const CONSENT_CHANNELS: NotificationChannel[] = ["EMAIL", "SMS", "WHATSAPP"];
 
-async function getProfileId() {
-  const cookieStore = await cookies();
-  return verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
-}
-
 export async function GET() {
-  const profileId = await getProfileId();
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const [preference, consents, profile] = await Promise.all([
@@ -35,7 +29,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const profileId = await getProfileId();
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const body = await req.json();

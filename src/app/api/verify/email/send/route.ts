@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
+import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { sendOtp } from "@/lib/verification/otp-service";
 import { writeAudit } from "@/lib/audit";
@@ -12,8 +11,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
   }
 
-  const cookieStore = await cookies();
-  const profileId = verifyProfileToken(cookieStore.get(APPLICANT_COOKIE)?.value);
+  const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
   const profile = await prisma.profile.findUnique({ where: { id: profileId }, include: { contact: true } });

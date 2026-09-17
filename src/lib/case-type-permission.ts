@@ -30,5 +30,11 @@ export function typePermissionFor(type: CaseType, action: "view" | "create" | "r
     if (action === "resolve") return "safety_cases:resolve";
     return null;
   }
+  if (type === "PRIVACY_INCIDENT") {
+    if (action === "view") return "privacy_incidents:view";
+    if (action === "review") return "privacy_incidents:review";
+    if (action === "resolve") return "privacy_incidents:resolve";
+    return null;
+  }
   return null; // INTERNAL — generic cases:* permissions only
 }

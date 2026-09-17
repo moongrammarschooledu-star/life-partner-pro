@@ -51,13 +51,29 @@ export const SAFETY_CATEGORIES: CaseCategory[] = [
   "OTHER_SAFETY_CONCERN",
 ];
 
+// Privacy incidents (STEP 13 spec §27) — own curated list, matching the
+// SUPPORT/COMPLAINT/SAFETY pattern rather than INTERNAL's open-ended set.
+export const PRIVACY_INCIDENT_CATEGORIES: CaseCategory[] = [
+  "UNAUTHORIZED_DATA_ACCESS",
+  "CONTACT_DATA_EXPOSURE",
+  "PHOTO_EXPOSURE",
+  "DOCUMENT_EXPOSURE",
+  "INCORRECT_PERMISSION",
+  "DATA_EXPORT_ISSUE",
+  "NOTIFICATION_PRIVACY_ISSUE",
+  "STAFF_ACCESS_VIOLATION",
+  "SECURITY_BREACH",
+  "OTHER_PRIVACY_INCIDENT",
+];
+
 const CATEGORIES_BY_TYPE: Record<CaseType, CaseCategory[]> = {
   SUPPORT: SUPPORT_CATEGORIES,
   COMPLAINT: COMPLAINT_CATEGORIES,
   SAFETY_REPORT: SAFETY_CATEGORIES,
+  PRIVACY_INCIDENT: PRIVACY_INCIDENT_CATEGORIES,
   // Internal cases are staff-initiated and not bound to the applicant-facing
   // category set — any category is acceptable.
-  INTERNAL: [...SUPPORT_CATEGORIES, ...COMPLAINT_CATEGORIES, ...SAFETY_CATEGORIES],
+  INTERNAL: [...SUPPORT_CATEGORIES, ...COMPLAINT_CATEGORIES, ...SAFETY_CATEGORIES, ...PRIVACY_INCIDENT_CATEGORIES],
 };
 
 export function isCategoryValidForType(type: CaseType, category: CaseCategory): boolean {
