@@ -33,8 +33,11 @@ export function PublicNavbar() {
           <Link href="/my-notifications" className="text-muted hover:text-foreground">
             My Notifications
           </Link>
+          <Link href="/my-cases" className="text-muted hover:text-foreground">
+            Help &amp; Support
+          </Link>
           <Link href="/support" className="text-muted hover:text-foreground">
-            Support
+            Contact Us
           </Link>
           <Link href="/admin/login" className="flex items-center gap-1 text-muted hover:text-foreground">
             <ShieldCheck className="h-4 w-4" /> Admin

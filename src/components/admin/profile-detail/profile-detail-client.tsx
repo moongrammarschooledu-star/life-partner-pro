@@ -13,6 +13,7 @@ import { PendingUpdateCard } from "@/components/admin/profile-detail/pending-upd
 import { OverviewTab } from "@/components/admin/profile-detail/overview-tab";
 import { MatchesTab } from "@/components/admin/profile-detail/matches-tab";
 import { NotesTab } from "@/components/admin/profile-detail/notes-tab";
+import { RestrictionsTab } from "@/components/admin/profile-detail/restrictions-tab";
 import { AddFollowUpModal } from "@/components/admin/add-follow-up-modal";
 import type { ProfileDetailDto } from "@/lib/serializers";
 
@@ -20,6 +21,7 @@ const TABS = [
   { value: "overview", label: "Overview" },
   { value: "matches", label: "Matches" },
   { value: "notes", label: "Notes & Communication" },
+  { value: "restrictions", label: "Cases & Restrictions" },
 ];
 
 function Avatar({ profile }: { profile: ProfileDetailDto }) {
@@ -108,6 +110,7 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
           {tab === "overview" && <OverviewTab profile={profile} />}
           {tab === "matches" && <MatchesTab profileId={profile.id} />}
           {tab === "notes" && <NotesTab profileId={profile.id} notes={profile.notes} />}
+          {tab === "restrictions" && <RestrictionsTab profileId={profile.id} />}
         </div>
 
         <div className="space-y-4">

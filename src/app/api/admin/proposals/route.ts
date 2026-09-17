@@ -6,6 +6,7 @@ import { writeAudit } from "@/lib/audit";
 import { nextProposalCode, ensureProposalCode } from "@/lib/proposal-code";
 import { STATUS_GROUPS } from "@/lib/proposal-status-labels";
 import { notifyProposalCreated } from "@/lib/notifications/events";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
 const proposalListInclude = {
   profileA: { select: { id: true, profileCode: true, fullName: true, gender: true, city: true } },
@@ -73,6 +74,15 @@ export async function POST(req: Request) {
     }
     const VALID_PRIORITIES = ["LOW", "MEDIUM", "HIGH"];
     if (priority && !VALID_PRIORITIES.includes(priority)) throw new ApiError(400, "Invalid priority");
+
+    // Spec §18 — real backend enforcement, not a hidden button.
+    const [aRestricted, bRestricted] = await Promise.all([
+      hasActiveRestriction(profileAId, "CANNOT_RECEIVE_PROPOSAL"),
+      hasActiveRestriction(profileBId, "CANNOT_RECEIVE_PROPOSAL"),
+    ]);
+    if (aRestricted || bRestricted) {
+      throw new ApiError(403, "One of these profiles is currently restricted from receiving proposals.");
+    }
 
     // Match creation never implies contact sharing (spec §4) — this only
     // records the proposal + a snapshot of the match score it came from.

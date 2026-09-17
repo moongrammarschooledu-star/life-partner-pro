@@ -205,4 +205,60 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Test Notification", body: "This is a test notification from Life Partner Pro." },
     UR: { title: "ٹیسٹ نوٹیفیکیشن", body: "یہ لائف پارٹنر پرو کی طرف سے ایک ٹیسٹ نوٹیفیکیشن ہے۔" },
   },
+
+  // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+  // Deliberately generic (spec §22 — never include case description,
+  // evidence, or internal-note content in a notification preview).
+  CASE_CREATED: {
+    EN: { title: "Case Received", subject: "We've Received Your Request", body: "Your request has been received and will be reviewed by our team. You can track its status anytime." },
+    UR: { title: "کیس موصول ہو گیا", subject: "آپ کی درخواست موصول ہو گئی", body: "آپ کی درخواست موصول ہو گئی ہے اور ہماری ٹیم اس کا جائزہ لے گی۔ آپ کسی بھی وقت اس کی صورتحال دیکھ سکتے ہیں۔" },
+  },
+  CASE_ASSIGNED: {
+    EN: { title: "Case Assigned", body: "A case has been assigned to you." },
+    UR: { title: "کیس تفویض ہوا", body: "ایک کیس آپ کو تفویض کیا گیا ہے۔" },
+  },
+  CASE_REASSIGNED: {
+    EN: { title: "Case Reassigned", body: "A case has been reassigned." },
+    UR: { title: "کیس دوبارہ تفویض ہوا", body: "ایک کیس دوبارہ تفویض کیا گیا ہے۔" },
+  },
+  CASE_UPDATED: {
+    EN: { title: "Case Update", subject: "Update on Your Request", body: "There is an update on your request. Please login to view the details." },
+    UR: { title: "کیس اپڈیٹ", subject: "آپ کی درخواست پر اپڈیٹ", body: "آپ کی درخواست پر ایک اپڈیٹ موجود ہے۔ تفصیلات دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  CASE_COMMENT_ADDED: {
+    EN: { title: "New Response", subject: "New Response on Your Request", body: "Our team has responded to your request. Please login to view the message." },
+    UR: { title: "نیا جواب", subject: "آپ کی درخواست پر نیا جواب", body: "ہماری ٹیم نے آپ کی درخواست کا جواب دیا ہے۔ پیغام دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  INFORMATION_REQUESTED: {
+    EN: { title: "More Information Needed", subject: "We Need More Information", body: "Our team needs more information to proceed with your request. Please login to respond." },
+    UR: { title: "مزید معلومات درکار", subject: "ہمیں مزید معلومات درکار ہیں", body: "آپ کی درخواست پر آگے بڑھنے کے لیے ہماری ٹیم کو مزید معلومات درکار ہیں۔ جواب دینے کے لیے لاگ ان کریں۔" },
+  },
+  USER_RESPONDED: {
+    EN: { title: "User Responded", body: "The reporting user has submitted the requested information." },
+    UR: { title: "صارف نے جواب دیا", body: "رپورٹ کرنے والے صارف نے مطلوبہ معلومات جمع کر دی ہیں۔" },
+  },
+  CASE_ESCALATED: {
+    EN: { title: "Case Escalated", body: "A case has been escalated and requires senior review." },
+    UR: { title: "کیس اپگریڈ ہوا", body: "ایک کیس اپگریڈ کیا گیا ہے اور اسے سینئر جائزے کی ضرورت ہے۔" },
+  },
+  CASE_OVERDUE: {
+    EN: { title: "Case Overdue", body: "A case has passed its SLA deadline and needs attention." },
+    UR: { title: "کیس کی مدت ختم", body: "ایک کیس کی مقررہ مدت ختم ہو چکی ہے اور اسے توجہ درکار ہے۔" },
+  },
+  CASE_RESOLVED: {
+    EN: { title: "Request Resolved", subject: "Your Request Has Been Resolved", body: "Your request has been resolved. Please login to view the resolution details." },
+    UR: { title: "درخواست حل ہو گئی", subject: "آپ کی درخواست حل ہو گئی ہے", body: "آپ کی درخواست حل ہو گئی ہے۔ تفصیلات دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  CASE_CLOSED: {
+    EN: { title: "Case Closed", subject: "Your Case Has Been Closed", body: "Your case has been closed. Please login if you'd like to review the outcome." },
+    UR: { title: "کیس بند ہو گیا", subject: "آپ کا کیس بند ہو گیا ہے", body: "آپ کا کیس بند ہو گیا ہے۔ نتیجہ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  CASE_REOPENED: {
+    EN: { title: "Case Reopened", subject: "Your Case Has Been Reopened", body: "Your case has been reopened and is being reviewed again." },
+    UR: { title: "کیس دوبارہ کھل گیا", subject: "آپ کا کیس دوبارہ کھل گیا ہے", body: "آپ کا کیس دوبارہ کھل گیا ہے اور اس کا دوبارہ جائزہ لیا جا رہا ہے۔" },
+  },
+  ADMIN_PROFILE_RESTRICTED: {
+    EN: { title: "Profile Restriction Applied", body: "A restriction has been applied to a profile." },
+    UR: { title: "پروفائل پر پابندی لاگو", body: "ایک پروفائل پر پابندی لاگو کی گئی ہے۔" },
+  },
 };

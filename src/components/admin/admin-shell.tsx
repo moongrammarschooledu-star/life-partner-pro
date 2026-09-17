@@ -33,6 +33,7 @@ import {
   KeyRound,
   Building2,
   ShieldAlert,
+  LifeBuoy,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -58,6 +59,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/notification-templates", label: "Notification Templates", icon: FileText, permission: "notification:template:manage" },
   { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3, permission: "reports:view" },
   { href: "/admin/team-workload", label: "Team Workload", icon: Users2, permission: "staff:view" },
+  { href: "/admin/case-management", label: "Case Management", icon: LifeBuoy, permission: "cases:view" },
   { href: "/admin/support", label: "Support", icon: Inbox },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, permission: "audit:view" },
   { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:edit" },

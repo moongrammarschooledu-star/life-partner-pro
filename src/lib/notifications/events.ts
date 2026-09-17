@@ -196,3 +196,75 @@ export async function notifyMeetingReminder(profileAId: string, profileBId: stri
     sendNotification({ profileId: profileBId, type, data: { relatedProposalId: proposalId } }),
   ]);
 }
+
+// ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+// Every wrapper pairs a notification with an AdminTask where the case needs
+// admin action, exactly like STEP 11's notifyAdminProfileUpdatePending/
+// notifySecurityFlagRaised pattern — never a new parallel trigger system.
+
+export async function notifyCaseCreated(caseId: string, reporterProfileId: string | null, assignedAdminId?: string | null) {
+  await Promise.all([
+    reporterProfileId ? sendNotification({ profileId: reporterProfileId, type: "CASE_CREATED", data: {} }) : Promise.resolve(),
+    notifyAdmins({ type: "CASE_CREATED", data: {}, assignedAdminId: assignedAdminId ?? undefined }),
+    createTask({ assignedToId: assignedAdminId ?? undefined, taskType: "CASE_REVIEW", resourceType: "CASE", resourceId: caseId }),
+  ]);
+}
+
+export async function notifyCaseAssigned(caseId: string, assignedAdminId: string) {
+  await Promise.all([
+    notifyAdmins({ type: "CASE_ASSIGNED", data: {}, assignedAdminId }),
+    createTask({ assignedToId: assignedAdminId, taskType: "CASE_REVIEW", resourceType: "CASE", resourceId: caseId }),
+  ]);
+}
+
+export async function notifyCaseReassigned(assignedAdminId: string) {
+  await notifyAdmins({ type: "CASE_REASSIGNED", data: {}, assignedAdminId });
+}
+
+export async function notifyCaseStatusChanged(reporterProfileId: string | null) {
+  if (!reporterProfileId) return;
+  await sendNotification({ profileId: reporterProfileId, type: "CASE_UPDATED", data: {} });
+}
+
+export async function notifyCaseEscalated(assignedAdminId?: string | null) {
+  await notifyAdmins({ type: "CASE_ESCALATED", data: {}, assignedAdminId: assignedAdminId ?? undefined });
+}
+
+export async function notifyCaseOverdue(assignedAdminId?: string | null) {
+  await notifyAdmins({ type: "CASE_OVERDUE", data: {}, assignedAdminId: assignedAdminId ?? undefined });
+}
+
+export async function notifyInformationRequested(reporterProfileId: string | null) {
+  if (!reporterProfileId) return;
+  await sendNotification({ profileId: reporterProfileId, type: "INFORMATION_REQUESTED", data: {} });
+}
+
+export async function notifyUserResponded(assignedAdminId?: string | null) {
+  await notifyAdmins({ type: "USER_RESPONDED", data: {}, assignedAdminId: assignedAdminId ?? undefined });
+}
+
+export async function notifyCaseCommentAdded(reporterProfileId: string | null) {
+  if (!reporterProfileId) return;
+  await sendNotification({ profileId: reporterProfileId, type: "CASE_COMMENT_ADDED", data: {} });
+}
+
+export async function notifyCaseResolved(reporterProfileId: string | null) {
+  if (!reporterProfileId) return;
+  await sendNotification({ profileId: reporterProfileId, type: "CASE_RESOLVED", data: {} });
+}
+
+export async function notifyCaseClosed(reporterProfileId: string | null) {
+  if (!reporterProfileId) return;
+  await sendNotification({ profileId: reporterProfileId, type: "CASE_CLOSED", data: {} });
+}
+
+export async function notifyCaseReopened(reporterProfileId: string | null, assignedAdminId?: string | null) {
+  await Promise.all([
+    reporterProfileId ? sendNotification({ profileId: reporterProfileId, type: "CASE_REOPENED", data: {} }) : Promise.resolve(),
+    notifyAdmins({ type: "CASE_UPDATED", data: {}, assignedAdminId: assignedAdminId ?? undefined }),
+  ]);
+}
+
+export async function notifyProfileRestricted(profileId: string) {
+  await notifyAdmins({ type: "ADMIN_PROFILE_RESTRICTED", data: { relatedProfileId: profileId } });
+}

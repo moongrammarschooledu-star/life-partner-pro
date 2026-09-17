@@ -21,6 +21,7 @@ import {
   type MatchCategory,
 } from "@/lib/matching";
 import { calculateAge } from "@/lib/utils";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
 interface MatchConfig {
   weights: MatchWeights;
@@ -93,6 +94,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const seekerRecord = await prisma.profile.findUnique({ where: { id }, include: matchableInclude });
     if (!seekerRecord) throw new ApiError(404, "Profile not found");
 
+    // Spec §18 — a scoped CANNOT_MATCH restriction (from a case's Restriction
+    // Engine action) blocks matching for this profile regardless of status,
+    // real backend enforcement rather than a hidden UI button.
+    if (await hasActiveRestriction(id, "CANNOT_MATCH")) {
+      throw new ApiError(403, "This profile is currently restricted from matching.");
+    }
+
     const oppositeGender = seekerRecord.gender === "MALE" ? "FEMALE" : "MALE";
     const { weights, hardRequirements, thresholds, enabled, maxMatchResults, excludeHardRequirementFailures, allowPartiallyVerifiedManualMatch } =
       await getMatchConfig();
@@ -121,6 +129,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         // A profile with an unresolved high/critical security flag never
         // enters the pool automatically, regardless of verification status.
         securityFlags: { none: { status: { in: ["OPEN", "INVESTIGATING"] }, severity: { in: ["HIGH", "CRITICAL"] } } },
+        // Spec §18 — a candidate with an active CANNOT_MATCH restriction
+        // never enters the pool, regardless of status/verification.
+        restrictions: { none: { restrictionType: "CANNOT_MATCH", active: true, OR: [{ endDate: null }, { endDate: { gt: new Date() } }] } },
         ...(city ? { city: { equals: city, mode: "insensitive" } } : {}),
         ...(education ? { education: { level: { equals: education, mode: "insensitive" } } } : {}),
         ...(profession ? { profession: { profession: { contains: profession, mode: "insensitive" } } } : {}),

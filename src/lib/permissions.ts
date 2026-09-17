@@ -36,7 +36,40 @@ export type Permission =
   | "sensitive:family:view"
   | "staff:view"
   | "profile:assign"
-  | "verification:assign";
+  | "verification:assign"
+  // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+  | "support:view"
+  | "support:create"
+  | "support:edit"
+  | "support:assign"
+  | "support:manage"
+  | "support:resolve"
+  | "support:close"
+  | "cases:view"
+  | "cases:create"
+  | "cases:edit"
+  | "cases:assign"
+  | "cases:manage"
+  | "cases:escalate"
+  | "cases:escalate:senior"
+  | "cases:staff-conduct:view"
+  | "cases:resolve"
+  | "cases:close"
+  | "cases:reopen"
+  | "cases:merge"
+  | "complaints:view"
+  | "complaints:create"
+  | "complaints:review"
+  | "complaints:resolve"
+  | "safety_cases:view"
+  | "safety_cases:review"
+  | "safety_cases:escalate"
+  | "safety_cases:resolve"
+  | "sensitive:case:evidence:view"
+  | "sensitive:case:notes:view"
+  | "sensitive:case:restricted-profile:view"
+  | "profile:restrict"
+  | "profile:suspend";
 
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -75,6 +108,38 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "staff:view",
     "profile:assign",
     "verification:assign",
+    "support:view",
+    "support:create",
+    "support:edit",
+    "support:assign",
+    "support:manage",
+    "support:resolve",
+    "support:close",
+    "cases:view",
+    "cases:create",
+    "cases:edit",
+    "cases:assign",
+    "cases:manage",
+    "cases:escalate",
+    "cases:escalate:senior",
+    "cases:staff-conduct:view",
+    "cases:resolve",
+    "cases:close",
+    "cases:reopen",
+    "cases:merge",
+    "complaints:view",
+    "complaints:create",
+    "complaints:review",
+    "complaints:resolve",
+    "safety_cases:view",
+    "safety_cases:review",
+    "safety_cases:escalate",
+    "safety_cases:resolve",
+    "sensitive:case:evidence:view",
+    "sensitive:case:notes:view",
+    "sensitive:case:restricted-profile:view",
+    "profile:restrict",
+    "profile:suspend",
   ],
   ADMIN: [
     "profile:view",
@@ -107,6 +172,38 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "staff:view",
     "profile:assign",
     "verification:assign",
+    "support:view",
+    "support:create",
+    "support:edit",
+    "support:assign",
+    "support:manage",
+    "support:resolve",
+    "support:close",
+    "cases:view",
+    "cases:create",
+    "cases:edit",
+    "cases:assign",
+    "cases:manage",
+    "cases:escalate",
+    "cases:escalate:senior",
+    "cases:resolve",
+    "cases:close",
+    "cases:reopen",
+    "complaints:view",
+    "complaints:create",
+    "complaints:review",
+    "complaints:resolve",
+    "safety_cases:view",
+    "safety_cases:review",
+    "safety_cases:escalate",
+    "safety_cases:resolve",
+    "sensitive:case:evidence:view",
+    "sensitive:case:notes:view",
+    "sensitive:case:restricted-profile:view",
+    "profile:restrict",
+    "profile:suspend",
+    // ADMIN deliberately lacks cases:merge and cases:staff-conduct:view —
+    // SUPER_ADMIN only, per the STEP 12 plan's conflict-of-interest design.
   ],
   STAFF: [
     "profile:view",
@@ -125,6 +222,16 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:view",
     "reports:export",
     "sensitive:family:view", // Family Coordination department staff need this; income/notes stay restricted
+    "support:view",
+    "support:create",
+    "cases:view",
+    "cases:create",
+    "cases:edit", // row-gated: only cases assigned to them — see src/lib/case-access.ts
+    "cases:resolve", // row-gated the same way
+    "cases:close", // row-gated the same way
+    "complaints:view", // row-gated
+    "safety_cases:view", // row-gated
+    "sensitive:case:evidence:view", // still row-gated by case assignment — this only lifts the flat permission floor
   ],
   VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view"],
 };

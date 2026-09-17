@@ -86,6 +86,23 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
 
   // Test mode — essential (bypasses preference/consent by design; it's admin-triggered)
   TEST_NOTIFICATION: ESSENTIAL,
+
+  // Case management (STEP 12) — essential. Support/complaint/safety-report
+  // communication must never be silently dropped by a marketing-style
+  // preference opt-out, matching ACCOUNT_SUSPENDED's treatment above.
+  CASE_CREATED: ESSENTIAL,
+  CASE_ASSIGNED: ESSENTIAL,
+  CASE_REASSIGNED: ESSENTIAL,
+  CASE_UPDATED: ESSENTIAL,
+  CASE_COMMENT_ADDED: ESSENTIAL,
+  INFORMATION_REQUESTED: ESSENTIAL,
+  USER_RESPONDED: ESSENTIAL,
+  CASE_ESCALATED: ESSENTIAL,
+  CASE_OVERDUE: ESSENTIAL,
+  CASE_RESOLVED: ESSENTIAL,
+  CASE_CLOSED: ESSENTIAL,
+  CASE_REOPENED: ESSENTIAL,
+  ADMIN_PROFILE_RESTRICTED: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

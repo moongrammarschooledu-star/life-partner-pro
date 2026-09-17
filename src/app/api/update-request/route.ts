@@ -5,6 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { verifyProfileToken, APPLICANT_COOKIE } from "@/lib/applicant-session";
 import { notifyAdminProfileUpdatePending } from "@/lib/notifications/events";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
 // Lightweight self-service verification: matching Profile Code + email is
 // enough to look up and submit an update request. This is intentionally not
@@ -63,6 +64,10 @@ export async function POST(req: Request) {
     }
 
     if (action === "submit") {
+      // Spec §18 — real backend enforcement, not a hidden button.
+      if (await hasActiveRestriction(profile.id, "CANNOT_UPDATE_FIELDS")) {
+        return NextResponse.json({ error: "This profile is currently restricted from submitting update requests." }, { status: 403 });
+      }
       const { contact, preference } = body;
       await prisma.pendingUpdate.upsert({
         where: { profileId: profile.id },

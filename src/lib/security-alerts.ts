@@ -93,5 +93,61 @@ export async function computeSecurityAlerts(): Promise<SecurityAlert[]> {
     });
   }
 
+  // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+  // Spec §39 — patterns, never automatic accusations; each is a count-based
+  // signal for a human reviewer, not a verdict.
+  const multipleComplaintsAgainstProfile = await prisma.case.groupBy({
+    by: ["reportedProfileId"],
+    where: { reportedProfileId: { not: null }, type: { in: ["COMPLAINT", "SAFETY_REPORT"] }, createdAt: { gte: subDays(now, 30) } },
+    _count: { reportedProfileId: true },
+    having: { reportedProfileId: { _count: { gte: 3 } } },
+  });
+  for (const g of multipleComplaintsAgainstProfile) {
+    if (!g.reportedProfileId) continue;
+    const profile = await prisma.profile.findUnique({ where: { id: g.reportedProfileId }, select: { profileCode: true } });
+    alerts.push({
+      id: `multi-complaint-${g.reportedProfileId}`,
+      severity: "HIGH",
+      title: "Multiple complaints against one profile",
+      description: `${profile?.profileCode ?? "A profile"} has received ${g._count.reportedProfileId} complaints or safety reports in the last 30 days.`,
+      occurredAt: now,
+    });
+  }
+
+  const multipleReportsFromReporter = await prisma.case.groupBy({
+    by: ["reporterProfileId"],
+    where: { reporterProfileId: { not: null }, type: { in: ["COMPLAINT", "SAFETY_REPORT"] }, createdAt: { gte: subDays(now, 30) } },
+    _count: { reporterProfileId: true },
+    having: { reporterProfileId: { _count: { gte: 5 } } },
+  });
+  for (const g of multipleReportsFromReporter) {
+    if (!g.reporterProfileId) continue;
+    const profile = await prisma.profile.findUnique({ where: { id: g.reporterProfileId }, select: { profileCode: true } });
+    alerts.push({
+      id: `multi-report-${g.reporterProfileId}`,
+      severity: "MEDIUM",
+      title: "Repeated reports from one account",
+      description: `${profile?.profileCode ?? "An account"} has filed ${g._count.reporterProfileId} complaints or safety reports in the last 30 days.`,
+      occurredAt: now,
+    });
+  }
+
+  const repeatedRestrictedAccess = await prisma.caseAccessLog.groupBy({
+    by: ["adminId"],
+    where: { createdAt: { gte: subDays(now, 1) } },
+    _count: { adminId: true },
+    having: { adminId: { _count: { gte: 20 } } },
+  });
+  for (const g of repeatedRestrictedAccess) {
+    const admin = await prisma.adminUser.findUnique({ where: { id: g.adminId }, select: { name: true } });
+    alerts.push({
+      id: `case-access-volume-${g.adminId}`,
+      severity: "MEDIUM",
+      title: "Unusual volume of case record access",
+      description: `${admin?.name ?? "An admin"} accessed case evidence/notes ${g._count.adminId} times in the last 24 hours.`,
+      occurredAt: now,
+    });
+  }
+
   return alerts.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 }

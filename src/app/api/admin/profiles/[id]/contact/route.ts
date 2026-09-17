@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
 // Reveals contact info for a single profile. Every call is audited — this is
 // the only code path in the app that ever reads ContactInfo for display.
@@ -37,6 +38,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!otherProfileId) throw new ApiError(400, "otherProfileId is required");
     if (!phoneShared && !whatsappShared && !emailShared) {
       throw new ApiError(400, "At least one contact channel must be selected");
+    }
+
+    // Spec §18 — real backend enforcement, not a hidden button.
+    const [aRestricted, bRestricted] = await Promise.all([
+      hasActiveRestriction(id, "CANNOT_CONTACT_SHARE"),
+      hasActiveRestriction(otherProfileId, "CANNOT_CONTACT_SHARE"),
+    ]);
+    if (aRestricted || bRestricted) {
+      throw new ApiError(403, "One of these profiles is currently restricted from contact sharing.");
     }
 
     const [profileAId, profileBId] = [id, otherProfileId].sort();

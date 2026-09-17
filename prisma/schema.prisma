@@ -30,6 +30,7 @@ enum AssignmentResourceType {
   SECURITY_FLAG
   FOLLOW_UP
   PROFILE
+  CASE
 }
 
 enum AssignmentPriority {
@@ -54,6 +55,7 @@ enum AdminTaskType {
   MEETING_TASK
   CONTACT_REQUEST_TASK
   FOLLOW_UP_DUE
+  CASE_REVIEW
 }
 
 enum AdminTaskStatus {
@@ -67,6 +69,130 @@ enum LoginHistoryEvent {
   SUCCESS
   FAILURE
   LOCKED
+}
+
+// ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+
+enum CaseType {
+  SUPPORT
+  COMPLAINT
+  SAFETY_REPORT
+  INTERNAL
+}
+
+// One merged enum since a Case has exactly one category regardless of type —
+// grouped by which case type each value applies to.
+enum CaseCategory {
+  // Support (spec §3)
+  ACCOUNT_PROBLEM
+  PROFILE_PROBLEM
+  PROFILE_UPDATE
+  VERIFICATION_ISSUE
+  MATCHING_ISSUE
+  PROPOSAL_ISSUE
+  CONTACT_PERMISSION_ISSUE
+  MEETING_ISSUE
+  COMMUNICATION_ISSUE
+  TECHNICAL_PROBLEM
+  PRIVACY_REQUEST
+  PAYMENT_BILLING
+  OTHER_SUPPORT
+
+  // Complaints (spec §4)
+  INCORRECT_PROFILE_INFORMATION
+  MISLEADING_INFORMATION
+  UNWANTED_CONTACT
+  INAPPROPRIATE_BEHAVIOR
+  MISUSE_OF_PLATFORM
+  HARASSMENT
+  FRAUD_SUSPICIOUS_ACTIVITY
+  PRIVACY_CONCERN
+  FAKE_IMPERSONATION_PROFILE
+  UNAUTHORIZED_CONTACT_SHARING
+  STAFF_CONDUCT_COMPLAINT
+  PROPOSAL_RELATED_COMPLAINT
+  MEETING_RELATED_COMPLAINT
+  OTHER_COMPLAINT
+
+  // Safety (spec §5)
+  THREATENING_BEHAVIOR
+  FINANCIAL_SCAM
+  IDENTITY_MISREPRESENTATION
+  FAKE_PROFILE
+  BLACKMAIL
+  UNAUTHORIZED_CONTACT
+  PRIVACY_VIOLATION
+  SUSPICIOUS_MEETING_BEHAVIOR
+  OTHER_SAFETY_CONCERN
+}
+
+enum CaseStatus {
+  NEW
+  ACKNOWLEDGED
+  ASSIGNED
+  IN_REVIEW
+  WAITING_FOR_USER
+  WAITING_FOR_STAFF
+  ESCALATED
+  ACTION_REQUIRED
+  RESOLVED
+  CLOSED
+  REOPENED
+  ARCHIVED
+}
+
+enum CasePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+  CRITICAL
+}
+
+// MANAGE/OWNER/APPROVE are derived at check-time, not stored — see
+// src/lib/case-access.ts.
+enum CaseAccessLevel {
+  VIEW
+  COMMENT
+  EDIT
+}
+
+enum CaseNoteLevel {
+  STAFF
+  ADMIN
+  SENIOR_ADMIN
+  SUPER_ADMIN
+}
+
+enum CaseLinkType {
+  RELATED_TO
+  DUPLICATE_OF
+  FOLLOW_UP_OF
+  ESCALATION_OF
+  EVIDENCE_FOR
+}
+
+enum RestrictionType {
+  CANNOT_MATCH
+  CANNOT_RECEIVE_PROPOSAL
+  CANNOT_CONTACT_SHARE
+  CANNOT_SCHEDULE_MEETING
+  CANNOT_UPDATE_FIELDS
+}
+
+enum ResolutionCategory {
+  INFORMATION_PROVIDED
+  USER_ISSUE_RESOLVED
+  PROFILE_CORRECTED
+  VERIFICATION_REQUESTED
+  CONTACT_RESTRICTION_APPLIED
+  PROFILE_RESTRICTED
+  PROFILE_SUSPENDED
+  CASE_ESCALATED
+  NO_VIOLATION_CONFIRMED
+  INSUFFICIENT_INFORMATION
+  DUPLICATE_CASE
+  OTHER_RESOLUTION
 }
 
 enum Gender {
@@ -420,6 +546,31 @@ enum AuditAction {
   VIEW_AS_STARTED
   VIEW_AS_ENDED
   VIEW_AS_ACCESS
+
+  // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+  CASE_CREATED
+  CASE_VIEWED
+  CASE_SEARCHED
+  CASE_ASSIGNED
+  CASE_REASSIGNED
+  CASE_ACCESS_SHARED
+  EVIDENCE_UPLOADED
+  EVIDENCE_VIEWED
+  EVIDENCE_DOWNLOADED
+  CASE_NOTE_CREATED
+  CASE_NOTE_EDITED
+  CASE_NOTE_DELETED
+  CASE_STATUS_CHANGED
+  CASE_PRIORITY_CHANGED
+  CASE_ESCALATED
+  INFORMATION_REQUESTED
+  PROFILE_RESTRICTION_APPLIED
+  PROFILE_RESTRICTION_LIFTED
+  CASE_RESOLUTION_CREATED
+  CASE_CLOSED
+  CASE_REOPENED
+  CASE_MERGED
+  CASE_LINKED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -526,6 +677,21 @@ enum NotificationType {
 
   // Test mode (spec §32)
   TEST_NOTIFICATION
+
+  // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+  CASE_CREATED
+  CASE_ASSIGNED
+  CASE_REASSIGNED
+  CASE_UPDATED
+  CASE_COMMENT_ADDED
+  INFORMATION_REQUESTED
+  USER_RESPONDED
+  CASE_ESCALATED
+  CASE_OVERDUE
+  CASE_RESOLVED
+  CASE_CLOSED
+  CASE_REOPENED
+  ADMIN_PROFILE_RESTRICTED
 }
 
 // ---------- Admin ----------
@@ -587,6 +753,23 @@ model AdminUser {
   tasksAssigned       AdminTask[]
   viewAsInitiated     ViewAsSession[]      @relation("ViewAsInitiator")
   viewAsTargeted      ViewAsSession[]      @relation("ViewAsTarget")
+
+  // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+  casesCreated              Case[]               @relation("CaseCreatedBy")
+  casesReportedAbout        Case[]               @relation("CaseReportedAdmin")
+  caseAccessGrantsReceived  CaseAccessGrant[]     @relation("CaseAccessGrantee")
+  caseAccessGrantsGiven     CaseAccessGrant[]     @relation("CaseAccessGranter")
+  caseComments              CaseComment[]
+  caseInternalNotes         CaseInternalNote[]
+  caseEvidenceUploaded      CaseEvidence[]
+  caseStatusChanges         CaseStatusHistory[]
+  caseEscalationsRaised     CaseEscalation[]
+  caseResolutionsCreated    CaseResolution[]
+  caseLinksCreated          CaseLink[]
+  caseMergesPerformed       CaseMerge[]
+  caseAccessLogs            CaseAccessLog[]
+  restrictionsApplied       ProfileRestriction[] @relation("RestrictionAppliedBy")
+  restrictionsLifted        ProfileRestriction[] @relation("RestrictionLiftedBy")
 }
 
 // ---------- Core profile ----------
@@ -656,6 +839,13 @@ model Profile {
   communicationLogs      CommunicationLog[]
   notificationPreference NotificationPreference?
   communicationConsents  CommunicationConsent[]
+
+  // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+  casesFiled     Case[]               @relation("CaseReporterProfile")
+  casesReported  Case[]               @relation("CaseReportedProfile")
+  caseComments   CaseComment[]
+  caseEvidence   CaseEvidence[]
+  restrictions   ProfileRestriction[]
 
   @@index([gender, status])
   @@index([city])
@@ -1372,6 +1562,18 @@ model AppSettings {
   twoFactorRequiredRoles Json? // array of AdminRole strings
   passwordMinLength      Int     @default(8)
 
+  // Support, Complaints, Safety & Case Management (STEP 12) — SLA is elapsed
+  // wall-clock hours, not a business-hours/holiday calendar (no such
+  // infrastructure exists anywhere in this codebase — see src/lib/case-sla.ts).
+  caseSlaNormalFirstResponseHours   Int @default(24)
+  caseSlaNormalResolutionHours      Int @default(72)
+  caseSlaHighFirstResponseHours     Int @default(8)
+  caseSlaHighResolutionHours        Int @default(24)
+  caseSlaUrgentFirstResponseHours   Int @default(2)
+  caseSlaUrgentResolutionHours      Int @default(8)
+  caseSlaCriticalFirstResponseHours Int @default(1)
+  caseSlaCriticalResolutionHours    Int @default(4)
+
   updatedAt             DateTime @updatedAt
 }
 
@@ -1756,6 +1958,261 @@ model ViewAsSession {
 
   @@index([superAdminId])
   @@index([targetAdminId])
+}
+
+// ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
+
+// One unified table for every support request, complaint, safety report, and
+// internal case (spec §6 — "every complaint, safety report, or support issue
+// becomes a Case"). caseNumber's prefix is chosen by `type` at creation (see
+// src/lib/case-code.ts): SUPPORT->LPP-SUP-, COMPLAINT->LPP-CMP-,
+// SAFETY_REPORT/INTERNAL->LPP-CASE-. relatedProposalId/relatedMeetingId/
+// relatedVerificationId/relatedCommunicationId are plain ids with no FK
+// relation, mirroring AdminAssignment/AdminTask's resourceId convention —
+// resolved by application code, not a Prisma include.
+model Case {
+  id              String       @id @default(cuid())
+  caseNumber      String       @unique
+  type            CaseType
+  category        CaseCategory
+  subject         String
+  description     String
+  priority        CasePriority @default(NORMAL)
+  status          CaseStatus   @default(NEW)
+  escalationLevel Int          @default(1)
+
+  reporterProfile   Profile?   @relation("CaseReporterProfile", fields: [reporterProfileId], references: [id])
+  reporterProfileId String?
+  reportedProfile   Profile?   @relation("CaseReportedProfile", fields: [reportedProfileId], references: [id])
+  reportedProfileId String?
+  reportedAdmin     AdminUser? @relation("CaseReportedAdmin", fields: [reportedAdminId], references: [id])
+  reportedAdminId   String?
+
+  relatedProposalId      String?
+  relatedMeetingId       String?
+  relatedVerificationId  String?
+  relatedCommunicationId String?
+
+  preferredResponseMethod String?
+  firstResponseDueAt      DateTime?
+  resolutionDueAt         DateTime?
+  firstRespondedAt        DateTime?
+
+  mergedIntoCaseId String?
+  createdBy        AdminUser? @relation("CaseCreatedBy", fields: [createdById], references: [id])
+  createdById      String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  closedAt         DateTime?
+  softDeletedAt     DateTime?
+
+  accessGrants    CaseAccessGrant[]
+  comments        CaseComment[]
+  internalNotes   CaseInternalNote[]
+  evidence        CaseEvidence[]
+  statusHistory   CaseStatusHistory[]
+  escalations     CaseEscalation[]
+  resolution      CaseResolution?
+  accessLogs      CaseAccessLog[]
+  linksFrom       CaseLink[]          @relation("CaseLinkSource")
+  linksTo         CaseLink[]          @relation("CaseLinkTarget")
+
+  @@index([type, status])
+  @@index([category])
+  @@index([priority, status])
+  @@index([reporterProfileId])
+  @@index([reportedProfileId])
+  @@index([reportedAdminId])
+  @@index([createdAt])
+}
+
+model CaseAccessGrant {
+  id          String          @id @default(cuid())
+  case        Case            @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId      String
+  admin       AdminUser       @relation("CaseAccessGrantee", fields: [adminId], references: [id])
+  adminId     String
+  level       CaseAccessLevel
+  grantedBy   AdminUser       @relation("CaseAccessGranter", fields: [grantedById], references: [id])
+  grantedById String
+  grantedAt   DateTime        @default(now())
+
+  @@unique([caseId, adminId])
+}
+
+// User-visible responses (visibleToUser: true) vs. internal back-and-forth
+// among staff (false) — never confused with CaseInternalNote, which is
+// staff-only investigation material, not conversational.
+model CaseComment {
+  id             String     @id @default(cuid())
+  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId         String
+  authorAdmin    AdminUser? @relation(fields: [authorAdminId], references: [id])
+  authorAdminId  String?
+  authorProfile  Profile?   @relation(fields: [authorProfileId], references: [id])
+  authorProfileId String?
+  body           String
+  visibleToUser  Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+
+  @@index([caseId])
+}
+
+model CaseInternalNote {
+  id        String        @id @default(cuid())
+  case      Case          @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId    String
+  admin     AdminUser     @relation(fields: [adminId], references: [id])
+  adminId   String
+  body      String
+  level     CaseNoteLevel @default(STAFF)
+  createdAt DateTime      @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  @@index([caseId])
+}
+
+// Mirrors VerificationDocument's encrypt-then-blob shape exactly (spec §12) —
+// see src/lib/case-evidence-storage.ts.
+model CaseEvidence {
+  id                   String     @id @default(cuid())
+  case                 Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId               String
+  uploadedByAdmin      AdminUser? @relation(fields: [uploadedByAdminId], references: [id])
+  uploadedByAdminId    String?
+  uploadedByProfile    Profile?   @relation(fields: [uploadedByProfileId], references: [id])
+  uploadedByProfileId  String?
+  secureStorageReference String
+  ivBase64             String
+  authTagBase64        String
+  mimeType             String
+  sizeBytes            Int
+  originalFilename     String?
+  createdAt            DateTime   @default(now())
+
+  @@index([caseId])
+}
+
+model CaseStatusHistory {
+  id          String      @id @default(cuid())
+  case        Case        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId      String
+  fromStatus  CaseStatus?
+  toStatus    CaseStatus
+  // Nullable — a user-driven transition (e.g. responding to an info
+  // request) has no admin actor; changedById is set only for admin-driven
+  // status changes.
+  changedBy   AdminUser?  @relation(fields: [changedById], references: [id])
+  changedById String?
+  reason      String?
+  createdAt   DateTime    @default(now())
+
+  @@index([caseId])
+}
+
+model CaseEscalation {
+  id             String    @id @default(cuid())
+  case           Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId         String
+  previousLevel  Int
+  newLevel       Int
+  reason         String
+  escalatedBy    AdminUser @relation(fields: [escalatedById], references: [id])
+  escalatedById  String
+  createdAt      DateTime  @default(now())
+
+  @@index([caseId])
+}
+
+model CaseResolution {
+  id                String              @id @default(cuid())
+  case              Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId            String              @unique
+  category          ResolutionCategory
+  summary           String
+  actionTaken       String?
+  followUpRequired  Boolean             @default(false)
+  followUpDate      DateTime?
+  resolvedBy        AdminUser           @relation(fields: [resolvedById], references: [id])
+  resolvedById      String
+  createdAt         DateTime            @default(now())
+}
+
+model CaseLink {
+  id          String       @id @default(cuid())
+  case        Case         @relation("CaseLinkSource", fields: [caseId], references: [id], onDelete: Cascade)
+  caseId      String
+  linkedCase  Case         @relation("CaseLinkTarget", fields: [linkedCaseId], references: [id])
+  linkedCaseId String
+  linkType    CaseLinkType
+  createdBy   AdminUser    @relation(fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime     @default(now())
+
+  @@unique([caseId, linkedCaseId, linkType])
+}
+
+// Preserves both cases' full history (spec §28 — "never silently delete the
+// original case history"); the source case is closed with mergedIntoCaseId
+// set, never deleted.
+model CaseMerge {
+  id           String    @id @default(cuid())
+  sourceCaseId String
+  targetCaseId String
+  reason       String
+  mergedBy     AdminUser @relation(fields: [mergedById], references: [id])
+  mergedById   String
+  createdAt    DateTime  @default(now())
+}
+
+// Thin per-case access trail (evidence/note views, downloads) kept separate
+// from the global AuditLog so "who viewed this case" queries don't scan the
+// whole audit table — every entry here is also mirrored into AuditLog via
+// writeAudit() for the platform-wide trail (spec §12/§33).
+model CaseAccessLog {
+  id        String   @id @default(cuid())
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId    String
+  admin     AdminUser @relation(fields: [adminId], references: [id])
+  adminId   String
+  action    String
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
+}
+
+// Independent, scoped, optionally time-boxed restrictions (spec §18) — NOT a
+// replacement for the existing blunt Profile.status=SUSPENDED lifecycle
+// (src/lib/verification/status.ts's suspendProfile()), which stays as the
+// full-suspension path. endDate is evaluated lazily at check time (see
+// src/lib/profile-restrictions.ts) — no cron sweep, matching this codebase's
+// existing lazy-expiry convention for OTPs/documents.
+model ProfileRestriction {
+  id              String          @id @default(cuid())
+  profile         Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId       String
+  restrictionType RestrictionType
+  reason          String
+  appliedBy       AdminUser       @relation("RestrictionAppliedBy", fields: [appliedById], references: [id])
+  appliedById     String
+  startDate       DateTime        @default(now())
+  endDate         DateTime?
+  active          Boolean         @default(true)
+  caseId          String?
+  liftedBy        AdminUser?      @relation("RestrictionLiftedBy", fields: [liftedById], references: [id])
+  liftedById      String?
+  liftedAt        DateTime?
+  createdAt       DateTime        @default(now())
+
+  @@index([profileId, active])
+}
+
+// Rows keyed by prefix ("SUP","CMP","CASE") — mirrors ProposalCodeCounter's
+// single-row-per-key pattern. See src/lib/case-code.ts.
+model CaseCodeCounter {
+  prefix  String @id
+  lastSeq Int    @default(0)
 }
 
 // ---------- Support ----------
