@@ -49,11 +49,16 @@ export async function buildDataExportPayload(profileId: string) {
   });
   if (!profile) throw new Error("Profile not found");
 
-  const [consentHistory, proposalsAsA, proposalsAsB, cases] = await Promise.all([
+  const [consentHistory, proposalsAsA, proposalsAsB, cases, invoices, payments, subscriptions] = await Promise.all([
     prisma.consentGrant.findMany({ where: { profileId }, orderBy: { recordedAt: "desc" } }),
     prisma.proposal.findMany({ where: { profileAId: profileId }, select: { proposalCode: true, status: true, createdAt: true } }),
     prisma.proposal.findMany({ where: { profileBId: profileId }, select: { proposalCode: true, status: true, createdAt: true } }),
     prisma.case.findMany({ where: { reporterProfileId: profileId }, select: { caseNumber: true, type: true, status: true, subject: true, createdAt: true } }),
+    // STEP 14 — the profile's own invoices/payments/subscriptions, never
+    // another profile's financial data.
+    prisma.invoice.findMany({ where: { profileId }, select: { invoiceCode: true, totalMinor: true, currencyCode: true, paymentStatus: true, invoiceDate: true } }),
+    prisma.payment.findMany({ where: { profileId }, select: { paymentCode: true, amountMinor: true, currencyCode: true, method: true, status: true, createdAt: true } }),
+    prisma.subscription.findMany({ where: { profileId }, select: { subscriptionCode: true, status: true, startDate: true, endDate: true } }),
   ]);
 
   return {
@@ -79,6 +84,9 @@ export async function buildDataExportPayload(profileId: string) {
     consentHistory,
     proposals: [...proposalsAsA, ...proposalsAsB],
     cases,
+    invoices,
+    payments,
+    subscriptions,
   };
 }
 

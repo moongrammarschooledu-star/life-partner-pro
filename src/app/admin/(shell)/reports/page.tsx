@@ -23,10 +23,11 @@ import { CommunicationsSection } from "@/components/admin/reports/communications
 import { FollowupsSection } from "@/components/admin/reports/followups-section";
 import { CasesSection } from "@/components/admin/reports/cases-section";
 import { PrivacySection } from "@/components/admin/reports/privacy-section";
+import { FinanceSection } from "@/components/admin/reports/finance-section";
 
 type Tab =
   | "overview" | "registration" | "demographics" | "income" | "verification" | "completeness"
-  | "matching" | "proposals" | "meetings" | "outcomes" | "staff" | "communications" | "followups" | "cases" | "privacy";
+  | "matching" | "proposals" | "meetings" | "outcomes" | "staff" | "communications" | "followups" | "cases" | "privacy" | "finance";
 
 const ALL_TABS: { value: Tab; label: string }[] = [
   { value: "overview", label: "Overview" },
@@ -44,6 +45,7 @@ const ALL_TABS: { value: Tab; label: string }[] = [
   { value: "followups", label: "Follow-Ups" },
   { value: "cases", label: "Cases" },
   { value: "privacy", label: "Privacy" },
+  { value: "finance", label: "Finance" },
 ];
 
 export default function ReportsPage() {
@@ -97,6 +99,7 @@ export default function ReportsPage() {
     if (t.value === "staff") return role === "SUPER_ADMIN";
     if (t.value === "cases") return role !== "VIEWER";
     if (t.value === "privacy") return role !== "VIEWER";
+    if (t.value === "finance") return role === "SUPER_ADMIN" || role === "ADMIN";
     return true;
   });
 
@@ -143,6 +146,7 @@ export default function ReportsPage() {
         {tab === "followups" && <FollowupsSection queryString={queryString} enabled={visited.has("followups")} />}
         {tab === "cases" && <CasesSection queryString={queryString} enabled={visited.has("cases")} />}
         {tab === "privacy" && <PrivacySection queryString={queryString} enabled={visited.has("privacy")} />}
+        {tab === "finance" && <FinanceSection queryString={queryString} enabled={visited.has("finance")} />}
       </div>
     </div>
   );

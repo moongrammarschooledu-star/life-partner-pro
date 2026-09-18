@@ -97,6 +97,28 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "privacy_incidents:view": "View privacy-incident cases",
   "privacy_incidents:review": "Review a privacy-incident case",
   "privacy_incidents:resolve": "Resolve a privacy-incident case",
+  // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+  "finance:view": "View the Finance Center",
+  "finance:dashboard:view": "View the financial dashboard",
+  "finance:payments:view": "View payments",
+  "finance:payments:manage": "Manage payments and manual payment verification",
+  "finance:invoices:view": "View invoices",
+  "finance:invoices:manage": "Manage invoices",
+  "finance:refunds:view": "View refunds",
+  "finance:refunds:request": "Request a refund",
+  "finance:refunds:approve": "Approve a refund",
+  "finance:subscriptions:view": "View subscriptions",
+  "finance:subscriptions:manage": "Manage subscriptions",
+  "finance:packages:view": "View packages and pricing",
+  "finance:packages:manage": "Manage packages, pricing, and entitlements",
+  "finance:coupons:view": "View coupons and discounts",
+  "finance:coupons:manage": "Manage coupons and discounts",
+  "finance:reconciliation:view": "View financial reconciliation",
+  "finance:reconciliation:manage": "Run financial reconciliation",
+  "finance:reports:view": "View financial reports",
+  "finance:reports:export": "Export a financial report",
+  "sensitive:finance:view": "View sensitive financial details",
+  "sensitive:finance:export": "Export sensitive financial data",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

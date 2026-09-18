@@ -91,7 +91,29 @@ export type Permission =
   | "sensitive:photos:view"
   | "privacy_incidents:view"
   | "privacy_incidents:review"
-  | "privacy_incidents:resolve";
+  | "privacy_incidents:resolve"
+  // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+  | "finance:view"
+  | "finance:dashboard:view"
+  | "finance:payments:view"
+  | "finance:payments:manage"
+  | "finance:invoices:view"
+  | "finance:invoices:manage"
+  | "finance:refunds:view"
+  | "finance:refunds:request"
+  | "finance:refunds:approve"
+  | "finance:subscriptions:view"
+  | "finance:subscriptions:manage"
+  | "finance:packages:view"
+  | "finance:packages:manage"
+  | "finance:coupons:view"
+  | "finance:coupons:manage"
+  | "finance:reconciliation:view"
+  | "finance:reconciliation:manage"
+  | "finance:reports:view"
+  | "finance:reports:export"
+  | "sensitive:finance:view"
+  | "sensitive:finance:export";
 
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -183,6 +205,27 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "privacy_incidents:view",
     "privacy_incidents:review",
     "privacy_incidents:resolve",
+    "finance:view",
+    "finance:dashboard:view",
+    "finance:payments:view",
+    "finance:payments:manage",
+    "finance:invoices:view",
+    "finance:invoices:manage",
+    "finance:refunds:view",
+    "finance:refunds:request",
+    "finance:refunds:approve",
+    "finance:subscriptions:view",
+    "finance:subscriptions:manage",
+    "finance:packages:view",
+    "finance:packages:manage",
+    "finance:coupons:view",
+    "finance:coupons:manage",
+    "finance:reconciliation:view",
+    "finance:reconciliation:manage",
+    "finance:reports:view",
+    "finance:reports:export",
+    "sensitive:finance:view",
+    "sensitive:finance:export",
   ],
   ADMIN: [
     "profile:view",
@@ -268,6 +311,28 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "privacy_incidents:resolve",
     // ADMIN deliberately lacks privacy:delete:manage and
     // privacy:break-glass:manage — SUPER_ADMIN only, per STEP 13's plan.
+    "finance:view",
+    "finance:dashboard:view",
+    "finance:payments:view",
+    "finance:payments:manage",
+    "finance:invoices:view",
+    "finance:invoices:manage",
+    "finance:refunds:view",
+    "finance:refunds:request",
+    "finance:refunds:approve",
+    "finance:subscriptions:view",
+    "finance:subscriptions:manage",
+    "finance:packages:view",
+    "finance:packages:manage",
+    "finance:coupons:view",
+    "finance:coupons:manage",
+    "finance:reconciliation:view",
+    "finance:reports:view",
+    "finance:reports:export",
+    "sensitive:finance:view",
+    "sensitive:finance:export",
+    // ADMIN deliberately lacks finance:reconciliation:manage — SUPER_ADMIN
+    // only, per STEP 14's plan (full financial control stays top-tier).
   ],
   STAFF: [
     "profile:view",
@@ -299,6 +364,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "privacy:consent:view", // row-gated: only profiles they're assigned to
     "privacy:requests:view", // row-gated the same way
     "privacy_incidents:view", // row-gated: only incidents assigned to them — see src/lib/case-access.ts
+    "finance:payments:view", // row-gated: only profiles they're assigned to
+    "finance:invoices:view", // row-gated the same way
+    "finance:refunds:request", // never finance:refunds:approve — spec §23
   ],
   VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view"],
 };

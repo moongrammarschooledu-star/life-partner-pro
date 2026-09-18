@@ -113,6 +113,20 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   DELETION_COMPLETED: ESSENTIAL,
   DATA_EXPORT_READY: ESSENTIAL,
   PRIVACY_REQUEST_UPDATED: ESSENTIAL,
+
+  // Payment, Subscription, Packages & Financial Management (STEP 14) —
+  // essential. Payment/subscription/refund status must never be silently
+  // dropped by a marketing-style preference opt-out.
+  PAYMENT_SUCCESS: ESSENTIAL,
+  PAYMENT_FAILED: ESSENTIAL,
+  REFUND_REQUESTED: ESSENTIAL,
+  REFUND_COMPLETED: ESSENTIAL,
+  SUBSCRIPTION_STARTED: ESSENTIAL,
+  SUBSCRIPTION_RENEWED: ESSENTIAL,
+  SUBSCRIPTION_EXPIRING: ESSENTIAL,
+  SUBSCRIPTION_CANCELLED: ESSENTIAL,
+  INVOICE_CREATED: ESSENTIAL,
+  MANUAL_PAYMENT_REQUIRES_REVIEW: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

@@ -97,6 +97,7 @@ enum CaseCategory {
   TECHNICAL_PROBLEM
   PRIVACY_REQUEST
   PAYMENT_BILLING
+  ASSISTED_MATCHMAKING_REQUEST // STEP 14 spec §39 premium action — entitlement-gated, see src/lib/finance/entitlements.ts
   OTHER_SUPPORT
 
   // Complaints (spec §4)
@@ -610,6 +611,29 @@ enum AuditAction {
   BREAK_GLASS_GRANTED
   BREAK_GLASS_USED
   PROFILE_SESSION_REVOKED
+
+  // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+  PACKAGE_CREATED
+  PACKAGE_UPDATED
+  PACKAGE_PRICE_CHANGED
+  COUPON_CREATED
+  COUPON_UPDATED
+  PAYMENT_STATUS_CHANGED
+  MANUAL_PAYMENT_RECORDED
+  MANUAL_PAYMENT_VERIFIED
+  MANUAL_PAYMENT_REJECTED
+  REFUND_REQUESTED
+  REFUND_APPROVED
+  REFUND_EXECUTED
+  REFUND_REJECTED
+  SUBSCRIPTION_CREATED
+  SUBSCRIPTION_RENEWED
+  SUBSCRIPTION_CANCELLED
+  SUBSCRIPTION_EXPIRED
+  ENTITLEMENT_GRANTED
+  INVOICE_GENERATED
+  FINANCIAL_REPORT_EXPORTED
+  RECONCILIATION_RUN
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -739,6 +763,18 @@ enum NotificationType {
   DELETION_COMPLETED
   DATA_EXPORT_READY
   PRIVACY_REQUEST_UPDATED
+
+  // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  REFUND_REQUESTED
+  REFUND_COMPLETED
+  SUBSCRIPTION_STARTED
+  SUBSCRIPTION_RENEWED
+  SUBSCRIPTION_EXPIRING
+  SUBSCRIPTION_CANCELLED
+  INVOICE_CREATED
+  MANUAL_PAYMENT_REQUIRES_REVIEW
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -868,6 +904,112 @@ enum ContactAccessLevel {
   FAMILY_CONTACT_APPROVED
 }
 
+// ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+// See src/lib/finance/ for the logic consuming these. Money is always an
+// integer minor-unit amount (never Float) — see src/lib/finance/money.ts.
+
+enum BillingType {
+  ONE_TIME
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+  CUSTOM
+}
+
+enum SubscriptionStatus {
+  PENDING
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  GRACE_PERIOD
+  CANCELLED
+  EXPIRED
+  SUSPENDED
+  PAYMENT_FAILED
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAYMENT_PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  MOBILE_WALLET
+  MANUAL
+  OTHER
+}
+
+// Only MANUAL is functional today (spec §2 architecture confirmed with the
+// user) — STRIPE's adapter exists against the same PaymentProvider
+// interface but reports "not configured" until real credentials are added.
+enum PaymentProviderName {
+  MANUAL
+  STRIPE
+}
+
+// Spec §22 — one model covers both the "request" and "completed" ends of
+// the lifecycle (not two parallel tables as spec §54 suggests).
+enum RefundStatus {
+  REQUESTED
+  PENDING_APPROVAL
+  APPROVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  REJECTED
+  CANCELLED
+}
+
+enum RefundType {
+  FULL
+  PARTIAL
+  MANUAL
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum ManualPaymentStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+enum ReconciliationItemStatus {
+  MATCHED
+  MISSING_INTERNAL
+  MISSING_PROVIDER
+  AMOUNT_MISMATCH
+  CURRENCY_MISMATCH
+  STATUS_MISMATCH
+  REQUIRES_REVIEW
+}
+
 // ---------- Admin ----------
 
 model AdminUser {
@@ -953,6 +1095,17 @@ model AdminUser {
   dataHoldsLifted           DataHold[]              @relation("DataHoldLiftedBy")
   breakGlassGrants          BreakGlassAccess[]
   privacyAccessLogs         PrivacyAccessLog[]
+
+  // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+  packagesCreated           Package[]
+  couponsCreated            Coupon[]
+  taxRulesCreated           TaxRule[]
+  manualPaymentsEntered     ManualPaymentDetail[]  @relation("ManualPaymentEnteredBy")
+  manualPaymentsVerified    ManualPaymentDetail[]  @relation("ManualPaymentVerifiedBy")
+  refundsRequested          Refund[]               @relation("RefundRequestedBy")
+  refundsApproved           Refund[]               @relation("RefundApprovedBy")
+  refundsExecuted           Refund[]               @relation("RefundExecutedBy")
+  reconciliationRunsStarted ReconciliationRun[]
 }
 
 // ---------- Core profile ----------
@@ -1038,6 +1191,13 @@ model Profile {
   privacyRequests         PrivacyRequest[]
   dataExportRequests      DataExportRequest[]
   sessions                ProfileSession[]
+
+  // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+  subscriptions  Subscription[]
+  orders         Order[]
+  payments       Payment[]
+  invoices       Invoice[]
+  couponRedemptions CouponRedemption[]
 
   @@index([gender, status])
   @@index([city])
@@ -1770,6 +1930,16 @@ model AppSettings {
   caseSlaCriticalFirstResponseHours Int @default(1)
   caseSlaCriticalResolutionHours    Int @default(4)
 
+  // Payments & Billing (STEP 14). paidFeatureKeys is the Super-Admin
+  // "which features currently require an entitlement" switch (spec §1) —
+  // empty by default, so nothing is gated unless explicitly turned on.
+  activePaymentProvider                  PaymentProviderName @default(MANUAL)
+  defaultCurrencyCode                    String              @default("PKR")
+  subscriptionGracePeriodDays            Int                 @default(7)
+  paymentRetryLimit                      Int                 @default(3)
+  refundApprovalRequiredAboveMinorUnits  Int?
+  paidFeatureKeys                        Json?
+
   updatedAt             DateTime @updatedAt
 }
 
@@ -2188,6 +2358,8 @@ model Case {
   relatedMeetingId       String?
   relatedVerificationId  String?
   relatedCommunicationId String?
+  relatedPaymentId       String? // STEP 14 — PAYMENT_BILLING cases, plain id, same convention
+  relatedInvoiceId       String?
 
   preferredResponseMethod String?
   firstResponseDueAt      DateTime?
@@ -2616,10 +2788,416 @@ model ProfileSession {
   @@index([profileId])
 }
 
-// Generic row-per-key counter shared by LPP-DEL-###### and LPP-PRIV-######
-// codes — mirrors CaseCodeCounter's exact shape with a reusable key instead
-// of two near-identical single-purpose tables. See src/lib/privacy/codes.ts.
+// Generic row-per-key counter shared by LPP-DEL-######/LPP-PRIV-###### codes
+// (STEP 13) and, from STEP 14 on, LPP-PAY-/LPP-SUB-/LPP-ORD-/LPP-INV-/
+// LPP-DISC-/LPP-PKG-/LPP-REF- codes too — mirrors CaseCodeCounter's exact
+// shape with a reusable key instead of many near-identical single-purpose
+// tables. See src/lib/privacy/codes.ts and src/lib/finance/codes.ts.
 model SequenceCounter {
   key     String @id
   lastSeq Int    @default(0)
+}
+
+// ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+// Every amount field is an Int in minor currency units (e.g. paisa/cents) —
+// never Float — per spec §4. See src/lib/finance/money.ts for the only place
+// arithmetic on these happens.
+
+model Currency {
+  code             String  @id // ISO 4217, e.g. "PKR"
+  symbol           String
+  decimalPrecision Int     @default(2)
+  active           Boolean @default(true)
+}
+
+model Package {
+  id          String      @id @default(cuid())
+  packageCode String      @unique // LPP-PKG-######
+  name        String
+  description String
+  billingType BillingType
+  durationDays Int? // null for ONE_TIME
+  active      Boolean     @default(true)
+  displayOrder Int        @default(0)
+  trialDays   Int         @default(0)
+  refundPolicyNote String?
+  createdBy   AdminUser?  @relation(fields: [createdById], references: [id])
+  createdById String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  prices        PackagePrice[]
+  entitlements  PackageEntitlement[]
+  orderItems    OrderItem[]
+  subscriptions Subscription[]
+
+  @@index([active, displayOrder])
+}
+
+// Append-only (spec §46) — a price "change" is a new row, never an update to
+// an old one. The package's current price is the latest active row ordered
+// by effectiveFrom. OrderItem/InvoiceItem copy the charged amount as their
+// own field, so a later price change never alters a historical invoice.
+model PackagePrice {
+  id            String   @id @default(cuid())
+  package       Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId     String
+  amountMinor   Int
+  currencyCode  String
+  taxInclusive  Boolean  @default(false)
+  effectiveFrom DateTime @default(now())
+  active        Boolean  @default(true)
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  @@index([packageId, effectiveFrom])
+}
+
+// Spec §8 — data, not code branches. featureKey is free text (e.g.
+// "matching.priority", "support.priority") so a new feature never requires
+// a schema change. limitValue null = unlimited.
+model PackageEntitlement {
+  id          String   @id @default(cuid())
+  package     Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId   String
+  featureKey  String
+  limitValue  Int?
+  resetPeriod String? // "MONTHLY" | "YEARLY" | null (lifetime for the subscription term)
+  createdAt   DateTime @default(now())
+
+  @@unique([packageId, featureKey])
+}
+
+model Subscription {
+  id                   String              @id @default(cuid())
+  subscriptionCode     String              @unique // LPP-SUB-######
+  profile              Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId            String
+  package              Package             @relation(fields: [packageId], references: [id])
+  packageId            String
+  provider             PaymentProviderName
+  providerSubscriptionId String?
+  status               SubscriptionStatus  @default(PENDING)
+  startDate            DateTime?
+  endDate              DateTime?
+  renewalDate          DateTime?
+  autoRenew            Boolean             @default(true)
+  trialEndsAt          DateTime?
+  cancelledAt          DateTime?
+  cancellationReason   String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  events SubscriptionEvent[]
+  orders Order[]
+
+  @@index([profileId, status])
+  @@index([status, renewalDate])
+}
+
+// Mirrors STEP 12's CaseStatusHistory precedent exactly.
+model SubscriptionEvent {
+  id             String        @id @default(cuid())
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  fromStatus     SubscriptionStatus?
+  toStatus       SubscriptionStatus
+  reason         String?
+  createdAt      DateTime      @default(now())
+
+  @@index([subscriptionId])
+}
+
+model Order {
+  id             String        @id @default(cuid())
+  orderCode      String        @unique // LPP-ORD-######
+  profile        Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId      String
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  subscriptionId String?
+  status         OrderStatus   @default(DRAFT)
+  currencyCode   String
+  subtotalMinor  Int
+  discountMinor  Int           @default(0)
+  taxMinor       Int           @default(0)
+  totalMinor     Int
+  couponId       String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  completedAt    DateTime?
+
+  items    OrderItem[]
+  payments Payment[]
+  invoice  Invoice?
+
+  @@index([profileId, status])
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId        String
+  package        Package  @relation(fields: [packageId], references: [id])
+  packageId      String
+  packagePriceId String? // snapshot reference only, not a live FK dependency for amounts
+  description    String
+  quantity       Int      @default(1)
+  unitPriceMinor Int
+  discountMinor  Int      @default(0)
+  taxMinor       Int      @default(0)
+  totalMinor     Int
+
+  @@index([orderId])
+}
+
+model Payment {
+  id                    String              @id @default(cuid())
+  paymentCode           String              @unique // LPP-PAY-######
+  order                 Order               @relation(fields: [orderId], references: [id])
+  orderId               String
+  profile               Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId             String
+  amountMinor           Int
+  currencyCode          String
+  method                PaymentMethod
+  provider              PaymentProviderName
+  providerTransactionId String?
+  status                PaymentStatus       @default(CREATED)
+  createdAt             DateTime            @default(now())
+  paidAt                DateTime?
+  failedAt              DateTime?
+  refundedAt            DateTime?
+
+  attempts      PaymentAttempt[]
+  manualDetail  ManualPaymentDetail?
+  invoice       Invoice?
+  refunds       Refund[]
+
+  @@unique([provider, providerTransactionId])
+  @@index([profileId, status])
+  @@index([orderId])
+}
+
+// Provider-side retry tracking (spec §27) — never stores raw gateway
+// error details, only a safe/sanitized message.
+model PaymentAttempt {
+  id                      String        @id @default(cuid())
+  payment                 Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId               String
+  attemptNumber           Int
+  status                  PaymentStatus
+  providerErrorCode       String?
+  providerErrorMessageSafe String?
+  createdAt               DateTime      @default(now())
+
+  @@index([paymentId])
+}
+
+// 1:1 extension of a Payment with method=MANUAL — mirrors the Case+
+// CaseEvidence extension-table pattern rather than a fully parallel
+// manual_payments table (spec §43/§44).
+model ManualPaymentDetail {
+  id                  String              @id @default(cuid())
+  payment             Payment             @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId           String              @unique
+  referenceNumber     String
+  evidenceDescription String?
+  // Either the applicant self-submitted (submittedByProfileId) or an admin
+  // recorded it on the customer's behalf (enteredById) — never both.
+  submittedByProfileId String?
+  enteredBy           AdminUser?          @relation("ManualPaymentEnteredBy", fields: [enteredById], references: [id])
+  enteredById         String?
+  enteredAt           DateTime            @default(now())
+  status              ManualPaymentStatus @default(PENDING_VERIFICATION)
+  verifiedBy          AdminUser?          @relation("ManualPaymentVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedById        String?
+  verifiedAt          DateTime?
+  rejectionReason     String?
+}
+
+// @@unique([provider, providerEventId]) IS the idempotency/replay-prevention
+// mechanism (spec §28/§29) — a duplicate webhook delivery fails the unique
+// insert and is treated as already-processed. Distinct from STEP 9's
+// WebhookEvent (notification-delivery callbacks) — considered reusing it,
+// rejected: payment webhooks need amount/currency-verification fields that
+// model doesn't have.
+model PaymentWebhookEvent {
+  id              String              @id @default(cuid())
+  provider        PaymentProviderName
+  providerEventId String
+  eventType       String
+  payloadHash     String
+  receivedAt      DateTime            @default(now())
+  processedAt     DateTime?
+  status          String              @default("RECEIVED") // RECEIVED | PROCESSED | FAILED | IGNORED
+  retryCount      Int                 @default(0)
+  errorCode       String?
+
+  @@unique([provider, providerEventId])
+}
+
+// Immutable once finalized (spec §47) — a correction is a new adjustment/
+// credit record, never a silent edit to amount/currency/customer/tax here.
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceCode     String        @unique // LPP-INV-######
+  order           Order         @relation(fields: [orderId], references: [id])
+  orderId         String        @unique
+  profile         Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId       String
+  payment         Payment?      @relation(fields: [paymentId], references: [id])
+  paymentId       String?       @unique
+  subtotalMinor   Int
+  discountMinor   Int
+  taxMinor        Int
+  totalMinor      Int
+  currencyCode    String
+  paymentStatus   PaymentStatus
+  invoiceDate     DateTime      @default(now())
+  dueDate         DateTime?
+  paidDate        DateTime?
+  paymentReference String?
+  createdAt       DateTime      @default(now())
+
+  items InvoiceItem[]
+
+  @@index([profileId])
+}
+
+model InvoiceItem {
+  id             String  @id @default(cuid())
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId      String
+  description    String
+  quantity       Int     @default(1)
+  unitPriceMinor Int
+  discountMinor  Int     @default(0)
+  taxMinor       Int     @default(0)
+  totalMinor     Int
+
+  @@index([invoiceId])
+}
+
+model Refund {
+  id               String              @id @default(cuid())
+  refundCode       String              @unique // LPP-REF-######
+  payment          Payment             @relation(fields: [paymentId], references: [id])
+  paymentId        String
+  amountMinor      Int
+  currencyCode     String
+  type             RefundType
+  reason           String
+  provider         PaymentProviderName
+  providerRefundId String?
+  requestedBy      AdminUser           @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  requestedById    String
+  approvedBy       AdminUser?          @relation("RefundApprovedBy", fields: [approvedById], references: [id])
+  approvedById     String?
+  executedBy       AdminUser?          @relation("RefundExecutedBy", fields: [executedById], references: [id])
+  executedById     String?
+  status           RefundStatus        @default(REQUESTED)
+  createdAt        DateTime            @default(now())
+  completedAt      DateTime?
+
+  @@index([paymentId])
+  @@index([status])
+}
+
+// Spec §20/§21 — a Coupon is a Discount that requires a redeemable code;
+// discountCode is the internal admin-facing id, code is what a user types.
+model Coupon {
+  id                   String       @id @default(cuid())
+  discountCode         String       @unique // LPP-DISC-######
+  code                 String       @unique // e.g. "WELCOME10"
+  description          String?
+  discountType         DiscountType
+  discountValue        Int // percent (0-100) or fixed minor-unit amount depending on discountType
+  minPurchaseMinor     Int?
+  maxDiscountMinor     Int?
+  startDate            DateTime?
+  endDate              DateTime?
+  usageLimit           Int?
+  perUserLimit         Int?
+  applicablePackageIds Json? // array of Package ids; null = all packages
+  active               Boolean      @default(true)
+  createdBy            AdminUser?   @relation(fields: [createdById], references: [id])
+  createdById          String?
+  createdAt            DateTime     @default(now())
+
+  redemptions CouponRedemption[]
+}
+
+model CouponRedemption {
+  id                   String   @id @default(cuid())
+  coupon               Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  couponId             String
+  profile              Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId            String
+  orderId              String
+  discountAppliedMinor Int
+  redeemedAt           DateTime @default(now())
+
+  @@unique([couponId, orderId])
+  @@index([couponId, profileId])
+}
+
+// Rate stored in basis points (1/100 of a percent, e.g. 1700 = 17.00%) to
+// avoid float precision issues (spec §19).
+model TaxRule {
+  id                  String    @id @default(cuid())
+  name                String
+  ratePercentBasisPoints Int
+  country             String
+  region              String?
+  applicableService   String? // null = all services
+  effectiveDate       DateTime  @default(now())
+  expiryDate          DateTime?
+  active              Boolean   @default(true)
+  createdBy           AdminUser? @relation(fields: [createdById], references: [id])
+  createdById         String?
+  createdAt           DateTime  @default(now())
+
+  @@index([country, active])
+}
+
+// Atomic usage consumption (spec §40) — see consumeUsage() in
+// src/lib/finance/entitlements.ts for the transactional WHERE-guarded update
+// that prevents the race condition this table exists to track.
+model FeatureUsage {
+  id             String   @id @default(cuid())
+  profileId      String
+  featureKey     String
+  subscriptionId String?
+  usageCount     Int      @default(0)
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([profileId, featureKey, periodStart])
+}
+
+model ReconciliationRun {
+  id             String     @id @default(cuid())
+  startedBy      AdminUser  @relation(fields: [startedById], references: [id])
+  startedById    String
+  startedAt      DateTime   @default(now())
+  completedAt    DateTime?
+  totalChecked   Int        @default(0)
+  matchedCount   Int        @default(0)
+  discrepancyCount Int      @default(0)
+
+  items ReconciliationItem[]
+}
+
+model ReconciliationItem {
+  id        String                    @id @default(cuid())
+  run       ReconciliationRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId     String
+  paymentId String?
+  status    ReconciliationItemStatus
+  detail    String?
+  createdAt DateTime                  @default(now())
+
+  @@index([runId, status])
 }

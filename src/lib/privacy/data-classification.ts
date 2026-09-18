@@ -36,6 +36,14 @@ export const DATA_CLASSIFICATION: Record<string, DataClassification> = {
   caseInternalNoteSeniorTier: "RESTRICTED",
   staffConductCase: "RESTRICTED",
   breakGlassGrant: "RESTRICTED",
+
+  // Payment, Subscription, Packages & Financial Management (STEP 14) — spec
+  // §34/§42's sensitive:finance:* permission tier.
+  payment: "HIGHLY_SENSITIVE",
+  invoice: "HIGHLY_SENSITIVE",
+  refund: "HIGHLY_SENSITIVE",
+  manualPaymentEvidence: "HIGHLY_SENSITIVE",
+  subscriptionStatus: "INTERNAL",
 };
 
 export function classify(field: string): DataClassification {

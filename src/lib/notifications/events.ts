@@ -294,3 +294,45 @@ export async function notifyDataExportReady(profileId: string) {
 export async function notifyPrivacyRequestUpdated(profileId: string, requestCode: string) {
   await sendNotification({ profileId, type: "PRIVACY_REQUEST_UPDATED", data: { templateVars: { requestCode } } });
 }
+
+// ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+
+export async function notifyPaymentSuccess(profileId: string) {
+  await sendNotification({ profileId, type: "PAYMENT_SUCCESS", data: {} });
+}
+
+export async function notifyPaymentFailed(profileId: string) {
+  await sendNotification({ profileId, type: "PAYMENT_FAILED", data: {} });
+}
+
+export async function notifyRefundRequested(profileId: string) {
+  await sendNotification({ profileId, type: "REFUND_REQUESTED", data: {} });
+}
+
+export async function notifyRefundCompleted(profileId: string) {
+  await sendNotification({ profileId, type: "REFUND_COMPLETED", data: {} });
+}
+
+export async function notifySubscriptionStarted(profileId: string) {
+  await sendNotification({ profileId, type: "SUBSCRIPTION_STARTED", data: {} });
+}
+
+export async function notifySubscriptionRenewed(profileId: string) {
+  await sendNotification({ profileId, type: "SUBSCRIPTION_RENEWED", data: {} });
+}
+
+export async function notifySubscriptionExpiring(profileId: string) {
+  await sendNotification({ profileId, type: "SUBSCRIPTION_EXPIRING", data: {} });
+}
+
+export async function notifySubscriptionCancelled(profileId: string) {
+  await sendNotification({ profileId, type: "SUBSCRIPTION_CANCELLED", data: {} });
+}
+
+export async function notifyInvoiceCreated(profileId: string) {
+  await sendNotification({ profileId, type: "INVOICE_CREATED", data: {} });
+}
+
+export async function notifyManualPaymentRequiresReview(assignedAdminId?: string | null) {
+  await notifyAdmins({ type: "MANUAL_PAYMENT_REQUIRES_REVIEW", data: {}, assignedAdminId: assignedAdminId ?? undefined });
+}

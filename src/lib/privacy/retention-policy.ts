@@ -114,6 +114,26 @@ async function expireDataExports() {
   }
 }
 
+// STEP 14 — FINANCIAL_RECORDS is now live. Payments/Invoices/Refunds are
+// never auto-deleted here (spec §47/§51's immutability + "never delete
+// financial records without checking retention requirements" both argue
+// against it) — only stale PaymentWebhookEvent rows (transient event-log
+// noise, not an accounting record) are eligible for automated pruning.
+async function sweepFinancialWebhookEvents() {
+  const policy = await getRetentionPolicy("FINANCIAL_RECORDS");
+  if (!policy || !policy.isActive || policy.action !== "DELETE") return;
+  const cutoff = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000);
+  const eligible = await prisma.paymentWebhookEvent.findMany({ where: { receivedAt: { lt: cutoff } }, select: { id: true }, take: 500 });
+  for (const row of eligible) {
+    try {
+      await prisma.paymentWebhookEvent.delete({ where: { id: row.id } });
+      await logOutcome("FINANCIAL_RECORDS", "PaymentWebhookEvent", row.id, "DELETE", "APPLIED");
+    } catch (error) {
+      await logOutcome("FINANCIAL_RECORDS", "PaymentWebhookEvent", row.id, "DELETE", "SKIPPED_ERROR", String(error));
+    }
+  }
+}
+
 // Categories with a configured, active policy but no automated handler yet
 // (spec's "Review Required" is a legitimate first-class action, not a gap —
 // disclosed in the final report as current automation coverage).
@@ -129,7 +149,6 @@ const UNAUTOMATED_CATEGORIES: DataCategory[] = [
   "SUPPORT_CASES",
   "SAFETY_CASES",
   "SECURITY_LOGS",
-  "FINANCIAL_RECORDS", // no financial system exists in this app
 ];
 
 async function flagUnautomatedCategories() {
@@ -152,6 +171,7 @@ export async function runDueRetentionActions() {
     await executeAccountDeletion(req.id).catch(() => {});
   }
   await sweepAuditLogs().catch(() => {});
+  await sweepFinancialWebhookEvents().catch(() => {});
   await expireDataExports().catch(() => {});
   await flagUnautomatedCategories().catch(() => {});
   return { deletionsProcessed: dueDeletions.length };

@@ -289,4 +289,48 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Privacy Request Updated", subject: "Your Privacy Request Has Been Updated", body: "Your Life Partner Pro account has a new update. Please log in to review your account." },
     UR: { title: "پرائیویسی درخواست میں تبدیلی", subject: "آپ کی پرائیویسی درخواست میں تبدیلی ہوئی ہے", body: "آپ کے لائف پارٹنر پرو اکاؤنٹ میں ایک نئی اپ ڈیٹ ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
   },
+
+  // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
+  // Deliberately generic — spec §49 — amounts/methods/reasons are never
+  // interpolated into an externally-sent preview.
+  PAYMENT_SUCCESS: {
+    EN: { title: "Payment Successful", subject: "Your Payment Was Successful", body: "Your payment has been received. Please log in to review your account." },
+    UR: { title: "ادائیگی کامیاب", subject: "آپ کی ادائیگی کامیاب رہی", body: "آپ کی ادائیگی موصول ہو گئی ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  PAYMENT_FAILED: {
+    EN: { title: "Payment Unsuccessful", subject: "There Was an Issue With Your Payment", body: "We were unable to process your recent payment. Please log in to review your account." },
+    UR: { title: "ادائیگی ناکام", subject: "آپ کی ادائیگی میں مسئلہ ہوا", body: "ہم آپ کی حالیہ ادائیگی پر کارروائی نہیں کر سکے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  REFUND_REQUESTED: {
+    EN: { title: "Refund Requested", subject: "Your Refund Request Has Been Received", body: "A refund request has been recorded for your account. Please log in to review your account." },
+    UR: { title: "رقم کی واپسی کی درخواست", subject: "آپ کی رقم کی واپسی کی درخواست موصول ہوگئی", body: "آپ کے اکاؤنٹ کے لیے رقم کی واپسی کی درخواست درج کر لی گئی ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  REFUND_COMPLETED: {
+    EN: { title: "Refund Completed", subject: "Your Refund Has Been Completed", body: "Your refund has been processed. Please log in to review your account." },
+    UR: { title: "رقم کی واپسی مکمل", subject: "آپ کی رقم کی واپسی مکمل ہو گئی", body: "آپ کی رقم کی واپسی کر دی گئی ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  SUBSCRIPTION_STARTED: {
+    EN: { title: "Subscription Started", subject: "Your Subscription Is Now Active", body: "Your subscription has started. Please log in to review your account." },
+    UR: { title: "سبسکرپشن شروع", subject: "آپ کی سبسکرپشن اب فعال ہے", body: "آپ کی سبسکرپشن شروع ہو گئی ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  SUBSCRIPTION_RENEWED: {
+    EN: { title: "Subscription Renewed", subject: "Your Subscription Has Been Renewed", body: "Your subscription has been renewed. Please log in to review your account." },
+    UR: { title: "سبسکرپشن تجدید", subject: "آپ کی سبسکرپشن کی تجدید ہو گئی", body: "آپ کی سبسکرپشن کی تجدید ہو گئی ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  SUBSCRIPTION_EXPIRING: {
+    EN: { title: "Subscription Needs Renewal", subject: "Your Subscription Needs Renewal", body: "Your subscription requires renewal. Please log in to review your account." },
+    UR: { title: "سبسکرپشن کی تجدید درکار ہے", subject: "آپ کی سبسکرپشن کی تجدید درکار ہے", body: "آپ کی سبسکرپشن کی تجدید درکار ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  SUBSCRIPTION_CANCELLED: {
+    EN: { title: "Subscription Cancelled", subject: "Your Subscription Has Been Cancelled", body: "Your subscription has been cancelled. Please log in to review your account." },
+    UR: { title: "سبسکرپشن منسوخ", subject: "آپ کی سبسکرپشن منسوخ ہو گئی", body: "آپ کی سبسکرپشن منسوخ ہو گئی ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  INVOICE_CREATED: {
+    EN: { title: "New Invoice", subject: "A New Invoice Is Available", body: "A new invoice is available on your account. Please log in to review your account." },
+    UR: { title: "نیا انوائس", subject: "ایک نیا انوائس دستیاب ہے", body: "آپ کے اکاؤنٹ پر ایک نیا انوائس دستیاب ہے۔ براہ کرم اپنا اکاؤنٹ دیکھنے کے لیے لاگ ان کریں۔" },
+  },
+  MANUAL_PAYMENT_REQUIRES_REVIEW: {
+    EN: { title: "Payment Under Review", body: "A manual payment submission is awaiting admin review." },
+    UR: { title: "ادائیگی زیر جائزہ", body: "ایک دستی ادائیگی کی جمع کرائی گئی درخواست انتظامی جائزے کی منتظر ہے۔" },
+  },
 };
