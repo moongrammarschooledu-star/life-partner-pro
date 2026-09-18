@@ -5,6 +5,7 @@ import { addMoney, subtractMoney } from "@/lib/finance/money";
 import { resolveCouponForOrder } from "@/lib/finance/coupon";
 import { computeTax, resolveTaxRule } from "@/lib/finance/tax";
 import { getActiveProvider } from "@/lib/finance/providers/registry";
+import { assertPaymentsAvailable, PaymentsUnavailableError } from "@/lib/finance/rollout";
 
 export class CheckoutError extends Error {}
 
@@ -13,7 +14,18 @@ export class CheckoutError extends Error {}
 // server-side, and re-computes tax from the active TaxRule. Nothing beyond
 // creating a Created-status Payment happens here — activation only occurs
 // once a webhook or admin-verified manual payment confirms PAID (spec §12).
+//
+// The rollout-phases gate (spec §70/§73) runs first, before any of that —
+// its PaymentsUnavailableError is re-thrown as a CheckoutError so existing
+// callers' error handling needs no change.
 export async function startCheckout(params: { profileId: string; packageId: string; couponCode?: string; country: string }) {
+  try {
+    await assertPaymentsAvailable({ id: params.profileId, country: params.country }, params.packageId);
+  } catch (error) {
+    if (error instanceof PaymentsUnavailableError) throw new CheckoutError(error.message);
+    throw error;
+  }
+
   const pkg = await prisma.package.findUnique({ where: { id: params.packageId }, include: { prices: { where: { active: true }, orderBy: { effectiveFrom: "desc" }, take: 1 } } });
   if (!pkg || !pkg.active) throw new CheckoutError("This package is not currently available.");
   const price = pkg.prices[0];

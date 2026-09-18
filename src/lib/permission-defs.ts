@@ -119,6 +119,14 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "finance:reports:export": "Export a financial report",
   "sensitive:finance:view": "View sensitive financial details",
   "sensitive:finance:export": "Export sensitive financial data",
+
+  // ---------- Payment Rollout Phases (STEP 14 add-on) ----------
+  "finance:rollout:view": "View payment rollout stage, feature flags, and health",
+  "finance:rollout:manage": "Change payment feature flags and beta/internal eligibility config",
+  "finance:rollout:enable": "Advance the payment rollout stage forward",
+  "finance:rollout:disable": "Disable payments (kill switch) or roll back the rollout stage",
+  "finance:provider:manage": "Change the active payment provider or environment config",
+  "finance:webhooks:view": "View payment webhook health and delivery status",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

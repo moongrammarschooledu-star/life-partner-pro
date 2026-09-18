@@ -139,6 +139,19 @@ enum CaseCategory {
   STAFF_ACCESS_VIOLATION
   SECURITY_BREACH
   OTHER_PRIVACY_INCIDENT
+
+  // Payment Incidents (STEP 14 rollout-phases add-on §82) — system-detected
+  // ops/staff-facing payment problems, filed under CaseType.INTERNAL (which
+  // already accepts any category). Deliberately distinct from PAYMENT_BILLING
+  // above, which is a customer-facing support ticket, not a system incident.
+  PROVIDER_OUTAGE
+  PAYMENT_VERIFICATION_FAILURE
+  DUPLICATE_CHARGE
+  REFUND_FAILURE
+  WEBHOOK_FAILURE
+  SUBSCRIPTION_ERROR
+  INVOICE_ERROR
+  RECONCILIATION_MISMATCH
 }
 
 enum CaseStatus {
@@ -634,6 +647,16 @@ enum AuditAction {
   INVOICE_GENERATED
   FINANCIAL_REPORT_EXPORTED
   RECONCILIATION_RUN
+
+  // ---------- Payment Rollout Phases (STEP 14 add-on) ----------
+  PAYMENT_ROLLOUT_CHANGED
+  PAYMENT_ENABLED
+  PAYMENT_DISABLED
+  PAYMENT_BETA_ENABLED
+  PAYMENT_PROVIDER_CHANGED
+  PAYMENT_ENVIRONMENT_CHANGED
+  PAYMENT_FEATURE_FLAG_CHANGED
+  PAYMENT_KILL_SWITCH_USED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1107,6 +1130,7 @@ model AdminUser {
   refundsExecuted           Refund[]               @relation("RefundExecutedBy")
   reconciliationRunsStarted ReconciliationRun[]
   bankAccountsCreated       BankAccount[]
+  paymentRolloutEvents      PaymentRolloutEvent[]
 }
 
 // ---------- Core profile ----------
@@ -1941,7 +1965,51 @@ model AppSettings {
   refundApprovalRequiredAboveMinorUnits  Int?
   paidFeatureKeys                        Json?
 
+  // Payment Rollout Phases (STEP 14 add-on). Stage gates new checkout
+  // sessions only — never touches existing subscriptions/invoices/refunds.
+  // Defaults reflect the honest current state: nothing has been through
+  // sandbox testing yet, so payments start fully DISABLED.
+  paymentRolloutStage             PaymentRolloutStage @default(DISABLED)
+  paymentsEnabled                 Boolean             @default(false)
+  checkoutEnabled                 Boolean             @default(false)
+  subscriptionsEnabled            Boolean             @default(false)
+  refundsEnabled                  Boolean             @default(true)
+  manualPaymentEnabled            Boolean             @default(true)
+  betaEnabled                     Boolean             @default(false)
+  publicCheckoutEnabled           Boolean             @default(false)
+  providerWebhooksEnabled         Boolean             @default(true)
+  paymentBetaPercentage           Int                 @default(0)
+  paymentBetaAllowedProfileIds    Json?
+  paymentBetaAllowedCountries     Json?
+  paymentBetaAllowedPackageIds    Json?
+  paymentInternalAllowedProfileIds Json?
+  reconciliationFrequency         String              @default("DAILY")
+  lastScheduledReconciliationAt   DateTime?
+
   updatedAt             DateTime @updatedAt
+}
+
+enum PaymentRolloutStage {
+  DISABLED
+  SANDBOX
+  INTERNAL
+  BETA
+  PRODUCTION
+}
+
+// Audit trail for payment rollout-stage transitions (STEP 14 add-on §78),
+// distinct from the generic AuditLog entry written alongside it — this one
+// captures the state-machine history specifically.
+model PaymentRolloutEvent {
+  id        String              @id @default(cuid())
+  fromStage PaymentRolloutStage?
+  toStage   PaymentRolloutStage
+  reason    String?
+  actorId   String
+  actor     AdminUser           @relation(fields: [actorId], references: [id])
+  createdAt DateTime            @default(now())
+
+  @@index([createdAt])
 }
 
 // Running counter backing the human-readable LPP-###### profile codes.
@@ -3201,8 +3269,10 @@ model FeatureUsage {
 
 model ReconciliationRun {
   id             String     @id @default(cuid())
-  startedBy      AdminUser  @relation(fields: [startedById], references: [id])
-  startedById    String
+  // Null for a scheduled/cron-triggered run (STEP 14 rollout-phases add-on
+  // §77) — every admin-initiated run still has a real actor.
+  startedBy      AdminUser? @relation(fields: [startedById], references: [id])
+  startedById    String?
   startedAt      DateTime   @default(now())
   completedAt    DateTime?
   totalChecked   Int        @default(0)

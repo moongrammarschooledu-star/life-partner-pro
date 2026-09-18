@@ -112,6 +112,12 @@ export type Permission =
   | "finance:reconciliation:manage"
   | "finance:reports:view"
   | "finance:reports:export"
+  | "finance:rollout:view"
+  | "finance:rollout:manage"
+  | "finance:rollout:enable"
+  | "finance:rollout:disable"
+  | "finance:provider:manage"
+  | "finance:webhooks:view"
   | "sensitive:finance:view"
   | "sensitive:finance:export";
 
@@ -224,6 +230,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "finance:reconciliation:manage",
     "finance:reports:view",
     "finance:reports:export",
+    "finance:rollout:view",
+    "finance:rollout:manage",
+    "finance:rollout:enable",
+    "finance:rollout:disable",
+    "finance:provider:manage",
+    "finance:webhooks:view",
     "sensitive:finance:view",
     "sensitive:finance:export",
   ],
@@ -333,6 +345,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "sensitive:finance:export",
     // ADMIN deliberately lacks finance:reconciliation:manage — SUPER_ADMIN
     // only, per STEP 14's plan (full financial control stays top-tier).
+    "finance:rollout:view",
+    "finance:webhooks:view",
+    // ADMIN deliberately lacks finance:rollout:manage/enable/disable and
+    // finance:provider:manage — changing rollout stage (especially the kill
+    // switch and any move into PRODUCTION) stays SUPER_ADMIN-only with
+    // reauth, per this add-on's plan.
   ],
   STAFF: [
     "profile:view",

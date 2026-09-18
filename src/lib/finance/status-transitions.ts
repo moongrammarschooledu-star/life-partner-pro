@@ -1,4 +1,4 @@
-import type { PaymentStatus, OrderStatus, RefundStatus, SubscriptionStatus } from "@prisma/client";
+import type { PaymentStatus, OrderStatus, RefundStatus, SubscriptionStatus, PaymentRolloutStage } from "@prisma/client";
 
 // Spec §56 — no arbitrary status changes. Every mutation route calls one of
 // these before writing a new status; an invalid transition is rejected with
@@ -68,4 +68,21 @@ const SUBSCRIPTION_TRANSITIONS: Record<SubscriptionStatus, SubscriptionStatus[]>
 
 export function isValidSubscriptionStatusTransition(from: SubscriptionStatus, to: SubscriptionStatus): boolean {
   return SUBSCRIPTION_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+// Payment Rollout Phases (STEP 14 add-on §83) — forward-only progression,
+// no skipping stages, plus a universal any-state kill switch to DISABLED.
+// There is no direct lateral/backward move (e.g. PRODUCTION -> BETA):
+// stepping back requires the same reauth-gated path back through DISABLED,
+// so a rollback is always an explicit, auditable, from-scratch decision.
+const ROLLOUT_TRANSITIONS: Record<PaymentRolloutStage, PaymentRolloutStage[]> = {
+  DISABLED: ["SANDBOX"],
+  SANDBOX: ["INTERNAL", "DISABLED"],
+  INTERNAL: ["BETA", "DISABLED"],
+  BETA: ["PRODUCTION", "DISABLED"],
+  PRODUCTION: ["DISABLED"],
+};
+
+export function isValidRolloutTransition(from: PaymentRolloutStage, to: PaymentRolloutStage): boolean {
+  return ROLLOUT_TRANSITIONS[from]?.includes(to) ?? false;
 }

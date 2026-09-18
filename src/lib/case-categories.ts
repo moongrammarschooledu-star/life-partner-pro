@@ -67,6 +67,20 @@ export const PRIVACY_INCIDENT_CATEGORIES: CaseCategory[] = [
   "OTHER_PRIVACY_INCIDENT",
 ];
 
+// Payment incidents (STEP 14 rollout-phases add-on §82) — system-detected
+// ops/staff-facing payment problems, folded into INTERNAL's open-ended set
+// (not their own CaseType, unlike PRIVACY_INCIDENT — see schema.prisma).
+export const PAYMENT_INCIDENT_CATEGORIES: CaseCategory[] = [
+  "PROVIDER_OUTAGE",
+  "PAYMENT_VERIFICATION_FAILURE",
+  "DUPLICATE_CHARGE",
+  "REFUND_FAILURE",
+  "WEBHOOK_FAILURE",
+  "SUBSCRIPTION_ERROR",
+  "INVOICE_ERROR",
+  "RECONCILIATION_MISMATCH",
+];
+
 const CATEGORIES_BY_TYPE: Record<CaseType, CaseCategory[]> = {
   SUPPORT: SUPPORT_CATEGORIES,
   COMPLAINT: COMPLAINT_CATEGORIES,
@@ -74,7 +88,13 @@ const CATEGORIES_BY_TYPE: Record<CaseType, CaseCategory[]> = {
   PRIVACY_INCIDENT: PRIVACY_INCIDENT_CATEGORIES,
   // Internal cases are staff-initiated and not bound to the applicant-facing
   // category set — any category is acceptable.
-  INTERNAL: [...SUPPORT_CATEGORIES, ...COMPLAINT_CATEGORIES, ...SAFETY_CATEGORIES, ...PRIVACY_INCIDENT_CATEGORIES],
+  INTERNAL: [
+    ...SUPPORT_CATEGORIES,
+    ...COMPLAINT_CATEGORIES,
+    ...SAFETY_CATEGORIES,
+    ...PRIVACY_INCIDENT_CATEGORIES,
+    ...PAYMENT_INCIDENT_CATEGORIES,
+  ],
 };
 
 export function isCategoryValidForType(type: CaseType, category: CaseCategory): boolean {

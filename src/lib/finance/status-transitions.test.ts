@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isValidPaymentStatusTransition, isValidOrderStatusTransition, isValidRefundStatusTransition, isValidSubscriptionStatusTransition } from "./status-transitions";
+import { isValidPaymentStatusTransition, isValidOrderStatusTransition, isValidRefundStatusTransition, isValidSubscriptionStatusTransition, isValidRolloutTransition } from "./status-transitions";
 
 describe("isValidPaymentStatusTransition", () => {
   it("allows the normal happy path", () => {
@@ -72,5 +72,38 @@ describe("isValidSubscriptionStatusTransition", () => {
   });
   it("allows reactivation from EXPIRED via a new successful payment", () => {
     expect(isValidSubscriptionStatusTransition("EXPIRED", "ACTIVE")).toBe(true);
+  });
+});
+
+describe("isValidRolloutTransition", () => {
+  it("allows forward progression one stage at a time", () => {
+    expect(isValidRolloutTransition("DISABLED", "SANDBOX")).toBe(true);
+    expect(isValidRolloutTransition("SANDBOX", "INTERNAL")).toBe(true);
+    expect(isValidRolloutTransition("INTERNAL", "BETA")).toBe(true);
+    expect(isValidRolloutTransition("BETA", "PRODUCTION")).toBe(true);
+  });
+  it("rejects skipping a stage", () => {
+    expect(isValidRolloutTransition("DISABLED", "INTERNAL")).toBe(false);
+    expect(isValidRolloutTransition("DISABLED", "BETA")).toBe(false);
+    expect(isValidRolloutTransition("DISABLED", "PRODUCTION")).toBe(false);
+    expect(isValidRolloutTransition("SANDBOX", "BETA")).toBe(false);
+    expect(isValidRolloutTransition("SANDBOX", "PRODUCTION")).toBe(false);
+    expect(isValidRolloutTransition("INTERNAL", "PRODUCTION")).toBe(false);
+  });
+  it("allows the kill switch from every active stage", () => {
+    expect(isValidRolloutTransition("SANDBOX", "DISABLED")).toBe(true);
+    expect(isValidRolloutTransition("INTERNAL", "DISABLED")).toBe(true);
+    expect(isValidRolloutTransition("BETA", "DISABLED")).toBe(true);
+    expect(isValidRolloutTransition("PRODUCTION", "DISABLED")).toBe(true);
+  });
+  it("rejects any lateral or backward move that bypasses DISABLED", () => {
+    expect(isValidRolloutTransition("PRODUCTION", "BETA")).toBe(false);
+    expect(isValidRolloutTransition("BETA", "INTERNAL")).toBe(false);
+    expect(isValidRolloutTransition("INTERNAL", "SANDBOX")).toBe(false);
+    expect(isValidRolloutTransition("PRODUCTION", "SANDBOX")).toBe(false);
+  });
+  it("rejects a no-op transition to the same stage", () => {
+    expect(isValidRolloutTransition("PRODUCTION", "PRODUCTION")).toBe(false);
+    expect(isValidRolloutTransition("DISABLED", "DISABLED")).toBe(false);
   });
 });

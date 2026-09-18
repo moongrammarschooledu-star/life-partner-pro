@@ -6,6 +6,7 @@ import { getProvider } from "@/lib/finance/providers/registry";
 import { generateInvoice } from "@/lib/finance/invoice";
 import { activateSubscription } from "@/lib/finance/subscription";
 import { notifyPaymentSuccess, notifyPaymentFailed } from "@/lib/notifications/events";
+import { getPaymentFeatureFlags } from "@/lib/finance/rollout";
 import type { PaymentProviderName } from "@prisma/client";
 
 const VALID_PROVIDERS: PaymentProviderName[] = ["MANUAL", "STRIPE"];
@@ -29,6 +30,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
 
   if (!provider.verifyWebhook(rawBody, signatureHeader)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
+  // Spec §71 — an emergency, admin-controlled stop for webhook intake
+  // specifically, separate from the rollout kill switch (which only blocks
+  // *new* checkout sessions). Return 200 so the provider doesn't treat this
+  // as a delivery failure and retry-storm; nothing here has been persisted yet.
+  const flags = await getPaymentFeatureFlags();
+  if (!flags.providerWebhooksEnabled) {
+    return NextResponse.json({ ok: true, skipped: true, reason: "Webhook processing is currently disabled." });
   }
 
   const event = provider.parseWebhookEvent(rawBody);
