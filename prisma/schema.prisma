@@ -1106,6 +1106,7 @@ model AdminUser {
   refundsApproved           Refund[]               @relation("RefundApprovedBy")
   refundsExecuted           Refund[]               @relation("RefundExecutedBy")
   reconciliationRunsStarted ReconciliationRun[]
+  bankAccountsCreated       BankAccount[]
 }
 
 // ---------- Core profile ----------
@@ -2808,6 +2809,27 @@ model Currency {
   symbol           String
   decimalPrecision Int     @default(2)
   active           Boolean @default(true)
+}
+
+// Super-Admin-configured receiving account(s) for the Manual/Bank Transfer
+// provider (spec §43) — without at least one active row, ManualPaymentProvider
+// has no real destination to show a payer, only a generic placeholder.
+// Multiple active rows are all shown so a payer can choose whichever bank
+// they can transfer from.
+model BankAccount {
+  id            String   @id @default(cuid())
+  accountTitle  String
+  accountNumber String
+  bankName      String
+  branchName    String?
+  iban          String?
+  active        Boolean  @default(true)
+  displayOrder  Int      @default(0)
+  createdBy     AdminUser? @relation(fields: [createdById], references: [id])
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  @@index([active, displayOrder])
 }
 
 model Package {

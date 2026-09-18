@@ -12,8 +12,29 @@ export const ManualPaymentProvider: PaymentProvider = {
   name: "MANUAL",
 
   async createCheckout({ paymentId, amountMinor, currencyCode, description }): Promise<CheckoutSession> {
-    const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
+    const [settings, bankAccounts] = await Promise.all([
+      prisma.appSettings.findUnique({ where: { id: 1 } }),
+      prisma.bankAccount.findMany({ where: { active: true }, orderBy: { displayOrder: "asc" } }),
+    ]);
     const reference = `LPP-${paymentId.slice(-8).toUpperCase()}`;
+
+    const accountsBlock =
+      bankAccounts.length > 0
+        ? bankAccounts
+            .map(
+              (a) =>
+                `— ${a.bankName}\n` +
+                `  Account Title: ${a.accountTitle}\n` +
+                `  Account Number: ${a.accountNumber}\n` +
+                (a.iban ? `  IBAN: ${a.iban}\n` : "") +
+                (a.branchName ? `  Branch: ${a.branchName}\n` : "")
+            )
+            .join("\n")
+        : // No bank account configured yet — spec §43 requires a real
+          // destination; this is a genuine gap the admin must fill in via
+          // Finance Center → Bank Accounts before Manual payments can work.
+          "No receiving bank account has been configured yet. Please contact us for payment instructions.";
+
     return {
       paymentId,
       providerReference: reference,
@@ -23,7 +44,8 @@ export const ManualPaymentProvider: PaymentProvider = {
         `Amount: ${(amountMinor / 100).toFixed(2)} ${currencyCode}\n` +
         `Reference: ${reference}\n` +
         `Description: ${description}\n\n` +
-        `Please transfer to the account details provided by ${settings?.appName ?? "Life Partner Pro"} and submit your payment reference for verification.`,
+        `Transfer to one of the following ${bankAccounts.length > 1 ? "accounts" : "account"}:\n\n${accountsBlock}\n\n` +
+        `After transferring, please submit your payment reference below for verification by ${settings?.appName ?? "Life Partner Pro"}.`,
     };
   },
 

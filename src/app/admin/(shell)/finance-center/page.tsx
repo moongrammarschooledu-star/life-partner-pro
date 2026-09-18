@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, DollarSign, TrendingUp, CheckCircle2, Clock, XCircle, RotateCcw, Users, AlertTriangle } from "lucide-react";
+import { Loader2, DollarSign, TrendingUp, CheckCircle2, Clock, XCircle, RotateCcw, Users, AlertTriangle, Landmark, Trash2 } from "lucide-react";
 import { StatCard } from "@/components/admin/stat-card";
 import { Tabs } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,7 @@ const TABS = [
   { value: "refunds", label: "Refunds" },
   { value: "manual-payments", label: "Manual Payment Queue" },
   { value: "coupons", label: "Coupons" },
+  { value: "bank-accounts", label: "Bank Accounts" },
   { value: "reconciliation", label: "Reconciliation" },
 ];
 
@@ -77,6 +78,7 @@ export default function FinanceCenterPage() {
       {tab === "refunds" && <RefundsSection onChanged={() => show("Updated", "success")} />}
       {tab === "manual-payments" && <ManualPaymentsSection onChanged={() => show("Updated", "success")} />}
       {tab === "coupons" && <CouponsSection onChanged={() => show("Saved", "success")} />}
+      {tab === "bank-accounts" && <BankAccountsSection onChanged={() => show("Saved", "success")} />}
       {tab === "reconciliation" && <ReconciliationSection onChanged={() => show("Reconciliation run started", "success")} />}
     </div>
   );
@@ -401,6 +403,97 @@ function CouponsSection({ onChanged }: { onChanged: () => void }) {
         </Field>
         <Field label="Discount Value" htmlFor="coupon-value">
           <Input id="coupon-value" type="number" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} />
+        </Field>
+      </ConfirmDialog>
+    </div>
+  );
+}
+
+function BankAccountsSection({ onChanged }: { onChanged: () => void }) {
+  const [items, setItems] = useState<Array<{ id: string; accountTitle: string; accountNumber: string; bankName: string; branchName: string | null; iban: string | null; active: boolean }> | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [accountTitle, setAccountTitle] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [branchName, setBranchName] = useState("");
+  const [iban, setIban] = useState("");
+
+  function load() {
+    fetch("/api/admin/finance-center/bank-accounts").then((r) => r.json()).then((j) => setItems(j.items ?? []));
+  }
+  useEffect(load, []);
+
+  async function create() {
+    const res = await fetch("/api/admin/finance-center/bank-accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountTitle, accountNumber, bankName, branchName: branchName || undefined, iban: iban || undefined }),
+    });
+    if (res.ok) {
+      onChanged();
+      setCreating(false);
+      setAccountTitle("");
+      setAccountNumber("");
+      setBankName("");
+      setBranchName("");
+      setIban("");
+      load();
+    }
+  }
+
+  async function toggle(id: string, active: boolean) {
+    const res = await fetch(`/api/admin/finance-center/bank-accounts/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !active }) });
+    if (res.ok) { onChanged(); load(); }
+  }
+
+  async function remove(id: string) {
+    const res = await fetch(`/api/admin/finance-center/bank-accounts/${id}`, { method: "DELETE" });
+    if (res.ok) { onChanged(); load(); }
+  }
+
+  if (items === null) return <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted" /></div>;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">These accounts are shown to customers during Manual/Bank Transfer checkout. At least one active account is required for Manual payments to work.</p>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setCreating(true)}>Add Bank Account</Button>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState icon={Landmark} title="No bank accounts configured" description="Customers won't see any transfer destination until you add one." />
+      ) : (
+        <div className="space-y-2">
+          {items.map((a) => (
+            <div key={a.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+              <div>
+                <p className="font-medium">{a.bankName} — {a.accountTitle}</p>
+                <p className="text-xs text-muted">Acc# {a.accountNumber}{a.iban ? ` · IBAN ${a.iban}` : ""}{a.branchName ? ` · ${a.branchName}` : ""}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={a.active ? "success" : "muted"}>{a.active ? "Active" : "Disabled"}</Badge>
+                <Button size="sm" variant="outline" onClick={() => toggle(a.id, a.active)}>{a.active ? "Disable" : "Enable"}</Button>
+                <Button size="sm" variant="outline" onClick={() => remove(a.id)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ConfirmDialog open={creating} title="Add Bank Account" description="Shown to customers during checkout for Manual/Bank Transfer payments." confirmLabel="Add" confirmDisabled={!accountTitle.trim() || !accountNumber.trim() || !bankName.trim()} onConfirm={create} onCancel={() => setCreating(false)}>
+        <Field label="Bank Name" htmlFor="ba-bank">
+          <Input id="ba-bank" value={bankName} onChange={(e) => setBankName(e.target.value)} />
+        </Field>
+        <Field label="Account Title" htmlFor="ba-title">
+          <Input id="ba-title" value={accountTitle} onChange={(e) => setAccountTitle(e.target.value)} />
+        </Field>
+        <Field label="Account Number" htmlFor="ba-number">
+          <Input id="ba-number" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} />
+        </Field>
+        <Field label="IBAN (optional)" htmlFor="ba-iban">
+          <Input id="ba-iban" value={iban} onChange={(e) => setIban(e.target.value)} />
+        </Field>
+        <Field label="Branch (optional)" htmlFor="ba-branch">
+          <Input id="ba-branch" value={branchName} onChange={(e) => setBranchName(e.target.value)} />
         </Field>
       </ConfirmDialog>
     </div>
