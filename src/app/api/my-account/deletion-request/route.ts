@@ -3,12 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { verifyApplicantReauthToken } from "@/lib/privacy/applicant-reauth";
 import { submitPrivacyRequest } from "@/lib/privacy/privacy-request";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 // Spec §14 — no financial/payment system exists in this app, so "check
 // financial records" is N/A; active proposals/cases are surfaced to the
 // applicant client-side as part of "what will become unavailable" before
 // this is ever called, and to the admin reviewer for their own judgment.
 export async function POST(req: Request) {
+  // STEP 15 §19 — persistent (cross-instance) rate limit.
+  const limited = await enforcePersistentLimit(req, "account-deletion", 5, 3600000);
+  if (limited) return limited;
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 

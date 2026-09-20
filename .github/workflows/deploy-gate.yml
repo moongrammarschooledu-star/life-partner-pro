@@ -1,0 +1,59 @@
+name: Deploy gate (post-deployment verification)
+
+# STEP 15 §22/§25/§62 — "deployment success" is NOT "the build finished". After
+# Vercel reports a deployment as ready, this workflow probes the LIVE URL
+# (health, unauthenticated smoke, security smoke) and posts the results as
+# evidence. Production Readiness reads that evidence; a failing run keeps the
+# release from being approved and should trigger the rollback runbook.
+#
+# Vercel calls GitHub's `deployment_status` event when a deployment finishes.
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL to verify (defaults to the deployment URL)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-deployment:
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Configure a GitHub Environment named "production" with REQUIRED REVIEWERS
+    # to make production verification/approval need an authorised human.
+    environment: ${{ github.event.deployment.environment == 'Production' && 'production' || 'staging' }}
+    env:
+      COMMIT_SHA: ${{ github.event.deployment.sha || github.sha }}
+      CI_EVIDENCE_TOKEN: ${{ secrets.CI_EVIDENCE_TOKEN }}
+      TARGET_URL: ${{ inputs.url || github.event.deployment_status.target_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Wait for the deployment to answer
+        run: |
+          for i in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET_URL/api/health/live" || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "Deployment did not become live in time"; exit 1
+
+      - name: Smoke test (unauthenticated)
+        run: node scripts/smoke.mjs --url "$TARGET_URL" --report
+        env:
+          EVIDENCE_URL: ${{ env.TARGET_URL }}
+
+      - name: Security smoke test
+        run: node scripts/security-smoke.mjs --url "$TARGET_URL" --report
+        env:
+          EVIDENCE_URL: ${{ env.TARGET_URL }}

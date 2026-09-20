@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { contentDisposition } from "@/lib/ops/upload-validation";
 import { assertCaseAccess } from "@/lib/case-access";
 import { readCaseEvidence } from "@/lib/case-evidence-storage";
 
@@ -25,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     await prisma.caseAccessLog.create({ data: { caseId: evidence.caseId, adminId: admin.id, action: "EVIDENCE_VIEWED" } });
 
     return new NextResponse(new Uint8Array(bytes), {
-      headers: { "Content-Type": evidence.mimeType, "Cache-Control": "no-store", "Content-Disposition": `inline; filename="${evidence.originalFilename ?? "evidence"}"` },
+      headers: { "Content-Type": evidence.mimeType, "Cache-Control": "no-store", "Content-Disposition": contentDisposition(evidence.originalFilename ?? "evidence"), "X-Content-Type-Options": "nosniff" },
     });
   } catch (error) {
     return handleApiError(error);

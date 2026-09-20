@@ -47,14 +47,22 @@ script, then deactivate or delete the seeded account.
 
 ## Environment variables
 
+The complete, current list (with placeholders and comments) is in `.env.example`; environments, migrations, backups,
+recovery and the required manual configuration are documented in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) and the
+operational runbooks in [`docs/RUNBOOKS.md`](docs/RUNBOOKS.md).
+
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string. |
-| `NEXTAUTH_SECRET` | Signs admin session JWTs. Generate with `openssl rand -base64 32`. |
-| `SEED_ADMIN_PASSWORD` | Optional — overrides the seeded super admin's password. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for photo uploads. Auto-set when you add a Blob store under the project's Storage tab. |
-
-No third-party API keys are required or referenced anywhere in the codebase (see "Notifications" below).
+| `DATABASE_URL` | Postgres connection string (pooled). Migrations derive the direct host automatically. |
+| `NEXTAUTH_SECRET` | 32+ chars. Signs sessions **and derives file-encryption keys** — rotating it invalidates all sessions and stored files. |
+| `APP_ENV`, `APP_URL`, `DATABASE_ENV_LABEL`, `STORAGE_ENV_LABEL`, `PAYMENT_ENVIRONMENT` | Environment identity + labels that prove database/storage/payment credentials belong to this environment (STEP 15). |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for photo/document/evidence uploads. |
+| `BACKUP_ENCRYPTION_KEY`, `BACKUP_BLOB_READ_WRITE_TOKEN` | Dedicated backup encryption key; optional separate backup storage. |
+| `CRON_SECRET`, `NOTIFICATION_WEBHOOK_SECRET`, `CI_EVIDENCE_TOKEN` | Authenticate the cron, notification webhook and pipeline-evidence endpoints. |
+| `EMAIL_PROVIDER_API_KEY`, `SMS_PROVIDER_API_KEY`, `WHATSAPP_*` | Optional message providers — until set, messages (including admin OTP codes) are only logged. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Optional card gateway (Manual/bank transfer needs none). |
+| `LOG_LEVEL`, `SLOW_QUERY_THRESHOLD_MS`, `CSP_MODE`, `ALERT_WEBHOOK_URL` | Monitoring/security tuning. |
+| `SEED_ADMIN_PASSWORD` | Optional — overrides the seeded super admin's password (local seed only). |
 
 ## What's implemented
 

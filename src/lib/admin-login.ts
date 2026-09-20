@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import type { AdminRole } from "@/lib/permissions";
 import type { AdminUser } from "@prisma/client";
+import { createHash } from "crypto";
+import { writeAudit } from "@/lib/audit";
 
 // Shared by both the pre-check route (src/app/api/admin/auth/precheck) and
 // NextAuth's authorize() in src/lib/auth.ts — the latter is the only place a
@@ -35,6 +37,15 @@ async function recordAttempt(params: {
       userAgent: params.userAgent ?? null,
     },
   });
+  // STEP 15 §16 — failed logins and lockouts also reach the AuditLog. The
+  // attempted e-mail is stored only as a short hash (an attacker-typed string
+  // is not something to persist verbatim); IP/user-agent are already in
+  // AdminLoginHistory and are attached to the audit row when an admin matches.
+  await writeAudit({
+    action: params.event === "LOCKED" ? "ADMIN_ACCOUNT_LOCKED" : "ADMIN_LOGIN_FAILED",
+    adminId: params.adminId ?? null,
+    meta: { emailHash: createHash("sha256").update(params.email.toLowerCase()).digest("hex").slice(0, 12) },
+  }).catch(() => undefined);
 }
 
 export async function checkAdminCredentials(params: {

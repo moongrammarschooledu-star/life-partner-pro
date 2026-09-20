@@ -119,7 +119,21 @@ export type Permission =
   | "finance:provider:manage"
   | "finance:webhooks:view"
   | "sensitive:finance:view"
-  | "sensitive:finance:export";
+  | "sensitive:finance:export"
+  | "system:view"
+  | "system:config:manage"
+  | "system:flags:manage"
+  | "system:maintenance:manage"
+  | "system:emergency:manage"
+  | "system:backup:view"
+  | "system:backup:trigger"
+  | "system:restore:approve"
+  | "system:jobs:view"
+  | "system:jobs:manage"
+  | "alerts:view"
+  | "alerts:manage"
+  | "readiness:view"
+  | "releases:manage";
 
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -236,6 +250,20 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "finance:rollout:disable",
     "finance:provider:manage",
     "finance:webhooks:view",
+    "system:view",
+    "system:config:manage",
+    "system:flags:manage",
+    "system:maintenance:manage",
+    "system:emergency:manage",
+    "system:backup:view",
+    "system:backup:trigger",
+    "system:restore:approve",
+    "system:jobs:view",
+    "system:jobs:manage",
+    "alerts:view",
+    "alerts:manage",
+    "readiness:view",
+    "releases:manage",
     "sensitive:finance:view",
     "sensitive:finance:export",
   ],
@@ -347,6 +375,14 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     // only, per STEP 14's plan (full financial control stays top-tier).
     "finance:rollout:view",
     "finance:webhooks:view",
+    "system:view",
+    "system:jobs:view",
+    "system:backup:view",
+    "alerts:view",
+    "alerts:manage",
+    "readiness:view",
+    // ADMIN deliberately lacks system:config/flags/maintenance/emergency/backup:trigger/restore/jobs:manage/releases —
+    // SUPER_ADMIN only (STEP 15). ADMIN can observe and work alerts, nothing more.
     // ADMIN deliberately lacks finance:rollout:manage/enable/disable and
     // finance:provider:manage — changing rollout stage (especially the kill
     // switch and any move into PRODUCTION) stays SUPER_ADMIN-only with

@@ -4,8 +4,12 @@ import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { verifyApplicantReauthToken } from "@/lib/privacy/applicant-reauth";
 import { submitPrivacyRequest } from "@/lib/privacy/privacy-request";
 import { issueExportDownloadToken } from "@/lib/privacy/data-export";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 export async function POST(req: Request) {
+  // STEP 15 §19 — persistent (cross-instance) rate limit.
+  const limited = await enforcePersistentLimit(req, "account-export", 5, 3600000);
+  if (limited) return limited;
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 

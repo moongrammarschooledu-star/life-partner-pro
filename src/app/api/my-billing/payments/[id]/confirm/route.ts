@@ -3,11 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { recordManualPayment } from "@/lib/finance/manual-payment";
 import { notifyManualPaymentRequiresReview } from "@/lib/notifications/events";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 // Applicant confirms they've made a bank transfer and submits the
 // reference/evidence for admin review (spec §43/§44) — this never itself
 // marks the payment PAID; only an admin's explicit verification does.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  // STEP 15 §19 — persistent (cross-instance) rate limit.
+  const limited = await enforcePersistentLimit(req, "billing-confirm", 10, 60000);
+  if (limited) return limited;
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 

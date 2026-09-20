@@ -4,8 +4,11 @@ import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { sendOtp } from "@/lib/verification/otp-service";
 import { writeAudit } from "@/lib/audit";
+import { blockedResponse } from "@/lib/ops/guards";
 
 export async function POST(req: Request) {
+  const blocked = await blockedResponse({ flags: ["verification.enabled"] });
+  if (blocked) return blocked;
   const key = `otp-email-send:${clientKeyFromRequest(req)}`;
   if (!rateLimit(key, 5, 60_000)) {
     return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });

@@ -79,6 +79,7 @@ enum CaseType {
   SAFETY_REPORT
   INTERNAL
   PRIVACY_INCIDENT
+  SYSTEM_INCIDENT // STEP 15 — ops incidents, numbered via the shared LPP-INC counter
 }
 
 // One merged enum since a Case has exactly one category regardless of type —
@@ -152,6 +153,15 @@ enum CaseCategory {
   SUBSCRIPTION_ERROR
   INVOICE_ERROR
   RECONCILIATION_MISMATCH
+
+  // System Incidents (STEP 15 spec §40) — CaseType.SYSTEM_INCIDENT
+  APPLICATION_OUTAGE
+  DATABASE_FAILURE
+  STORAGE_FAILURE
+  NOTIFICATION_INCIDENT
+  BACKUP_FAILURE
+  DEPLOYMENT_FAILURE
+  DATA_INTEGRITY_INCIDENT
 }
 
 enum CaseStatus {
@@ -657,6 +667,27 @@ enum AuditAction {
   PAYMENT_ENVIRONMENT_CHANGED
   PAYMENT_FEATURE_FLAG_CHANGED
   PAYMENT_KILL_SWITCH_USED
+
+  // ---------- Production, DevOps & Recovery (STEP 15) ----------
+  SYSTEM_SETTING_CHANGED
+  FEATURE_FLAG_CHANGED
+  MAINTENANCE_ENABLED
+  MAINTENANCE_DISABLED
+  OPERATIONAL_STATE_CHANGED
+  EMERGENCY_SWITCH_CHANGED
+  BACKUP_TRIGGERED
+  BACKUP_VERIFIED
+  RESTORE_TRIGGERED
+  RESTORE_REQUESTED
+  DEPLOYMENT_STARTED
+  DEPLOYMENT_COMPLETED
+  DEPLOYMENT_FAILED
+  ROLLBACK_STARTED
+  ROLLBACK_COMPLETED
+  ENVIRONMENT_CONFIG_CHANGED
+  JOB_INTERVENTION
+  ALERT_STATUS_CHANGED
+  INTEGRITY_CHECK_RUN
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1230,6 +1261,8 @@ model Profile {
   @@index([maritalStatus])
   @@index([dateOfBirth])
   @@index([verified])
+  @@index([softDeleted, status]) // STEP 15 — matching candidate + admin list filters
+  @@index([createdAt])
 }
 
 model ContactInfo {
@@ -1521,6 +1554,7 @@ model Proposal {
   @@index([matchId])
   @@index([assignedToId])
   @@index([status])
+  @@index([status, updatedAt]) // STEP 15 — pending-proposal reminder sweep
 }
 
 model ProposalEvent {
@@ -1835,10 +1869,15 @@ model AuditLog {
   targetProfileId String?
   meta          String?     // JSON blob of extra context
   createdAt     DateTime    @default(now())
+  // STEP 15 — populated automatically by writeAudit() for admin actions only
+  ipAddress     String?
+  userAgent     String?
+  correlationId String?
 
   @@index([targetProfileId])
   @@index([adminId])
   @@index([createdAt])
+  @@index([action, createdAt])
 }
 
 // ---------- App-wide settings (single row) ----------
@@ -2961,7 +3000,7 @@ model PackageEntitlement {
 model Subscription {
   id                   String              @id @default(cuid())
   subscriptionCode     String              @unique // LPP-SUB-######
-  profile              Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile              Profile             @relation(fields: [profileId], references: [id], onDelete: Restrict)
   profileId            String
   package              Package             @relation(fields: [packageId], references: [id])
   packageId            String
@@ -3001,7 +3040,7 @@ model SubscriptionEvent {
 model Order {
   id             String        @id @default(cuid())
   orderCode      String        @unique // LPP-ORD-######
-  profile        Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile        Profile       @relation(fields: [profileId], references: [id], onDelete: Restrict)
   profileId      String
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
   subscriptionId String?
@@ -3045,7 +3084,7 @@ model Payment {
   paymentCode           String              @unique // LPP-PAY-######
   order                 Order               @relation(fields: [orderId], references: [id])
   orderId               String
-  profile               Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile               Profile             @relation(fields: [profileId], references: [id], onDelete: Restrict)
   profileId             String
   amountMinor           Int
   currencyCode          String
@@ -3066,6 +3105,8 @@ model Payment {
   @@unique([provider, providerTransactionId])
   @@index([profileId, status])
   @@index([orderId])
+  @@index([status, createdAt]) // STEP 15 — health/cron/integrity queries
+  @@index([paidAt])
 }
 
 // Provider-side retry tracking (spec §27) — never stores raw gateway
@@ -3133,7 +3174,7 @@ model Invoice {
   invoiceCode     String        @unique // LPP-INV-######
   order           Order         @relation(fields: [orderId], references: [id])
   orderId         String        @unique
-  profile         Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile         Profile       @relation(fields: [profileId], references: [id], onDelete: Restrict)
   profileId       String
   payment         Payment?      @relation(fields: [paymentId], references: [id])
   paymentId       String?       @unique
@@ -3292,4 +3333,472 @@ model ReconciliationItem {
   createdAt DateTime                  @default(now())
 
   @@index([runId, status])
+}
+
+
+// =====================================================================
+// STEP 15 — Production Deployment, DevOps, Monitoring, Backup & Recovery
+// All additive. No relations into Steps 1-14 models except plain string
+// ids (same convention as Case.relatedPaymentId), so nothing here can
+// cascade into or alter existing data.
+// =====================================================================
+
+enum OperationalState {
+  NORMAL
+  DEGRADED
+  MAINTENANCE
+  RECOVERY
+  EMERGENCY
+}
+
+enum MaintenanceMode {
+  OFF
+  ON
+  SCHEDULED
+}
+
+enum ErrorCategory {
+  AUTH_ERROR
+  AUTHORIZATION_ERROR
+  VALIDATION_ERROR
+  DATABASE_ERROR
+  STORAGE_ERROR
+  PAYMENT_ERROR
+  WEBHOOK_ERROR
+  NOTIFICATION_ERROR
+  MATCHING_ERROR
+  PROPOSAL_ERROR
+  VERIFICATION_ERROR
+  SUPPORT_ERROR
+  SECURITY_ERROR
+  SYSTEM_ERROR
+}
+
+enum ErrorSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ErrorEventStatus {
+  NEW
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  RETRYING
+  DEAD_LETTER
+  CANCELLED
+}
+
+enum BackupType {
+  DATABASE
+  FILES
+}
+
+enum BackupStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum BackupTrigger {
+  SCHEDULED
+  MANUAL
+}
+
+enum BackupRetentionClass {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum RestoreRequestStatus {
+  PENDING
+  APPROVED
+  EXECUTED
+  CANCELLED
+  REJECTED
+}
+
+enum AlertStatus {
+  NEW
+  ACKNOWLEDGED
+  INVESTIGATING
+  MITIGATING
+  RESOLVED
+  CLOSED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  HIGH
+  CRITICAL
+}
+
+enum ReleaseStatus {
+  PENDING_APPROVAL
+  APPROVED
+  DEPLOYING
+  HEALTHY
+  UNHEALTHY
+  FAILED
+  ROLLED_BACK
+}
+
+// Singleton (id = 1). Operational state, maintenance, emergency switches,
+// DR targets, monitoring thresholds, backup policy and admin session length
+// — kept apart from AppSettings (already 100+ product-config fields).
+model SystemControl {
+  id Int @id @default(1)
+
+  operationalState       OperationalState @default(NORMAL)
+  operationalStateReason String?
+
+  maintenanceMode     MaintenanceMode @default(OFF)
+  maintenanceStartsAt DateTime?
+  maintenanceEndsAt   DateTime?
+  maintenanceMessage  String?
+
+  // Emergency switches (spec §56)
+  emergencyPaymentsDisabled           Boolean @default(false)
+  emergencyRegistrationsDisabled      Boolean @default(false)
+  emergencyProfileSubmissionsDisabled Boolean @default(false)
+  emergencyMatchingDisabled           Boolean @default(false)
+  emergencyProposalsDisabled          Boolean @default(false)
+  emergencyNotificationsDisabled      Boolean @default(false)
+  emergencyUploadsDisabled            Boolean @default(false)
+  emergencyPublicAccessDisabled       Boolean @default(false)
+
+  // Disaster-recovery targets (spec §9) — targets, never guarantees
+  rpoMinutes Int @default(1440)
+  rtoMinutes Int @default(240)
+
+  // Monitoring thresholds (spec §17/§38/§65)
+  slowQueryThresholdMs         Int  @default(500)
+  apiLatencyWarnMs             Int  @default(2000)
+  errorRateWarnPerHour         Int  @default(50)
+  failedLoginSpikeThreshold    Int  @default(10)
+  paymentFailureSpikeThreshold Int  @default(5)
+  webhookFailureSpikeThreshold Int  @default(5)
+  queueBacklogThreshold        Int  @default(100)
+  permissionViolationThreshold Int  @default(30)
+  dbStorageLimitMb             Int?
+  fileStorageLimitMb           Int?
+  capacityWarnPercent          Int  @default(80)
+
+  // Backup policy (spec §7) — retention is configurable, never hard-coded law
+  backupsEnabled            Boolean @default(true)
+  backupDailyKeep           Int     @default(7)
+  backupWeeklyKeep          Int     @default(4)
+  backupMonthlyKeep         Int     @default(6)
+  backupStaleAfterHours     Int     @default(48)
+  restoreTestStaleAfterDays Int     @default(30)
+
+  monitoringPeriodHours Int @default(24)
+  evidenceMaxAgeDays    Int @default(7)
+  adminSessionMaxHours  Int @default(12)
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+model FeatureFlag {
+  key         String   @id
+  enabled     Boolean  @default(true)
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+// Centralised, privacy-safe error record (spec §13/§14). message is already
+// redacted + truncated by the capture helper; no stack parameters, no PII.
+model ErrorEvent {
+  id            String           @id @default(cuid())
+  fingerprint   String
+  category      ErrorCategory
+  severity      ErrorSeverity
+  service       String // API | FRONTEND | CRON | JOB | WEBHOOK | DATABASE | PROXY
+  route         String?
+  message       String
+  environment   String
+  appVersion    String?
+  correlationId String?
+  status        ErrorEventStatus @default(NEW)
+  occurrences   Int              @default(1)
+  firstSeenAt   DateTime         @default(now())
+  lastSeenAt    DateTime         @default(now())
+  resolvedById  String?
+  resolvedAt    DateTime?
+
+  @@unique([fingerprint, environment])
+  @@index([status, lastSeenAt])
+  @@index([category])
+  @@index([severity])
+  @@index([lastSeenAt])
+}
+
+// Aggregated slow-query stats (spec §18). Never stores SQL text or params.
+model SlowQueryStat {
+  id         String   @id @default(cuid())
+  key        String   @unique // `${operation}:${table}:${route|-}`
+  operation  String
+  tableName  String
+  route      String?
+  count      Int      @default(1)
+  totalMs    Int
+  maxMs      Int
+  lastMs     Int
+  firstSeenAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([lastSeenAt])
+}
+
+// Hourly latency/error buckets per instrumented route (spec §17).
+model PerfSample {
+  id          String   @id @default(cuid())
+  route       String
+  bucketStart DateTime
+  count       Int      @default(0)
+  errorCount  Int      @default(0)
+  slowCount   Int      @default(0)
+  sumMs       Int      @default(0)
+  maxMs       Int      @default(0)
+
+  @@unique([route, bucketStart])
+  @@index([bucketStart])
+}
+
+// Persistent (cross-instance) rate-limit counter (spec §19).
+model RateLimitBucket {
+  key             String   @id
+  count           Int      @default(0)
+  windowStartedAt DateTime @default(now())
+
+  @@index([windowStartedAt])
+}
+
+model BackgroundJob {
+  id            String    @id @default(cuid())
+  type          String
+  status        JobStatus @default(PENDING)
+  dedupKey      String?   @unique
+  payload       Json? // safe metadata only — never PII/secrets
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(3)
+  runAfter      DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  lockedUntil   DateTime?
+  failureReason String?
+  correlationId String?
+  resolved      Boolean   @default(false)
+  resolvedById  String?
+  createdById   String?
+
+  @@index([status, runAfter])
+  @@index([type, status])
+}
+
+// One row per named scheduled task: lock (prevents duplicate execution) +
+// last-run summary (spec §31).
+model CronTask {
+  name                String    @id
+  lockedUntil         DateTime?
+  lastStartedAt       DateTime?
+  lastCompletedAt     DateTime?
+  lastStatus          String? // SUCCESS | FAILED
+  lastDurationMs      Int?
+  consecutiveFailures Int       @default(0)
+  totalFailures       Int       @default(0)
+  schedule            String?
+  updatedAt           DateTime  @updatedAt
+}
+
+model CronTaskRun {
+  id            String    @id @default(cuid())
+  taskName      String
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  durationMs    Int?
+  status        String // SUCCESS | FAILED | SKIPPED_LOCKED
+  error         String?
+  correlationId String?
+
+  @@index([taskName, startedAt])
+}
+
+model BackupRun {
+  id                 String               @id @default(cuid())
+  backupCode         String               @unique // LPP-BKP-######
+  type               BackupType
+  trigger            BackupTrigger
+  status             BackupStatus         @default(RUNNING)
+  retentionClass     BackupRetentionClass @default(DAILY)
+  startedAt          DateTime             @default(now())
+  completedAt        DateTime?
+  sizeBytes          Int?
+  checksumSha256     String?
+  manifest           Json? // per-table row counts / file counts
+  storageUrl         String? // ciphertext object only
+  encrypted          Boolean              @default(true)
+  separateStore      Boolean              @default(false)
+  expiresAt          DateTime?
+  triggeredById      String?
+  failureReason      String?
+  verifiedAt         DateTime?
+  verificationStatus String? // PASSED | FAILED
+  prunedAt           DateTime?
+
+  restoreTests    RestoreTest[]
+  restoreRequests RestoreRequest[]
+
+  @@index([type, status, startedAt])
+}
+
+// Incremental mirror of encrypted blob objects (photos/documents/evidence).
+model BackupFileCopy {
+  id        String   @id @default(cuid())
+  sourceUrl String   @unique
+  backupUrl String
+  sha256    String
+  sizeBytes Int
+  kind      String // PHOTO | DOCUMENT | EVIDENCE
+  copiedAt  DateTime @default(now())
+}
+
+model RestoreTest {
+  id            String    @id @default(cuid())
+  backup        BackupRun @relation(fields: [backupId], references: [id])
+  backupId      String
+  mode          String // VERIFY_ONLY
+  status        String // RUNNING | PASSED | FAILED
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  result        Json?
+  performedById String?
+
+  @@index([backupId])
+  @@index([startedAt])
+}
+
+// Authorization record for a real restore — executing it is done outside the
+// app (scripts/restore-backup.ts); nothing in the app overwrites live data.
+model RestoreRequest {
+  id            String               @id @default(cuid())
+  backup        BackupRun            @relation(fields: [backupId], references: [id])
+  backupId      String
+  status        RestoreRequestStatus @default(PENDING)
+  reason        String
+  targetLabel   String
+  requestedById String
+  approvedById  String?
+  requestedAt   DateTime             @default(now())
+  decidedAt     DateTime?
+  executedAt    DateTime?
+  notes         String?
+
+  @@index([status])
+}
+
+model Alert {
+  id             String        @id @default(cuid())
+  alertCode      String        @unique // LPP-ALT-######
+  category       String // rule key, e.g. ERROR_RATE
+  severity       AlertSeverity
+  source         String
+  service        String
+  title          String
+  detail         String? // safe text only
+  status         AlertStatus   @default(NEW)
+  dedupKey       String
+  occurrences    Int           @default(1)
+  firstSeenAt    DateTime      @default(now())
+  lastSeenAt     DateTime      @default(now())
+  assignedToId   String?
+  resolution     String?
+  resolvedAt     DateTime?
+  incidentCaseId String? // plain id of the Case opened for this alert
+  createdAt      DateTime      @default(now())
+
+  events AlertEvent[]
+
+  @@index([status, severity])
+  @@index([dedupKey])
+}
+
+model AlertEvent {
+  id         String       @id @default(cuid())
+  alert      Alert        @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  alertId    String
+  actorId    String?
+  fromStatus AlertStatus?
+  toStatus   AlertStatus?
+  note       String?
+  createdAt  DateTime     @default(now())
+
+  @@index([alertId])
+}
+
+model IntegrityCheckRun {
+  id            String    @id @default(cuid())
+  trigger       String // SCHEDULED | MANUAL | POST_RESTORE
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  status        String // RUNNING | CLEAN | FINDINGS | FAILED
+  totalChecks   Int       @default(0)
+  findingCount  Int       @default(0)
+  findings      Json?
+  triggeredById String?
+
+  @@index([startedAt])
+}
+
+model Release {
+  id                  String        @id @default(cuid())
+  releaseCode         String        @unique // LPP-REL-######
+  version             String
+  commitSha           String
+  environment         String
+  status              ReleaseStatus @default(DEPLOYING)
+  deployedBy          String?
+  deployedAt          DateTime      @default(now())
+  notes               String?
+  migrations          Json? // applied migration names at deploy time
+  featureFlags        Json?
+  paymentEnvironment  String?
+  testResults         Json?
+  smokeResult         String?
+  rollbackTargetId    String? // previous stable Release id
+  monitoringUntil     DateTime?
+  approvedById        String?
+  approvedAt          DateTime?
+  verifiedAt          DateTime?
+  verificationResult  Json?
+
+  @@unique([commitSha, environment])
+  @@index([environment, deployedAt])
+}
+
+// Evidence posted by CI / deploy-gate workflows (spec §22/§49/§68). The
+// readiness evaluator never marks a gate PASS without fresh evidence.
+model CiEvidence {
+  id          String   @id @default(cuid())
+  kind        String // BUILD | TYPECHECK | LINT | TESTS | SECURITY_SCAN | DEPENDENCY_AUDIT | MIGRATION_VALIDATION | SMOKE | SECURITY_SMOKE
+  status      String // PASS | FAIL
+  commitSha   String
+  environment String?
+  summary     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([kind, createdAt])
 }

@@ -127,6 +127,21 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "finance:rollout:disable": "Disable payments (kill switch) or roll back the rollout stage",
   "finance:provider:manage": "Change the active payment provider or environment config",
   "finance:webhooks:view": "View payment webhook health and delivery status",
+  // ---------- Production, DevOps & Recovery (STEP 15) ----------
+  "system:view": "View System Health and operational status",
+  "system:config:manage": "Change monitoring thresholds, backup policy and system configuration",
+  "system:flags:manage": "Toggle feature flags",
+  "system:maintenance:manage": "Enable/disable maintenance mode and change the operational state",
+  "system:emergency:manage": "Use the emergency kill switches",
+  "system:backup:view": "View backup and recovery status",
+  "system:backup:trigger": "Trigger a backup or restore verification",
+  "system:restore:approve": "Request or approve a restore",
+  "system:jobs:view": "View background jobs and scheduled tasks",
+  "system:jobs:manage": "Retry, cancel or resolve background jobs; run the scheduled tick",
+  "alerts:view": "View alerts and incidents",
+  "alerts:manage": "Acknowledge, assign, resolve alerts and open incidents",
+  "readiness:view": "View Production Readiness and release records",
+  "releases:manage": "Approve releases and record rollbacks",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

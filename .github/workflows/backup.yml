@@ -1,0 +1,50 @@
+name: Database backup (pg_dump — optional, off by default)
+
+# STEP 15 §6 — an INDEPENDENT second backup path. The application already makes
+# encrypted logical backups from inside the daily tick; this workflow adds a
+# real `pg_dump` for databases that outgrow the in-app backup, stored as an
+# encrypted GitHub artifact. It only runs when the repository VARIABLE
+# BACKUP_WORKFLOW_ENABLED is "true" and the secrets below exist, so it never
+# fails noisily on a fresh clone.
+#
+# Required secrets: BACKUP_DATABASE_URL (a READ-ONLY, direct/un-pooled URL),
+# BACKUP_PASSPHRASE (>= 32 chars, store it separately from the artifacts).
+# Neon point-in-time recovery remains the primary recovery mechanism (manual
+# configuration in the Neon console); GitHub artifacts are capped at 90 days.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pg-dump:
+    if: vars.BACKUP_WORKFLOW_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Dump and encrypt
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_DATABASE_URL" && test ${#BACKUP_PASSPHRASE} -ge 32
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          pg_dump --no-owner --format=custom "$BACKUP_DATABASE_URL" \
+            | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE \
+            > "lpp-$stamp.dump.enc"
+          sha256sum "lpp-$stamp.dump.enc" > "lpp-$stamp.dump.enc.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lpp-db-backup
+          path: lpp-*.dump.enc*
+          retention-days: 30
+          if-no-files-found: error

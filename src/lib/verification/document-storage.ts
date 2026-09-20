@@ -1,5 +1,7 @@
 import { put, del } from "@vercel/blob";
 import { randomUUID } from "crypto";
+import { validateUpload } from "@/lib/ops/upload-validation";
+import { imageDimensionsOk } from "@/lib/ops/image-check";
 import { encryptDocument, decryptDocument } from "@/lib/verification/document-crypto";
 
 // Mirrors src/lib/storage.ts's photo pattern (Vercel Blob, raw URL never
@@ -21,6 +23,12 @@ export async function saveVerificationDocument(
   if (file.byteLength > MAX_UPLOAD_BYTES) {
     throw new DocumentUploadError("File is too large (max 10MB).");
   }
+
+  // STEP 15 §33 — real file type from magic bytes (declared MIME is not trusted);
+  // images additionally get a pixel-dimension cap.
+  const check = validateUpload({ buffer: file, declaredMime: mimeType, allowed: ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const, maxBytes: MAX_UPLOAD_BYTES });
+  if (!check.ok) throw new DocumentUploadError(check.error);
+  if (check.detected !== "application/pdf" && !(await imageDimensionsOk(file))) throw new DocumentUploadError("Image dimensions are too large.");
 
   const { ciphertext, ivBase64, authTagBase64 } = encryptDocument(file);
   const blob = await put(`verification-documents/${randomUUID()}.enc`, ciphertext, {

@@ -81,11 +81,28 @@ export const PAYMENT_INCIDENT_CATEGORIES: CaseCategory[] = [
   "RECONCILIATION_MISMATCH",
 ];
 
+// System incidents (STEP 15 spec §40) — CaseType.SYSTEM_INCIDENT. Payment and
+// security incident kinds reuse categories that already exist above.
+export const SYSTEM_INCIDENT_CATEGORIES: CaseCategory[] = [
+  "APPLICATION_OUTAGE",
+  "DATABASE_FAILURE",
+  "STORAGE_FAILURE",
+  "SECURITY_BREACH",
+  "PROVIDER_OUTAGE",
+  "WEBHOOK_FAILURE",
+  "RECONCILIATION_MISMATCH",
+  "NOTIFICATION_INCIDENT",
+  "BACKUP_FAILURE",
+  "DEPLOYMENT_FAILURE",
+  "DATA_INTEGRITY_INCIDENT",
+];
+
 const CATEGORIES_BY_TYPE: Record<CaseType, CaseCategory[]> = {
   SUPPORT: SUPPORT_CATEGORIES,
   COMPLAINT: COMPLAINT_CATEGORIES,
   SAFETY_REPORT: SAFETY_CATEGORIES,
   PRIVACY_INCIDENT: PRIVACY_INCIDENT_CATEGORIES,
+  SYSTEM_INCIDENT: SYSTEM_INCIDENT_CATEGORIES,
   // Internal cases are staff-initiated and not bound to the applicant-facing
   // category set — any category is acceptable.
   INTERNAL: [
@@ -94,6 +111,7 @@ const CATEGORIES_BY_TYPE: Record<CaseType, CaseCategory[]> = {
     ...SAFETY_CATEGORIES,
     ...PRIVACY_INCIDENT_CATEGORIES,
     ...PAYMENT_INCIDENT_CATEGORIES,
+    ...SYSTEM_INCIDENT_CATEGORIES,
   ],
 };
 

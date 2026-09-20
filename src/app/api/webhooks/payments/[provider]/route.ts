@@ -8,6 +8,10 @@ import { activateSubscription } from "@/lib/finance/subscription";
 import { notifyPaymentSuccess, notifyPaymentFailed } from "@/lib/notifications/events";
 import { getPaymentFeatureFlags } from "@/lib/finance/rollout";
 import type { PaymentProviderName } from "@prisma/client";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
+import { captureError } from "@/lib/observability/error-capture";
+import { bumpCounter } from "@/lib/observability/metrics";
+import { getCorrelationId } from "@/lib/observability/correlation";
 
 const VALID_PROVIDERS: PaymentProviderName[] = ["MANUAL", "STRIPE"];
 
@@ -18,6 +22,9 @@ const VALID_PROVIDERS: PaymentProviderName[] = ["MANUAL", "STRIPE"];
 // already-processed, never reprocessed. Never trusts a client-supplied
 // amount/currency/status — always re-derives from the parsed event.
 export async function POST(req: Request, { params }: { params: Promise<{ provider: string }> }) {
+  // STEP 15 §19 — persistent (cross-instance) rate limit.
+  const limited = await enforcePersistentLimit(req, "webhook-payments", 300, 60000);
+  if (limited) return limited;
   const { provider: providerParam } = await params;
   const providerName = providerParam.toUpperCase() as PaymentProviderName;
   if (!VALID_PROVIDERS.includes(providerName)) {
@@ -29,6 +36,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
   const signatureHeader = req.headers.get("stripe-signature") ?? req.headers.get("x-webhook-signature");
 
   if (!provider.verifyWebhook(rawBody, signatureHeader)) {
+    // Counted so a spoofing/probing spike is visible on System Health → Security.
+    void bumpCounter("security:webhook-signature");
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -92,6 +101,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
     return NextResponse.json({ ok: true });
   } catch (error) {
     await prisma.paymentWebhookEvent.update({ where: { id: webhookEvent.id }, data: { status: "FAILED", errorCode: "PROCESSING_ERROR", retryCount: { increment: 1 } } }).catch(() => {});
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Processing error" }, { status: 200 });
+    // STEP 15 §13/§57 — the failure is now captured centrally (it used to be
+    // swallowed silently) and the response no longer echoes the raw error text.
+    await captureError({ error, route: "/api/webhooks/payments", service: "WEBHOOK", category: "WEBHOOK_ERROR", severity: "HIGH", correlationId: await getCorrelationId() });
+    return NextResponse.json({ ok: false, error: "Processing error" }, { status: 200 });
   }
 }

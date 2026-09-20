@@ -3,11 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { verifyExportDownloadToken, readDataExport } from "@/lib/privacy/data-export";
 import { writeAudit } from "@/lib/audit";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 // Streaming, authenticated, audited — never a permanent public export URL
 // (spec §21). Requires both the applicant's own session AND the short-lived
 // signed download token issued at export creation.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  // STEP 15 §19 — persistent (cross-instance) rate limit.
+  const limited = await enforcePersistentLimit(req, "account-download-export", 20, 3600000);
+  if (limited) return limited;
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 

@@ -1,5 +1,7 @@
 import { put, del } from "@vercel/blob";
 import { randomUUID } from "crypto";
+import { validateUpload } from "@/lib/ops/upload-validation";
+import { imageDimensionsOk } from "@/lib/ops/image-check";
 import { encryptEvidence, decryptEvidence } from "@/lib/case-evidence-crypto";
 
 // Mirrors src/lib/verification/document-storage.ts exactly (spec §12) —
@@ -21,6 +23,12 @@ export async function saveCaseEvidence(
   if (file.byteLength > MAX_UPLOAD_BYTES) {
     throw new EvidenceUploadError("File is too large (max 10MB).");
   }
+
+  // STEP 15 §33 — real file type from magic bytes (declared MIME is not trusted);
+  // images additionally get a pixel-dimension cap.
+  const check = validateUpload({ buffer: file, declaredMime: mimeType, allowed: ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const, maxBytes: MAX_UPLOAD_BYTES });
+  if (!check.ok) throw new EvidenceUploadError(check.error);
+  if (check.detected !== "application/pdf" && !(await imageDimensionsOk(file))) throw new EvidenceUploadError("Image dimensions are too large.");
 
   const { ciphertext, ivBase64, authTagBase64 } = encryptEvidence(file);
   const blob = await put(`case-evidence/${randomUUID()}.enc`, ciphertext, {

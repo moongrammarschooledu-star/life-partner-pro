@@ -4,10 +4,18 @@ import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { assertCaseAccess } from "@/lib/case-access";
 import { saveCaseEvidence, EvidenceUploadError } from "@/lib/case-evidence-storage";
 import { writeAudit } from "@/lib/audit";
+import { safeFilename } from "@/lib/ops/upload-validation";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
+import { assertFeatureEnabled } from "@/lib/ops/feature-flags";
+import { assertSwitchOpen } from "@/lib/ops/system-control";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin("sensitive:case:evidence:view");
+    await assertSwitchOpen("uploads");
+    await assertFeatureEnabled("uploads.enabled");
+    const limited = await enforcePersistentLimit(req, "admin-evidence-upload", 30, 60_000, admin.id);
+    if (limited) return limited;
     const { id } = await params;
 
     const caseRecord = await prisma.case.findUnique({ where: { id } });
@@ -30,7 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         authTagBase64: saved.authTagBase64,
         mimeType: saved.mimeType,
         sizeBytes: saved.sizeBytes,
-        originalFilename: file.name || null,
+        originalFilename: file.name ? safeFilename(file.name) : null,
       },
     });
 

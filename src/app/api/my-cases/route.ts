@@ -9,6 +9,7 @@ import { findPossibleDuplicateCases } from "@/lib/case-duplicate-detection";
 import { notifyCaseCreated } from "@/lib/notifications/events";
 import { writeAudit } from "@/lib/audit";
 import type { CaseType, CaseCategory } from "@prisma/client";
+import { blockedResponse } from "@/lib/ops/guards";
 
 const VALID_TYPES: CaseType[] = ["SUPPORT", "COMPLAINT", "SAFETY_REPORT"];
 
@@ -17,6 +18,8 @@ const VALID_TYPES: CaseType[] = ["SUPPORT", "COMPLAINT", "SAFETY_REPORT"];
 // duplicate (spec §26) — returns candidates alongside the created case so
 // the UI can surface "Possible Existing Case" without preventing filing.
 export async function POST(req: Request) {
+  const blocked = await blockedResponse({ flags: ["support.enabled"] });
+  if (blocked) return blocked;
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 

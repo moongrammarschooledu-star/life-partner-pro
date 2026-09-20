@@ -22,6 +22,9 @@ import {
 } from "@/lib/matching";
 import { calculateAge } from "@/lib/utils";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
+import { pairEligibilityProblem } from "@/lib/matching-eligibility";
+import { blockedResponse } from "@/lib/ops/guards";
+import { withRequestMetrics } from "@/lib/observability/metrics";
 
 interface MatchConfig {
   weights: MatchWeights;
@@ -68,7 +71,9 @@ function categoryScores(result: MatchResult): Partial<Record<MatchCategory, numb
   return out;
 }
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function getHandler(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const blocked = await blockedResponse({ switches: ["matching"], flags: ["matching.enabled"] });
+  if (blocked) return blocked;
   try {
     await requireAdmin("match:run");
     const { id } = await params;
@@ -124,6 +129,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         id: { not: id },
         gender: oppositeGender,
         softDeleted: false,
+        // STEP 15 §36 — deactivated / deletion-pending accounts were previously still
+        // eligible candidates; inactive accounts are always excluded.
+        accountStatus: "ACTIVE",
         status: activeOnly ? "ACTIVE" : eligibilityStatus,
         verified: verifiedFilter,
         // A profile with an unresolved high/critical security flag never
@@ -205,6 +213,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const blocked = await blockedResponse({ switches: ["matching"], flags: ["matching.enabled"] });
+  if (blocked) return blocked;
   try {
     const admin = await requireAdmin("match:run");
     const { id } = await params;
@@ -215,6 +225,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       prisma.profile.findUnique({ where: { id: candidateId }, include: matchableInclude }),
     ]);
     if (!seekerRecord || !candidateRecord) throw new ApiError(404, "Profile not found");
+
+    // STEP 15 §36 — the manual path used to re-check nothing (deleted/suspended/
+    // deactivated/same-gender/restricted profiles could be paired by id).
+    const problem = pairEligibilityProblem(seekerRecord, candidateRecord);
+    if (problem) throw new ApiError(400, problem);
+    if ((await hasActiveRestriction(id, "CANNOT_MATCH")) || (await hasActiveRestriction(candidateId, "CANNOT_MATCH"))) {
+      throw new ApiError(403, "One of these profiles is currently restricted from matching.");
+    }
 
     const { weights, hardRequirements, thresholds, enabled } = await getMatchConfig();
     const result = scoreMatchWithThresholds(toMatchable(seekerRecord), toMatchable(candidateRecord), weights, hardRequirements, thresholds, enabled);
@@ -263,3 +281,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return handleApiError(error);
   }
 }
+
+// STEP 15 §17 — latency/error buckets for this critical route (System Health → Performance).
+export const GET = withRequestMetrics("GET /api/admin/profiles/[id]/matches", getHandler);

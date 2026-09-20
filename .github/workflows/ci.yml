@@ -1,0 +1,100 @@
+name: CI
+
+# STEP 15 §22 — pipeline: install → typecheck → lint → unit tests → security
+# checks → migration validation → build. A failing critical stage fails the
+# workflow; make it a REQUIRED status check on the production branch (GitHub →
+# Settings → Branches → branch protection) so nothing merges — and therefore
+# nothing deploys — while it is red. Each stage also reports evidence to the
+# deployed app (Production Readiness) when CI_EVIDENCE_TOKEN / EVIDENCE_URL
+# repository secrets are configured.
+
+on:
+  pull_request:
+  push:
+    branches: [development, staging, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMMIT_SHA: ${{ github.sha }}
+  CI_EVIDENCE_TOKEN: ${{ secrets.CI_EVIDENCE_TOKEN }}
+  EVIDENCE_URL: ${{ secrets.EVIDENCE_URL }}
+  # Dummy, CI-only values (no real secrets are ever used by this workflow).
+  NEXTAUTH_SECRET: ci-only-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+  APP_ENV: development
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lpp_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lpp_ci?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        id: typecheck
+        run: npm run typecheck
+      - if: always()
+        run: node scripts/post-evidence.mjs TYPECHECK ${{ steps.typecheck.outcome }}
+
+      - name: Lint
+        id: lint
+        run: npm run lint
+      - if: always()
+        run: node scripts/post-evidence.mjs LINT ${{ steps.lint.outcome }}
+
+      - name: Unit tests (includes the route-authorization coverage guard)
+        id: tests
+        run: npm test
+      - if: always()
+        run: node scripts/post-evidence.mjs TESTS ${{ steps.tests.outcome }}
+
+      - name: Static security scan
+        id: scan
+        run: npm run security:scan
+      - if: always()
+        run: node scripts/post-evidence.mjs SECURITY_SCAN ${{ steps.scan.outcome }}
+
+      - name: Dependency audit (fails on high/critical in production dependencies)
+        id: audit
+        run: npm run deps:audit
+      - if: always()
+        run: node scripts/post-evidence.mjs DEPENDENCY_AUDIT ${{ steps.audit.outcome }}
+
+      - name: Migration validation (static checks + reproduce the schema from migrations)
+        id: migrations
+        run: |
+          npm run db:migrate:validate
+          npx prisma migrate deploy
+          # Fails (exit 2) if the migrations do not produce EXACTLY prisma/schema.prisma
+          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - if: always()
+        run: node scripts/post-evidence.mjs MIGRATION_VALIDATION ${{ steps.migrations.outcome }}
+
+      - name: Build
+        id: build
+        run: npm run build
+      - if: always()
+        run: node scripts/post-evidence.mjs BUILD ${{ steps.build.outcome }}

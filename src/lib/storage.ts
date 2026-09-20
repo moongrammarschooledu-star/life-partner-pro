@@ -2,6 +2,8 @@ import { put, del } from "@vercel/blob";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { encryptPhoto, decryptPhoto } from "@/lib/privacy/photo-crypto";
+import { validateUpload } from "@/lib/ops/upload-validation";
+import { imageDimensionsOk } from "@/lib/ops/image-check";
 
 // Vercel's serverless functions have no persistent writable disk, so photos
 // live in Vercel Blob rather than on disk. Blob URLs are unlisted but not
@@ -35,6 +37,12 @@ export async function savePhoto(
   if (file.byteLength > MAX_UPLOAD_BYTES) {
     throw new UploadValidationError("Image is too large (max 8MB).");
   }
+
+  // STEP 15 §33 — verify the REAL file type from its magic bytes (the client-
+  // declared MIME above is not trusted) and cap the pixel dimensions.
+  const check = validateUpload({ buffer: file, declaredMime: mimeType, allowed: ["image/jpeg", "image/png", "image/webp"] as const, maxBytes: MAX_UPLOAD_BYTES });
+  if (!check.ok) throw new UploadValidationError(check.error);
+  if (!(await imageDimensionsOk(file))) throw new UploadValidationError("Image dimensions are too large.");
 
   // Re-encode to strip metadata (incl. EXIF/GPS) and normalize size — also
   // acts as a sanity check that the bytes are actually a decodable image.

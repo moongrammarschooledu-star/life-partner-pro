@@ -3,10 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { saveCaseEvidence, EvidenceUploadError } from "@/lib/case-evidence-storage";
 import { writeAudit } from "@/lib/audit";
+import { safeFilename } from "@/lib/ops/upload-validation";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
+import { blockedResponse } from "@/lib/ops/guards";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const blocked = await blockedResponse({ switches: ["uploads"], flags: ["uploads.enabled", "support.enabled"] });
+  if (blocked) return blocked;
+  const limited = await enforcePersistentLimit(req, "case-evidence-upload", 10, 60_000, profileId);
+  if (limited) return limited;
   const { id } = await params;
 
   const caseRecord = await prisma.case.findUnique({ where: { id } });
@@ -31,7 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         authTagBase64: saved.authTagBase64,
         mimeType: saved.mimeType,
         sizeBytes: saved.sizeBytes,
-        originalFilename: file.name || null,
+        originalFilename: file.name ? safeFilename(file.name) : null,
       },
     });
 

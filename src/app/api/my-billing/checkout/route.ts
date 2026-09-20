@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { startCheckout, CheckoutError } from "@/lib/finance/checkout";
+import { withRequestMetrics } from "@/lib/observability/metrics";
 
-export async function POST(req: Request) {
+async function postHandler(req: Request) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
@@ -36,3 +37,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not start checkout. Please try again." }, { status: 500 });
   }
 }
+
+// STEP 15 §17 — latency/error buckets for this critical route (System Health → Performance).
+export const POST = withRequestMetrics("POST /api/my-billing/checkout", postHandler);

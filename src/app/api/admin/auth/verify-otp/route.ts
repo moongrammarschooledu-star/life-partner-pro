@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { isExpired } from "@/lib/verification/otp";
 import { issueStepUpToken } from "@/lib/step-up-token";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 // Second step of the 2FA login flow — see precheck/route.ts and
 // src/lib/auth.ts's authorize(), which is the actual enforcement point.
@@ -11,6 +12,9 @@ export async function POST(req: Request) {
   if (!challengeId || !code) {
     return NextResponse.json({ error: "Missing challenge or code." }, { status: 400 });
   }
+
+  const limited = await enforcePersistentLimit(req, "admin-verify-otp", 20, 15 * 60_000, challengeId);
+  if (limited) return limited;
 
   const challenge = await prisma.adminOtpChallenge.findUnique({
     where: { id: challengeId },

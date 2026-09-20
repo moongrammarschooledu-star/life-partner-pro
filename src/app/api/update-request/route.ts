@@ -5,6 +5,7 @@ import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { notifyAdminProfileUpdatePending } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
+import { blockedResponse } from "@/lib/ops/guards";
 
 // Lightweight self-service verification: matching Profile Code + email is
 // enough to look up and submit an update request. This is intentionally not
@@ -28,6 +29,8 @@ async function findProfileBySessionCookie() {
 }
 
 export async function POST(req: Request) {
+  const blocked = await blockedResponse({ switches: ["profileSubmissions"] });
+  if (blocked) return blocked;
   const key = `update-request:${clientKeyFromRequest(req)}`;
   if (!rateLimit(key, 10, 60_000)) {
     return NextResponse.json({ error: "Too many requests. Please try again in a minute." }, { status: 429 });

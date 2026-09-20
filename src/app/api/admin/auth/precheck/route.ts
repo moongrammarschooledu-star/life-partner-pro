@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { checkAdminCredentials } from "@/lib/admin-login";
 import { generateOtpCode, expiresInMinutes } from "@/lib/verification/otp";
 import { notificationService } from "@/lib/notifications";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 // Pre-check for the two-step 2FA login flow (spec §12) — never creates a
 // session. If the admin has 2FA enabled (or their role requires it), this
@@ -16,6 +17,10 @@ export async function POST(req: Request) {
   if (!email || !password) {
     return NextResponse.json({ status: "invalid" }, { status: 400 });
   }
+
+  // STEP 15 §19 — persistent (cross-instance) throttle per IP and per e-mail, on top of the per-account lockout.
+  const limited = await enforcePersistentLimit(req, "admin-precheck", 20, 15 * 60_000, email);
+  if (limited) return limited;
 
   const ipAddress = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const userAgent = req.headers.get("user-agent");

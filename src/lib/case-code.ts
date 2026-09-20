@@ -8,7 +8,8 @@ import type { CaseType } from "@prisma/client";
 function prefixFor(type: CaseType): "SUP" | "CMP" | "INC" | "CASE" {
   if (type === "SUPPORT") return "SUP";
   if (type === "COMPLAINT") return "CMP";
-  if (type === "PRIVACY_INCIDENT") return "INC";
+  // SYSTEM_INCIDENT (STEP 15) deliberately shares the INC counter so LPP-INC-###### stays one unique numbering space.
+  if (type === "PRIVACY_INCIDENT" || type === "SYSTEM_INCIDENT") return "INC";
   return "CASE";
 }
 

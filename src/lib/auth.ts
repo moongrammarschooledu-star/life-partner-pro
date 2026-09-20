@@ -6,13 +6,17 @@ import { checkAdminCredentials } from "@/lib/admin-login";
 import { resolveEffectivePermissions } from "@/lib/effective-permissions";
 import { verifyStepUpToken } from "@/lib/step-up-token";
 import { writeAudit } from "@/lib/audit";
+import { getSystemControl } from "@/lib/ops/system-control";
 import type { AdminRole } from "@/lib/permissions";
 
 // Session duration: NextAuth's JWT maxAge (30-day default, unset here) is
 // fixed at Edge config construction time in auth.config.ts and can't do a DB
 // read there without breaking the Edge/Node split that keeps middleware
 // under Vercel's bundle limit — see that file's own header comment.
-const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// STEP 15 §21: the authoritative lifetime is now the DB session row, whose
+// expiry comes from SystemControl.adminSessionMaxHours (default 12 h,
+// configurable). requireAdmin() and the admin layout both reject an expired row.
+const FALLBACK_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -49,13 +53,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
+        const control = await getSystemControl().catch(() => null);
+        const sessionMaxAgeMs = control ? control.adminSessionMaxHours * 3_600_000 : FALLBACK_SESSION_MAX_AGE_MS;
         const session = await prisma.adminSession.create({
           data: {
             adminId: admin.id,
             userAgent,
             ipAddress,
             deviceInfo: userAgent ? summarizeUserAgent(userAgent) : null,
-            expiresAt: new Date(Date.now() + SESSION_MAX_AGE_MS),
+            expiresAt: new Date(Date.now() + sessionMaxAgeMs),
           },
         });
         const sid = session.id;

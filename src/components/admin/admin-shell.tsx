@@ -37,6 +37,11 @@ import {
   Lock,
   Wallet,
   Package,
+  Activity,
+  SlidersHorizontal,
+  Siren,
+  ClipboardCheck,
+  BookOpen,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -66,6 +71,11 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/privacy-center", label: "Privacy Center", icon: Lock, permission: "privacy:view" },
   { href: "/admin/finance-center", label: "Finance Center", icon: Wallet, permission: "finance:view" },
   { href: "/admin/packages", label: "Packages", icon: Package, permission: "finance:packages:view" },
+  { href: "/admin/system-health", label: "System Health", icon: Activity, permission: "system:view" },
+  { href: "/admin/system-config", label: "System Configuration", icon: SlidersHorizontal, permission: "system:view" },
+  { href: "/admin/alerts", label: "Alerts & Incidents", icon: Siren, permission: "alerts:view" },
+  { href: "/admin/production-readiness", label: "Production Readiness", icon: ClipboardCheck, permission: "readiness:view" },
+  { href: "/admin/runbooks", label: "Runbooks", icon: BookOpen, permission: "system:view" },
   { href: "/admin/support", label: "Support", icon: Inbox },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, permission: "audit:view" },
   { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:edit" },

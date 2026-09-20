@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { getActiveViewAs } from "@/lib/view-as";
 import type { Permission, AdminRole } from "@/lib/permissions";
+import { ServiceUnavailableError } from "@/lib/ops/system-control";
 
 export class ApiError extends Error {
   status: number;
@@ -84,8 +85,33 @@ export async function requireAdmin(permission?: Permission, options?: RequireAdm
 
 export function handleApiError(error: unknown) {
   if (error instanceof ApiError) {
+    // 401/403 are counted (deduped) so auth-attack / permission-violation
+    // spikes can raise alerts; other 4xx are ordinary validation outcomes.
+    if (error.status === 401 || error.status === 403) {
+      void captureAsync(error, error.status);
+    }
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
-  console.error(error);
+  if (error instanceof ServiceUnavailableError) {
+    // A closed kill switch / feature flag — neutral 503, not an application error.
+    return NextResponse.json({ error: error.message }, { status: 503, headers: { "Retry-After": "300" } });
+  }
+  void captureAsync(error, 500);
   return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+}
+
+// Fire-and-forget: monitoring must never delay or fail a response. The route
+// is unknown here (handleApiError has no request), so it is read from the
+// proxy-injected headers when available.
+async function captureAsync(error: unknown, status: number) {
+  try {
+    const { getRequestMeta } = await import("@/lib/observability/correlation");
+    const { captureError } = await import("@/lib/observability/error-capture");
+    const { headers } = await import("next/headers");
+    const h = await headers();
+    const meta = await getRequestMeta();
+    await captureError({ error, status, route: h.get("x-lpp-path") ?? undefined, correlationId: meta.correlationId });
+  } catch {
+    console.error(error);
+  }
 }

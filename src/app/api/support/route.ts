@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { blockedResponse } from "@/lib/ops/guards";
 
 export async function POST(req: Request) {
+  const blocked = await blockedResponse({ flags: ["support.enabled"] });
+  if (blocked) return blocked;
   const key = `support:${clientKeyFromRequest(req)}`;
   if (!rateLimit(key, 5, 60_000)) {
     return NextResponse.json({ error: "Too many requests. Please try again in a minute." }, { status: 429 });

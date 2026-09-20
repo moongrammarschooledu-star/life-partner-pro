@@ -7,6 +7,7 @@ import { nextProposalCode, ensureProposalCode } from "@/lib/proposal-code";
 import { STATUS_GROUPS } from "@/lib/proposal-status-labels";
 import { notifyProposalCreated } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
+import { blockedResponse } from "@/lib/ops/guards";
 
 const proposalListInclude = {
   profileA: { select: { id: true, profileCode: true, fullName: true, gender: true, city: true } },
@@ -65,6 +66,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const blocked = await blockedResponse({ switches: ["proposals"], flags: ["proposals.enabled"] });
+  if (blocked) return blocked;
   try {
     const admin = await requireAdmin("proposal:create");
     const { profileAId, profileBId, matchId, priority, note, verificationWarningAcknowledged } = await req.json();

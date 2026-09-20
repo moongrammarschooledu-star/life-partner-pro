@@ -15,6 +15,7 @@ import {
   type MatchResult,
   type MatchCategory,
 } from "@/lib/matching";
+import { blockedResponse } from "@/lib/ops/guards";
 
 function categoryScores(result: MatchResult): Partial<Record<MatchCategory, number>> {
   const out: Partial<Record<MatchCategory, number>> = {};
@@ -40,6 +41,8 @@ const CATEGORY_LABELS: Record<MatchCategory, string> = {
 // and *current* admin settings, snapshotting the prior score/breakdown first
 // so nothing is silently overwritten (spec §34).
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const blocked = await blockedResponse({ switches: ["matching"], flags: ["matching.enabled"] });
+  if (blocked) return blocked;
   try {
     const admin = await requireAdmin("match:run");
     const { id } = await params;

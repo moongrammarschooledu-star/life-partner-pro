@@ -4,10 +4,14 @@ import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { getCurrentAssigneeId } from "@/lib/admin-assignment";
 import { notifyUserResponded } from "@/lib/notifications/events";
 import { writeAudit } from "@/lib/audit";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 // Spec §14 — submitting additional information flips the case from
 // "Waiting for User" back to "In Review".
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  // STEP 15 §19 — persistent (cross-instance) rate limit.
+  const limited = await enforcePersistentLimit(req, "case-respond", 20, 60000);
+  if (limited) return limited;
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const { id } = await params;

@@ -13,24 +13,40 @@ import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { notifyProfileRegistered, notifyProfileSubmitted } from "@/lib/notifications/events";
 import { signProfileToken, signSessionId, APPLICANT_COOKIE, APPLICANT_SESSION_ID_COOKIE } from "@/lib/applicant-session";
 import { createProfileSession } from "@/lib/profile-session";
+import { blockedResponse } from "@/lib/ops/guards";
+import { withRequestMetrics } from "@/lib/observability/metrics";
 
 const CONSENT_VERSION = "1.0";
 const GENERIC_ERROR = "Your profile could not be submitted. Please check the highlighted fields.";
 
-export async function POST(req: Request) {
+async function postHandler(req: Request) {
+  const blocked = await blockedResponse({ switches: ["registrations", "profileSubmissions"], flags: ["registrations.enabled"] });
+  if (blocked) return blocked;
   const key = `register:${clientKeyFromRequest(req)}`;
   if (!rateLimit(key, 5, 60_000)) {
     return NextResponse.json({ error: "Too many submissions. Please try again in a minute." }, { status: 429 });
   }
 
   try {
-    const formData = await req.formData();
+    // STEP 15 §57 — a malformed body (wrong content type, broken JSON) is a client
+    // error, not a server fault: answer 400 instead of surfacing a 500.
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json({ error: "Invalid submission." }, { status: 400 });
+    }
     const rawPayload = formData.get("payload");
     if (typeof rawPayload !== "string") {
       return NextResponse.json({ error: "Invalid submission." }, { status: 400 });
     }
 
-    const parsed = JSON.parse(rawPayload);
+    let parsed: { hp?: unknown } & Record<string, unknown>;
+    try {
+      parsed = JSON.parse(rawPayload);
+    } catch {
+      return NextResponse.json({ error: "Invalid submission." }, { status: 400 });
+    }
 
     // Honeypot: a real user never sees or fills this field (visually hidden
     // in the wizard). A non-empty value is treated identically to any other
@@ -300,3 +316,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }
+
+// STEP 15 §17 — latency/error buckets for this critical route (System Health → Performance).
+export const POST = withRequestMetrics("POST /api/register", postHandler);

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { prisma } from "@/lib/prisma";
 import { issueStepUpToken } from "@/lib/step-up-token";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 // Password re-confirmation for the two most sensitive actions (spec §16):
 // deactivating an admin account, and changing critical security settings.
@@ -11,6 +12,9 @@ import { issueStepUpToken } from "@/lib/step-up-token";
 export async function POST(req: Request) {
   try {
     const admin = await requireAdmin();
+    // Password-guessing guard for the step-up prompt (10 tries / 15 min per admin).
+    const limited = await enforcePersistentLimit(req, "admin-reauth", 10, 15 * 60_000, admin.id);
+    if (limited) return limited;
     const { password } = (await req.json()) as { password?: string };
     if (!password) throw new ApiError(400, "Password is required.");
 

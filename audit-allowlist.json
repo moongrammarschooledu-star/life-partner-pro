@@ -1,0 +1,12 @@
+{
+  "_comment": "Reviewed exceptions for `npm run deps:audit`. Each entry needs a reason and a review-by date; expired entries fail the audit again.",
+  "allow": [
+    {
+      "package": "deepmerge-ts",
+      "reason": "Only reachable through the Prisma CLI's config loader (@prisma/config) at build/migrate time, merging our own trusted prisma config. Not reachable from request handling. npm's suggested fix (downgrade prisma) is not appropriate; upgrade Prisma deliberately after testing.",
+      "reviewBy": "2026-12-31"
+    },
+    { "package": "@prisma/config", "reason": "Same finding as deepmerge-ts (transitive).", "reviewBy": "2026-12-31" },
+    { "package": "prisma", "reason": "Same finding as deepmerge-ts (transitive through the CLI).", "reviewBy": "2026-12-31" }
+  ]
+}

@@ -5,6 +5,7 @@ import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { saveVerificationDocument, DocumentUploadError } from "@/lib/verification/document-storage";
 import { writeAudit } from "@/lib/audit";
 import type { DocumentType } from "@prisma/client";
+import { blockedResponse } from "@/lib/ops/guards";
 
 const VALID_TYPES: DocumentType[] = ["IDENTITY", "EDUCATION", "EMPLOYMENT", "OTHER"];
 
@@ -24,6 +25,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const blocked = await blockedResponse({ switches: ["uploads"], flags: ["uploads.enabled", "verification.enabled"] });
+  if (blocked) return blocked;
   const key = `verification-doc-upload:${clientKeyFromRequest(req)}`;
   if (!rateLimit(key, 5, 60_000)) {
     return NextResponse.json({ error: "Too many uploads. Please try again in a minute." }, { status: 429 });

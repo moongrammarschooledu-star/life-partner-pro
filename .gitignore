@@ -48,3 +48,8 @@ next-env.d.ts
 
 # editor/tooling session state (not project source)
 .claude/scheduled_tasks.lock
+
+# STEP 15 — local backup/restore test artifacts (contain encrypted production data; never commit)
+/.backups-selftest/
+/.backups/
+*.lppb

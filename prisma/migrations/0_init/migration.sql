@@ -1,0 +1,3309 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
+-- CreateEnum
+CREATE TYPE "AdminRole" AS ENUM ('SUPER_ADMIN', 'ADMIN', 'STAFF', 'VIEWER');
+
+-- CreateEnum
+CREATE TYPE "AssignmentResourceType" AS ENUM ('PROPOSAL', 'VERIFICATION', 'SECURITY_FLAG', 'FOLLOW_UP', 'PROFILE', 'CASE');
+
+-- CreateEnum
+CREATE TYPE "AssignmentPriority" AS ENUM ('LOW', 'NORMAL', 'HIGH', 'URGENT');
+
+-- CreateEnum
+CREATE TYPE "AssignmentStatus" AS ENUM ('ASSIGNED', 'IN_PROGRESS', 'WAITING', 'COMPLETED', 'REASSIGNED');
+
+-- CreateEnum
+CREATE TYPE "AdminTaskType" AS ENUM ('NEW_PROFILE_REVIEW', 'VERIFICATION_REQUEST', 'PROPOSAL_FOLLOWUP', 'MEETING_TASK', 'CONTACT_REQUEST_TASK', 'FOLLOW_UP_DUE', 'CASE_REVIEW');
+
+-- CreateEnum
+CREATE TYPE "AdminTaskStatus" AS ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "LoginHistoryEvent" AS ENUM ('SUCCESS', 'FAILURE', 'LOCKED');
+
+-- CreateEnum
+CREATE TYPE "CaseType" AS ENUM ('SUPPORT', 'COMPLAINT', 'SAFETY_REPORT', 'INTERNAL', 'PRIVACY_INCIDENT', 'SYSTEM_INCIDENT');
+
+-- CreateEnum
+CREATE TYPE "CaseCategory" AS ENUM ('ACCOUNT_PROBLEM', 'PROFILE_PROBLEM', 'PROFILE_UPDATE', 'VERIFICATION_ISSUE', 'MATCHING_ISSUE', 'PROPOSAL_ISSUE', 'CONTACT_PERMISSION_ISSUE', 'MEETING_ISSUE', 'COMMUNICATION_ISSUE', 'TECHNICAL_PROBLEM', 'PRIVACY_REQUEST', 'PAYMENT_BILLING', 'ASSISTED_MATCHMAKING_REQUEST', 'OTHER_SUPPORT', 'INCORRECT_PROFILE_INFORMATION', 'MISLEADING_INFORMATION', 'UNWANTED_CONTACT', 'INAPPROPRIATE_BEHAVIOR', 'MISUSE_OF_PLATFORM', 'HARASSMENT', 'FRAUD_SUSPICIOUS_ACTIVITY', 'PRIVACY_CONCERN', 'FAKE_IMPERSONATION_PROFILE', 'UNAUTHORIZED_CONTACT_SHARING', 'STAFF_CONDUCT_COMPLAINT', 'PROPOSAL_RELATED_COMPLAINT', 'MEETING_RELATED_COMPLAINT', 'OTHER_COMPLAINT', 'THREATENING_BEHAVIOR', 'FINANCIAL_SCAM', 'IDENTITY_MISREPRESENTATION', 'FAKE_PROFILE', 'BLACKMAIL', 'UNAUTHORIZED_CONTACT', 'PRIVACY_VIOLATION', 'SUSPICIOUS_MEETING_BEHAVIOR', 'OTHER_SAFETY_CONCERN', 'UNAUTHORIZED_DATA_ACCESS', 'CONTACT_DATA_EXPOSURE', 'PHOTO_EXPOSURE', 'DOCUMENT_EXPOSURE', 'INCORRECT_PERMISSION', 'DATA_EXPORT_ISSUE', 'NOTIFICATION_PRIVACY_ISSUE', 'STAFF_ACCESS_VIOLATION', 'SECURITY_BREACH', 'OTHER_PRIVACY_INCIDENT', 'PROVIDER_OUTAGE', 'PAYMENT_VERIFICATION_FAILURE', 'DUPLICATE_CHARGE', 'REFUND_FAILURE', 'WEBHOOK_FAILURE', 'SUBSCRIPTION_ERROR', 'INVOICE_ERROR', 'RECONCILIATION_MISMATCH', 'APPLICATION_OUTAGE', 'DATABASE_FAILURE', 'STORAGE_FAILURE', 'NOTIFICATION_INCIDENT', 'BACKUP_FAILURE', 'DEPLOYMENT_FAILURE', 'DATA_INTEGRITY_INCIDENT');
+
+-- CreateEnum
+CREATE TYPE "CaseStatus" AS ENUM ('NEW', 'ACKNOWLEDGED', 'ASSIGNED', 'IN_REVIEW', 'WAITING_FOR_USER', 'WAITING_FOR_STAFF', 'ESCALATED', 'ACTION_REQUIRED', 'RESOLVED', 'CLOSED', 'REOPENED', 'ARCHIVED');
+
+-- CreateEnum
+CREATE TYPE "CasePriority" AS ENUM ('LOW', 'NORMAL', 'HIGH', 'URGENT', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "CaseAccessLevel" AS ENUM ('VIEW', 'COMMENT', 'EDIT');
+
+-- CreateEnum
+CREATE TYPE "CaseNoteLevel" AS ENUM ('STAFF', 'ADMIN', 'SENIOR_ADMIN', 'SUPER_ADMIN');
+
+-- CreateEnum
+CREATE TYPE "CaseLinkType" AS ENUM ('RELATED_TO', 'DUPLICATE_OF', 'FOLLOW_UP_OF', 'ESCALATION_OF', 'EVIDENCE_FOR');
+
+-- CreateEnum
+CREATE TYPE "RestrictionType" AS ENUM ('CANNOT_MATCH', 'CANNOT_RECEIVE_PROPOSAL', 'CANNOT_CONTACT_SHARE', 'CANNOT_SCHEDULE_MEETING', 'CANNOT_UPDATE_FIELDS');
+
+-- CreateEnum
+CREATE TYPE "ResolutionCategory" AS ENUM ('INFORMATION_PROVIDED', 'USER_ISSUE_RESOLVED', 'PROFILE_CORRECTED', 'VERIFICATION_REQUESTED', 'CONTACT_RESTRICTION_APPLIED', 'PROFILE_RESTRICTED', 'PROFILE_SUSPENDED', 'CASE_ESCALATED', 'NO_VIOLATION_CONFIRMED', 'INSUFFICIENT_INFORMATION', 'DUPLICATE_CASE', 'OTHER_RESOLUTION');
+
+-- CreateEnum
+CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE');
+
+-- CreateEnum
+CREATE TYPE "MaritalStatus" AS ENUM ('NEVER_MARRIED', 'DIVORCED', 'WIDOWED', 'ANNULLED', 'SEPARATED', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "PreferencePriority" AS ENUM ('MUST_HAVE', 'PREFERRED', 'FLEXIBLE');
+
+-- CreateEnum
+CREATE TYPE "ProfileStatus" AS ENUM ('NEW', 'UNDER_REVIEW', 'VERIFIED', 'ACTIVE', 'MATCHING', 'PROPOSAL_SENT', 'WAITING_FOR_RESPONSE', 'INTERESTED', 'NOT_INTERESTED', 'MEETING_ARRANGED', 'FINALIZED', 'MARRIED', 'REJECTED', 'ARCHIVED', 'SUSPENDED');
+
+-- CreateEnum
+CREATE TYPE "VerificationStatus" AS ENUM ('NOT_VERIFIED', 'VERIFICATION_PENDING', 'UNDER_REVIEW', 'VERIFICATION_REQUIRED', 'VERIFIED', 'VERIFICATION_REJECTED', 'VERIFICATION_EXPIRED', 'RE_VERIFICATION_REQUIRED');
+
+-- CreateEnum
+CREATE TYPE "VerificationConfidence" AS ENUM ('HIGH', 'MEDIUM', 'LOW');
+
+-- CreateEnum
+CREATE TYPE "VerificationItemStatus" AS ENUM ('PENDING', 'COMPLETED', 'FAILED', 'NOT_APPLICABLE');
+
+-- CreateEnum
+CREATE TYPE "OtpChannel" AS ENUM ('PHONE', 'EMAIL', 'WHATSAPP');
+
+-- CreateEnum
+CREATE TYPE "OtpStatus" AS ENUM ('PENDING', 'VERIFIED', 'EXPIRED', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "DocumentType" AS ENUM ('IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "DocumentReviewStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+
+-- CreateEnum
+CREATE TYPE "SecurityFlagType" AS ENUM ('MULTIPLE_REGISTRATIONS', 'REPEATED_FAILED_OTP', 'UNUSUAL_UPDATE_ACTIVITY', 'SUSPICIOUS_ACCOUNT_BEHAVIOR', 'DUPLICATE_PROFILE_SUSPECTED', 'VERIFICATION_INCONSISTENCY', 'ABUSIVE_BEHAVIOR_REPORT');
+
+-- CreateEnum
+CREATE TYPE "SecurityFlagSeverity" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "SecurityFlagStatus" AS ENUM ('OPEN', 'INVESTIGATING', 'RESOLVED', 'DISMISSED');
+
+-- CreateEnum
+CREATE TYPE "ContactMethod" AS ENUM ('PHONE', 'WHATSAPP', 'EMAIL');
+
+-- CreateEnum
+CREATE TYPE "FamilyType" AS ENUM ('NUCLEAR', 'JOINT', 'EXTENDED');
+
+-- CreateEnum
+CREATE TYPE "FamilyStatus" AS ENUM ('MIDDLE_CLASS', 'UPPER_MIDDLE_CLASS', 'UPPER_CLASS', 'WELL_SETTLED');
+
+-- CreateEnum
+CREATE TYPE "EmploymentType" AS ENUM ('GOVERNMENT', 'PRIVATE', 'BUSINESS_OWNER', 'SELF_EMPLOYED', 'FREELANCE', 'NOT_WORKING', 'STUDENT');
+
+-- CreateEnum
+CREATE TYPE "ProposalStatus" AS ENUM ('DRAFT', 'SENT', 'INTERESTED', 'NOT_INTERESTED', 'WAITING', 'MEETING', 'FINALIZED', 'CLOSED', 'PROPOSAL_CREATED', 'WAITING_FOR_PROFILE_A', 'WAITING_FOR_PROFILE_B', 'BOTH_REVIEWING', 'PROFILE_A_INTERESTED', 'PROFILE_B_INTERESTED', 'BOTH_INTERESTED', 'CONTACT_PERMISSION_PENDING', 'CONTACT_APPROVED', 'FAMILIES_CONTACTED', 'MEETING_REQUESTED', 'MEETING_SCHEDULED', 'MEETING_COMPLETED', 'FURTHER_DISCUSSION', 'ACCEPTED', 'REJECTED', 'ON_HOLD', 'MARRIED', 'ARCHIVED');
+
+-- CreateEnum
+CREATE TYPE "ProposalResponseType" AS ENUM ('INTERESTED', 'NOT_INTERESTED', 'NEED_MORE_INFO');
+
+-- CreateEnum
+CREATE TYPE "ProposalDeclineReason" AS ENUM ('DIFFERENT_EXPECTATIONS', 'LOCATION', 'AGE', 'EDUCATION', 'PROFESSION', 'FAMILY_PREFERENCE', 'PERSONAL_PREFERENCE', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "MeetingType" AS ENUM ('FAMILY_MEETING', 'INITIAL_MEETING', 'ONLINE_MEETING', 'PHONE_DISCUSSION', 'IN_PERSON_MEETING', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "MeetingStatus" AS ENUM ('REQUESTED', 'SCHEDULED', 'CONFIRMED', 'COMPLETED', 'RESCHEDULED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "CommunicationType" AS ENUM ('PHONE_CALL', 'WHATSAPP', 'SMS', 'EMAIL', 'MEETING', 'FOLLOW_UP');
+
+-- CreateEnum
+CREATE TYPE "MatchStatus" AS ENUM ('SUGGESTED', 'REVIEWED', 'APPROVED', 'REJECTED', 'PROPOSAL_CREATED', 'CLOSED');
+
+-- CreateEnum
+CREATE TYPE "MatchRecommendation" AS ENUM ('STRONG_MATCH', 'GOOD_MATCH', 'NEEDS_REVIEW', 'NOT_RECOMMENDED');
+
+-- CreateEnum
+CREATE TYPE "FollowUpPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+
+-- CreateEnum
+CREATE TYPE "ProposalPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+
+-- CreateEnum
+CREATE TYPE "FollowUpStatus" AS ENUM ('PENDING', 'COMPLETED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "AuditAction" AS ENUM ('ADMIN_LOGIN', 'ADMIN_LOGOUT', 'PROFILE_CREATED', 'PROFILE_VIEWED', 'PROFILE_EDITED', 'PROFILE_DELETED', 'PROFILE_RESTORED', 'PROFILE_STATUS_CHANGED', 'PROFILE_VERIFIED', 'CONTACT_VIEWED', 'CONTACT_SHARED', 'MATCH_CREATED', 'MATCH_STATUS_CHANGED', 'MATCH_RECALCULATED', 'PROPOSAL_CREATED', 'PROPOSAL_STATUS_CHANGED', 'NOTE_ADDED', 'COMMUNICATION_LOGGED', 'FOLLOW_UP_SCHEDULED', 'UPDATE_REQUEST_SUBMITTED', 'UPDATE_REQUEST_APPROVED', 'UPDATE_REQUEST_REJECTED', 'ADMIN_USER_CREATED', 'ADMIN_USER_ROLE_CHANGED', 'ADMIN_USER_STATUS_CHANGED', 'PROPOSAL_VIEWED', 'PROPOSAL_RESPONSE_SUBMITTED', 'CONTACT_PERMISSION_REQUESTED', 'CONTACT_PERMISSION_APPROVED', 'MEETING_CREATED', 'MEETING_MODIFIED', 'FAMILY_COMMUNICATION_LOGGED', 'PROPOSAL_FINALIZED', 'PROPOSAL_MARRIED', 'PROPOSAL_ARCHIVED', 'PROPOSAL_ASSIGNED', 'VERIFICATION_STATUS_CHANGED', 'OTP_SENT', 'OTP_VERIFIED', 'OTP_FAILED', 'EMAIL_VERIFICATION_SENT', 'EMAIL_VERIFIED', 'DOCUMENT_UPLOADED', 'DOCUMENT_REVIEWED', 'ADMIN_ACCESSED_VERIFICATION_DOCUMENT', 'SECURITY_FLAG_RAISED', 'SECURITY_FLAG_UPDATED', 'SECURITY_FLAG_RESOLVED', 'DUPLICATE_SCAN_RUN', 'VERIFICATION_ASSIGNED', 'PROFILE_SUSPENDED', 'PROPOSAL_CREATED_WITH_VERIFICATION_WARNING', 'ADMIN_MESSAGE_SENT', 'NOTIFICATION_PREFERENCE_CHANGED', 'COMMUNICATION_CONSENT_CHANGED', 'NOTIFICATION_TEMPLATE_UPDATED', 'WEBHOOK_PROCESSED', 'WEBHOOK_SIMULATED', 'NOTIFICATION_TEST_SENT', 'NOTIFICATION_RETRY_TRIGGERED', 'REPORT_GENERATED', 'REPORT_EXPORTED', 'REPORT_REGENERATED', 'SCHEDULED_REPORT_CREATED', 'SCHEDULED_REPORT_UPDATED', 'SCHEDULED_REPORT_RUN', 'CUSTOM_ROLE_CREATED', 'CUSTOM_ROLE_UPDATED', 'CUSTOM_ROLE_PERMISSIONS_CHANGED', 'ADMIN_USER_PASSWORD_RESET', 'ADMIN_USER_DEACTIVATED', 'ADMIN_LOGIN_FAILED', 'ADMIN_ACCOUNT_LOCKED', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_DISABLED', 'ADMIN_SESSION_REVOKED', 'ASSIGNMENT_CREATED', 'ASSIGNMENT_REASSIGNED', 'TASK_REASSIGNED', 'TASK_COMPLETED', 'DEPARTMENT_CREATED', 'DEPARTMENT_UPDATED', 'SECURITY_SETTINGS_CHANGED', 'VIEW_AS_STARTED', 'VIEW_AS_ENDED', 'VIEW_AS_ACCESS', 'CASE_CREATED', 'CASE_VIEWED', 'CASE_SEARCHED', 'CASE_ASSIGNED', 'CASE_REASSIGNED', 'CASE_ACCESS_SHARED', 'EVIDENCE_UPLOADED', 'EVIDENCE_VIEWED', 'EVIDENCE_DOWNLOADED', 'CASE_NOTE_CREATED', 'CASE_NOTE_EDITED', 'CASE_NOTE_DELETED', 'CASE_STATUS_CHANGED', 'CASE_PRIORITY_CHANGED', 'CASE_ESCALATED', 'INFORMATION_REQUESTED', 'PROFILE_RESTRICTION_APPLIED', 'PROFILE_RESTRICTION_LIFTED', 'CASE_RESOLUTION_CREATED', 'CASE_CLOSED', 'CASE_REOPENED', 'CASE_MERGED', 'CASE_LINKED', 'CONSENT_GRANTED', 'CONSENT_REVOKED', 'PRIVACY_REQUEST_CREATED', 'DATA_EXPORT_REQUESTED', 'DATA_EXPORT_CREATED', 'DATA_EXPORT_DOWNLOADED', 'ACCOUNT_DEACTIVATED', 'ACCOUNT_REACTIVATED', 'DELETION_REQUESTED', 'DELETION_STARTED', 'DATA_DELETED', 'DATA_ANONYMIZED', 'RETENTION_ACTION_EXECUTED', 'DATA_HOLD_CREATED', 'DATA_HOLD_RELEASED', 'SENSITIVE_DATA_VIEWED', 'SENSITIVE_DATA_EXPORTED', 'CONTACT_SHARE_REVOKED', 'PHOTO_VIEWED', 'PRIVACY_INCIDENT_CREATED', 'BREAK_GLASS_GRANTED', 'BREAK_GLASS_USED', 'PROFILE_SESSION_REVOKED', 'PACKAGE_CREATED', 'PACKAGE_UPDATED', 'PACKAGE_PRICE_CHANGED', 'COUPON_CREATED', 'COUPON_UPDATED', 'PAYMENT_STATUS_CHANGED', 'MANUAL_PAYMENT_RECORDED', 'MANUAL_PAYMENT_VERIFIED', 'MANUAL_PAYMENT_REJECTED', 'REFUND_REQUESTED', 'REFUND_APPROVED', 'REFUND_EXECUTED', 'REFUND_REJECTED', 'SUBSCRIPTION_CREATED', 'SUBSCRIPTION_RENEWED', 'SUBSCRIPTION_CANCELLED', 'SUBSCRIPTION_EXPIRED', 'ENTITLEMENT_GRANTED', 'INVOICE_GENERATED', 'FINANCIAL_REPORT_EXPORTED', 'RECONCILIATION_RUN', 'PAYMENT_ROLLOUT_CHANGED', 'PAYMENT_ENABLED', 'PAYMENT_DISABLED', 'PAYMENT_BETA_ENABLED', 'PAYMENT_PROVIDER_CHANGED', 'PAYMENT_ENVIRONMENT_CHANGED', 'PAYMENT_FEATURE_FLAG_CHANGED', 'PAYMENT_KILL_SWITCH_USED', 'SYSTEM_SETTING_CHANGED', 'FEATURE_FLAG_CHANGED', 'MAINTENANCE_ENABLED', 'MAINTENANCE_DISABLED', 'OPERATIONAL_STATE_CHANGED', 'EMERGENCY_SWITCH_CHANGED', 'BACKUP_TRIGGERED', 'BACKUP_VERIFIED', 'RESTORE_TRIGGERED', 'RESTORE_REQUESTED', 'DEPLOYMENT_STARTED', 'DEPLOYMENT_COMPLETED', 'DEPLOYMENT_FAILED', 'ROLLBACK_STARTED', 'ROLLBACK_COMPLETED', 'ENVIRONMENT_CONFIG_CHANGED', 'JOB_INTERVENTION', 'ALERT_STATUS_CHANGED', 'INTEGRITY_CHECK_RUN');
+
+-- CreateEnum
+CREATE TYPE "Locale" AS ENUM ('EN', 'UR');
+
+-- CreateEnum
+CREATE TYPE "NotificationChannel" AS ENUM ('IN_APP', 'EMAIL', 'SMS', 'WHATSAPP');
+
+-- CreateEnum
+CREATE TYPE "DeliveryStatus" AS ENUM ('QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "ConsentStatus" AS ENUM ('GRANTED', 'REVOKED');
+
+-- CreateEnum
+CREATE TYPE "TemplateStatus" AS ENUM ('ACTIVE', 'DISABLED');
+
+-- CreateEnum
+CREATE TYPE "NotificationType" AS ENUM ('ACCOUNT_REGISTERED', 'MOBILE_VERIFIED', 'EMAIL_VERIFIED', 'PROFILE_SUBMITTED', 'PROFILE_APPROVED', 'PROFILE_UPDATE_APPROVED', 'PROFILE_UPDATE_REJECTED', 'ACCOUNT_SUSPENDED', 'VERIFICATION_STARTED', 'VERIFICATION_APPROVED', 'VERIFICATION_ACTION_REQUIRED', 'VERIFICATION_REJECTED', 'RE_VERIFICATION_REQUIRED', 'MATCH_IDENTIFIED', 'PROPOSAL_RECEIVED', 'PROPOSAL_VIEWED', 'PROPOSAL_INTEREST_SUBMITTED', 'PROPOSAL_NOT_INTERESTED', 'PROPOSAL_MUTUAL_INTEREST', 'PROPOSAL_ADMIN_ACTION_REQUIRED', 'PROPOSAL_STATUS_CHANGED', 'PROPOSAL_PENDING_REMINDER', 'PROPOSAL_FINALIZED', 'CONTACT_PERMISSION_REQUESTED', 'CONTACT_PERMISSION_APPROVED', 'CONTACT_PERMISSION_REVOKED', 'MEETING_REQUESTED', 'MEETING_SCHEDULED', 'MEETING_CONFIRMED', 'MEETING_RESCHEDULED', 'MEETING_CANCELLED', 'MEETING_COMPLETED', 'MEETING_REMINDER_24H', 'MEETING_REMINDER_2H', 'FOLLOWUP_REMINDER', 'FOLLOWUP_ADMIN_RESPONSE_REQUESTED', 'ADMIN_MUTUAL_INTEREST', 'ADMIN_CONTACT_PERMISSION_REQUEST', 'ADMIN_MEETING_REQUEST', 'ADMIN_MEETING_CONFIRMATION', 'ADMIN_OVERDUE_FOLLOWUP', 'ADMIN_SUSPICIOUS_ACTIVITY', 'ADMIN_DUPLICATE_PROFILE_ALERT', 'ADMIN_PROFILE_UPDATE_PENDING', 'ADMIN_ASSIGNMENT_CHANGED', 'ADMIN_DIRECT_MESSAGE', 'TEST_NOTIFICATION', 'CASE_CREATED', 'CASE_ASSIGNED', 'CASE_REASSIGNED', 'CASE_UPDATED', 'CASE_COMMENT_ADDED', 'INFORMATION_REQUESTED', 'USER_RESPONDED', 'CASE_ESCALATED', 'CASE_OVERDUE', 'CASE_RESOLVED', 'CASE_CLOSED', 'CASE_REOPENED', 'ADMIN_PROFILE_RESTRICTED', 'ACCOUNT_DEACTIVATED', 'ACCOUNT_REACTIVATED', 'DELETION_REQUEST_RECEIVED', 'DELETION_COMPLETED', 'DATA_EXPORT_READY', 'PRIVACY_REQUEST_UPDATED', 'PAYMENT_SUCCESS', 'PAYMENT_FAILED', 'REFUND_REQUESTED', 'REFUND_COMPLETED', 'SUBSCRIPTION_STARTED', 'SUBSCRIPTION_RENEWED', 'SUBSCRIPTION_EXPIRING', 'SUBSCRIPTION_CANCELLED', 'INVOICE_CREATED', 'MANUAL_PAYMENT_REQUIRES_REVIEW');
+
+-- CreateEnum
+CREATE TYPE "DataClassification" AS ENUM ('PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_SENSITIVE', 'RESTRICTED');
+
+-- CreateEnum
+CREATE TYPE "ConsentCategory" AS ENUM ('ACCOUNT_CREATION', 'MATRIMONIAL_PROFILE_PROCESSING', 'PROFILE_MATCHING', 'PROPOSAL_PARTICIPATION', 'CONTACT_SHARING', 'PHOTO_PROCESSING', 'VERIFICATION_PROCESSING', 'NOTIFICATIONS', 'EMAIL_COMMUNICATION', 'SMS_COMMUNICATION', 'WHATSAPP_COMMUNICATION', 'ANALYTICS', 'AI_ASSISTED_MATCHING', 'DATA_RETENTION', 'TERMS_AND_PRIVACY_POLICY');
+
+-- CreateEnum
+CREATE TYPE "ConsentGrantStatus" AS ENUM ('GRANTED', 'REVOKED');
+
+-- CreateEnum
+CREATE TYPE "AccountStatus" AS ENUM ('ACTIVE', 'DEACTIVATED', 'DELETION_REQUESTED', 'DELETION_PROCESSING', 'DELETED');
+
+-- CreateEnum
+CREATE TYPE "DataCategory" AS ENUM ('ACCOUNT_DATA', 'PROFILE_DATA', 'CONTACT_DATA', 'PHOTOS', 'VERIFICATION_DOCUMENTS', 'CONSENT_RECORDS', 'PROPOSAL_RECORDS', 'MEETING_RECORDS', 'COMMUNICATION_RECORDS', 'SUPPORT_CASES', 'SAFETY_CASES', 'AUDIT_LOGS', 'SECURITY_LOGS', 'FINANCIAL_RECORDS');
+
+-- CreateEnum
+CREATE TYPE "RetentionAction" AS ENUM ('DELETE', 'ANONYMIZE', 'ARCHIVE', 'REVIEW_REQUIRED', 'RETAIN');
+
+-- CreateEnum
+CREATE TYPE "DeletionRequestStatus" AS ENUM ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'SCHEDULED', 'PROCESSING', 'COMPLETED', 'REJECTED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "DeletionMode" AS ENUM ('DELETE', 'ANONYMIZE');
+
+-- CreateEnum
+CREATE TYPE "PrivacyRequestType" AS ENUM ('ACCESS', 'CORRECTION', 'DELETION', 'RESTRICT_PROCESSING', 'WITHDRAW_CONSENT', 'EXPORT', 'REPORT_ISSUE', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "PrivacyRequestStatus" AS ENUM ('SUBMITTED', 'UNDER_REVIEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "ContactAccessLevel" AS ENUM ('HIDDEN', 'ADMIN_ONLY', 'STAFF_AUTHORIZED', 'USER_APPROVED', 'PROPOSAL_APPROVED', 'FAMILY_CONTACT_APPROVED');
+
+-- CreateEnum
+CREATE TYPE "BillingType" AS ENUM ('ONE_TIME', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY', 'CUSTOM');
+
+-- CreateEnum
+CREATE TYPE "SubscriptionStatus" AS ENUM ('PENDING', 'TRIAL', 'ACTIVE', 'PAST_DUE', 'GRACE_PERIOD', 'CANCELLED', 'EXPIRED', 'SUSPENDED', 'PAYMENT_FAILED');
+
+-- CreateEnum
+CREATE TYPE "OrderStatus" AS ENUM ('DRAFT', 'PENDING_PAYMENT', 'PAYMENT_PROCESSING', 'PAID', 'FAILED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'COMPLETED');
+
+-- CreateEnum
+CREATE TYPE "PaymentStatus" AS ENUM ('CREATED', 'PENDING', 'PROCESSING', 'PAID', 'FAILED', 'CANCELLED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED', 'EXPIRED');
+
+-- CreateEnum
+CREATE TYPE "PaymentMethod" AS ENUM ('CARD', 'BANK_TRANSFER', 'MOBILE_WALLET', 'MANUAL', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "PaymentProviderName" AS ENUM ('MANUAL', 'STRIPE');
+
+-- CreateEnum
+CREATE TYPE "RefundStatus" AS ENUM ('REQUESTED', 'PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "RefundType" AS ENUM ('FULL', 'PARTIAL', 'MANUAL');
+
+-- CreateEnum
+CREATE TYPE "DiscountType" AS ENUM ('PERCENTAGE', 'FIXED_AMOUNT');
+
+-- CreateEnum
+CREATE TYPE "ManualPaymentStatus" AS ENUM ('PENDING_VERIFICATION', 'VERIFIED', 'REJECTED');
+
+-- CreateEnum
+CREATE TYPE "ReconciliationItemStatus" AS ENUM ('MATCHED', 'MISSING_INTERNAL', 'MISSING_PROVIDER', 'AMOUNT_MISMATCH', 'CURRENCY_MISMATCH', 'STATUS_MISMATCH', 'REQUIRES_REVIEW');
+
+-- CreateEnum
+CREATE TYPE "PaymentRolloutStage" AS ENUM ('DISABLED', 'SANDBOX', 'INTERNAL', 'BETA', 'PRODUCTION');
+
+-- CreateEnum
+CREATE TYPE "ReportExportType" AS ENUM ('CSV', 'EXCEL', 'PDF');
+
+-- CreateEnum
+CREATE TYPE "ReportFrequency" AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY');
+
+-- CreateEnum
+CREATE TYPE "OperationalState" AS ENUM ('NORMAL', 'DEGRADED', 'MAINTENANCE', 'RECOVERY', 'EMERGENCY');
+
+-- CreateEnum
+CREATE TYPE "MaintenanceMode" AS ENUM ('OFF', 'ON', 'SCHEDULED');
+
+-- CreateEnum
+CREATE TYPE "ErrorCategory" AS ENUM ('AUTH_ERROR', 'AUTHORIZATION_ERROR', 'VALIDATION_ERROR', 'DATABASE_ERROR', 'STORAGE_ERROR', 'PAYMENT_ERROR', 'WEBHOOK_ERROR', 'NOTIFICATION_ERROR', 'MATCHING_ERROR', 'PROPOSAL_ERROR', 'VERIFICATION_ERROR', 'SUPPORT_ERROR', 'SECURITY_ERROR', 'SYSTEM_ERROR');
+
+-- CreateEnum
+CREATE TYPE "ErrorSeverity" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "ErrorEventStatus" AS ENUM ('NEW', 'ACKNOWLEDGED', 'RESOLVED');
+
+-- CreateEnum
+CREATE TYPE "JobStatus" AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'RETRYING', 'DEAD_LETTER', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "BackupType" AS ENUM ('DATABASE', 'FILES');
+
+-- CreateEnum
+CREATE TYPE "BackupStatus" AS ENUM ('RUNNING', 'COMPLETED', 'FAILED');
+
+-- CreateEnum
+CREATE TYPE "BackupTrigger" AS ENUM ('SCHEDULED', 'MANUAL');
+
+-- CreateEnum
+CREATE TYPE "BackupRetentionClass" AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY');
+
+-- CreateEnum
+CREATE TYPE "RestoreRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'EXECUTED', 'CANCELLED', 'REJECTED');
+
+-- CreateEnum
+CREATE TYPE "AlertStatus" AS ENUM ('NEW', 'ACKNOWLEDGED', 'INVESTIGATING', 'MITIGATING', 'RESOLVED', 'CLOSED');
+
+-- CreateEnum
+CREATE TYPE "AlertSeverity" AS ENUM ('INFO', 'WARNING', 'HIGH', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "ReleaseStatus" AS ENUM ('PENDING_APPROVAL', 'APPROVED', 'DEPLOYING', 'HEALTHY', 'UNHEALTHY', 'FAILED', 'ROLLED_BACK');
+
+-- CreateTable
+CREATE TABLE "AdminUser" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "role" "AdminRole" NOT NULL DEFAULT 'STAFF',
+    "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "lastLoginAt" TIMESTAMP(3),
+    "mustResetPassword" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "customRoleId" TEXT,
+    "departmentId" TEXT,
+
+    CONSTRAINT "AdminUser_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Profile" (
+    "id" TEXT NOT NULL,
+    "profileCode" TEXT NOT NULL,
+    "fullName" TEXT NOT NULL,
+    "gender" "Gender" NOT NULL,
+    "dateOfBirth" TIMESTAMP(3) NOT NULL,
+    "maritalStatus" "MaritalStatus" NOT NULL,
+    "heightCm" INTEGER NOT NULL,
+    "city" TEXT NOT NULL,
+    "area" TEXT,
+    "country" TEXT NOT NULL,
+    "nationality" TEXT,
+    "hasChildren" BOOLEAN,
+    "numberOfChildren" INTEGER,
+    "status" "ProfileStatus" NOT NULL DEFAULT 'NEW',
+    "verified" BOOLEAN NOT NULL DEFAULT false,
+    "softDeleted" BOOLEAN NOT NULL DEFAULT false,
+    "accountStatus" "AccountStatus" NOT NULL DEFAULT 'ACTIVE',
+    "profileCompletion" INTEGER NOT NULL DEFAULT 0,
+    "preferredLanguage" "Locale" NOT NULL DEFAULT 'EN',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Profile_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ContactInfo" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "mobileNumber" TEXT NOT NULL,
+    "whatsappNumber" TEXT,
+    "email" TEXT NOT NULL,
+    "preferredContactMethod" "ContactMethod" NOT NULL DEFAULT 'PHONE',
+    "contactVerified" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "ContactInfo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EducationInfo" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "degree" TEXT,
+    "institution" TEXT,
+
+    CONSTRAINT "EducationInfo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfessionInfo" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "profession" TEXT NOT NULL,
+    "jobTitle" TEXT,
+    "companyName" TEXT,
+    "employmentType" "EmploymentType" NOT NULL DEFAULT 'PRIVATE',
+    "monthlyIncome" INTEGER,
+    "annualIncome" INTEGER,
+    "workLocation" TEXT,
+    "businessDetails" TEXT,
+    "program" TEXT,
+    "expectedGraduation" TEXT,
+
+    CONSTRAINT "ProfessionInfo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FamilyInfo" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "fatherOccupation" TEXT,
+    "motherOccupation" TEXT,
+    "numberOfBrothers" INTEGER NOT NULL DEFAULT 0,
+    "numberOfSisters" INTEGER NOT NULL DEFAULT 0,
+    "familyType" "FamilyType" NOT NULL DEFAULT 'NUCLEAR',
+    "familyStatus" "FamilyStatus" NOT NULL DEFAULT 'MIDDLE_CLASS',
+    "familyLocation" TEXT,
+    "familyBackground" TEXT,
+    "additionalInfo" TEXT,
+
+    CONSTRAINT "FamilyInfo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "LifestyleInfo" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "religion" TEXT,
+    "sect" TEXT,
+    "religiousPractice" TEXT,
+    "languages" TEXT,
+    "smoking" BOOLEAN NOT NULL DEFAULT false,
+    "drinking" BOOLEAN NOT NULL DEFAULT false,
+    "hobbies" TEXT,
+    "personality" TEXT,
+    "aboutMe" TEXT,
+    "otherPreferences" TEXT,
+
+    CONSTRAINT "LifestyleInfo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PartnerPreference" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "minAge" INTEGER,
+    "maxAge" INTEGER,
+    "preferredCountry" TEXT,
+    "preferredCity" TEXT,
+    "preferredArea" TEXT,
+    "minEducation" TEXT,
+    "preferredEducation" TEXT,
+    "professionPreference" TEXT,
+    "minIncome" INTEGER,
+    "maxIncome" INTEGER,
+    "incomeFlexible" BOOLEAN NOT NULL DEFAULT true,
+    "maritalStatusPreference" TEXT,
+    "minHeightCm" INTEGER,
+    "maxHeightCm" INTEGER,
+    "familyTypePreference" TEXT,
+    "familyBackgroundPreference" TEXT,
+    "otherFamilyRequirements" TEXT,
+    "additionalExpectations" TEXT,
+    "agePriority" "PreferencePriority" DEFAULT 'PREFERRED',
+    "locationPriority" "PreferencePriority" DEFAULT 'PREFERRED',
+    "professionPriority" "PreferencePriority" DEFAULT 'PREFERRED',
+    "locationScope" TEXT,
+
+    CONSTRAINT "PartnerPreference_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfilePhoto" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "storageKey" TEXT NOT NULL,
+    "mimeType" TEXT NOT NULL,
+    "sizeBytes" INTEGER NOT NULL,
+    "isPrimary" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ivBase64" TEXT,
+    "authTagBase64" TEXT,
+
+    CONSTRAINT "ProfilePhoto_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ConsentRecord" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "privacyConsent" BOOLEAN NOT NULL DEFAULT false,
+    "matchmakingConsent" BOOLEAN NOT NULL DEFAULT false,
+    "contactSharingConsent" BOOLEAN NOT NULL DEFAULT false,
+    "termsAccepted" BOOLEAN NOT NULL DEFAULT false,
+    "consentVersion" TEXT NOT NULL DEFAULT '1.0',
+    "agreedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ipHash" TEXT,
+
+    CONSTRAINT "ConsentRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PendingUpdate" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "payload" TEXT NOT NULL,
+    "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PendingUpdate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfileNote" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "proposalId" TEXT,
+    "matchId" TEXT,
+    "adminId" TEXT NOT NULL,
+    "text" TEXT NOT NULL,
+    "pinned" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ProfileNote_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Match" (
+    "id" TEXT NOT NULL,
+    "profileAId" TEXT NOT NULL,
+    "profileBId" TEXT NOT NULL,
+    "score" INTEGER NOT NULL,
+    "ageScore" INTEGER NOT NULL,
+    "locationScore" INTEGER NOT NULL,
+    "educationScore" INTEGER NOT NULL,
+    "professionScore" INTEGER NOT NULL,
+    "incomeScore" INTEGER NOT NULL,
+    "maritalStatusScore" INTEGER NOT NULL,
+    "heightScore" INTEGER NOT NULL,
+    "familyScore" INTEGER NOT NULL,
+    "religiousScore" INTEGER NOT NULL,
+    "lifestyleScore" INTEGER NOT NULL,
+    "languagesScore" INTEGER NOT NULL DEFAULT 0,
+    "directionAToB" INTEGER NOT NULL DEFAULT 0,
+    "directionBToA" INTEGER NOT NULL DEFAULT 0,
+    "breakdown" TEXT NOT NULL,
+    "algorithmVersion" TEXT NOT NULL DEFAULT 'LPP-MATCH-v1.0',
+    "previousScore" INTEGER,
+    "previousBreakdown" TEXT,
+    "recalculatedAt" TIMESTAMP(3),
+    "status" "MatchStatus" NOT NULL DEFAULT 'SUGGESTED',
+    "recommendation" "MatchRecommendation",
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Match_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Proposal" (
+    "id" TEXT NOT NULL,
+    "proposalCode" TEXT,
+    "profileAId" TEXT NOT NULL,
+    "profileBId" TEXT NOT NULL,
+    "matchId" TEXT,
+    "matchScore" INTEGER,
+    "status" "ProposalStatus" NOT NULL DEFAULT 'DRAFT',
+    "priority" "ProposalPriority" NOT NULL DEFAULT 'MEDIUM',
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "assignedToId" TEXT,
+    "finalizedAt" TIMESTAMP(3),
+    "finalizedById" TEXT,
+    "finalNotes" TEXT,
+    "marriedAt" TIMESTAMP(3),
+    "marriedById" TEXT,
+    "marriageNotes" TEXT,
+    "rejectedAt" TIMESTAMP(3),
+    "rejectedById" TEXT,
+    "rejectionReason" TEXT,
+    "internalRejectionNote" TEXT,
+    "closedAt" TIMESTAMP(3),
+    "archivedAt" TIMESTAMP(3),
+    "lastPendingReminderAt" TIMESTAMP(3),
+
+    CONSTRAINT "Proposal_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProposalEvent" (
+    "id" TEXT NOT NULL,
+    "proposalId" TEXT NOT NULL,
+    "status" "ProposalStatus" NOT NULL,
+    "note" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "performedByAdminId" TEXT,
+    "performedByProfileId" TEXT,
+
+    CONSTRAINT "ProposalEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProposalResponse" (
+    "id" TEXT NOT NULL,
+    "proposalId" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "response" "ProposalResponseType" NOT NULL,
+    "reason" "ProposalDeclineReason",
+    "reasonNote" TEXT,
+    "respondedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ProposalResponse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ContactPermission" (
+    "id" TEXT NOT NULL,
+    "proposalId" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "requestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "approvedAt" TIMESTAMP(3),
+    "approvedById" TEXT,
+    "revokedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ContactPermission_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Meeting" (
+    "id" TEXT NOT NULL,
+    "proposalId" TEXT NOT NULL,
+    "meetingType" "MeetingType" NOT NULL,
+    "scheduledAt" TIMESTAMP(3) NOT NULL,
+    "locationInfo" TEXT,
+    "participants" TEXT,
+    "status" "MeetingStatus" NOT NULL DEFAULT 'REQUESTED',
+    "notes" TEXT,
+    "followUpDate" TIMESTAMP(3),
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "reminder24hSentAt" TIMESTAMP(3),
+    "reminder2hSentAt" TIMESTAMP(3),
+
+    CONSTRAINT "Meeting_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FamilyCommunication" (
+    "id" TEXT NOT NULL,
+    "proposalId" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "contactPerson" TEXT NOT NULL,
+    "relationship" TEXT NOT NULL,
+    "communicationMethod" TEXT NOT NULL,
+    "communicationDate" TIMESTAMP(3) NOT NULL,
+    "outcome" TEXT,
+    "notes" TEXT,
+    "nextFollowUpDate" TIMESTAMP(3),
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "FamilyCommunication_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProposalCodeCounter" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "lastSeq" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ProposalCodeCounter_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Communication" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "proposalId" TEXT,
+    "adminId" TEXT NOT NULL,
+    "type" "CommunicationType" NOT NULL,
+    "notes" TEXT,
+    "occurredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "followUpDate" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Communication_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FollowUp" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "proposalId" TEXT,
+    "adminId" TEXT,
+    "title" TEXT,
+    "note" TEXT,
+    "purpose" TEXT,
+    "outcome" TEXT,
+    "dueDate" TIMESTAMP(3) NOT NULL,
+    "priority" "FollowUpPriority" NOT NULL DEFAULT 'MEDIUM',
+    "status" "FollowUpStatus" NOT NULL DEFAULT 'PENDING',
+    "completedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reminderSentAt" TIMESTAMP(3),
+
+    CONSTRAINT "FollowUp_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ContactShareLog" (
+    "id" TEXT NOT NULL,
+    "profileAId" TEXT NOT NULL,
+    "profileBId" TEXT NOT NULL,
+    "phoneShared" BOOLEAN NOT NULL DEFAULT false,
+    "whatsappShared" BOOLEAN NOT NULL DEFAULT false,
+    "emailShared" BOOLEAN NOT NULL DEFAULT false,
+    "approvedById" TEXT NOT NULL,
+    "sharedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ContactShareLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfileVerification" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "status" "VerificationStatus" NOT NULL DEFAULT 'NOT_VERIFIED',
+    "assignedToId" TEXT,
+    "phoneVerifiedAt" TIMESTAMP(3),
+    "emailVerifiedAt" TIMESTAMP(3),
+    "whatsappVerifiedAt" TIMESTAMP(3),
+    "requestedInfoItems" TEXT,
+    "rejectionReasonCategory" TEXT,
+    "rejectionNote" TEXT,
+    "suspensionReason" TEXT,
+    "reVerificationReason" TEXT,
+    "expiresAt" TIMESTAMP(3),
+    "verificationVersion" INTEGER NOT NULL DEFAULT 1,
+    "lastReviewedAt" TIMESTAMP(3),
+    "lastReviewedById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProfileVerification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "VerificationItem" (
+    "id" TEXT NOT NULL,
+    "profileVerificationId" TEXT NOT NULL,
+    "itemKey" TEXT NOT NULL,
+    "status" "VerificationItemStatus" NOT NULL DEFAULT 'PENDING',
+    "documentId" TEXT,
+    "note" TEXT,
+    "completedById" TEXT,
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "VerificationItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "OtpVerification" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "channel" "OtpChannel" NOT NULL,
+    "codeHash" TEXT NOT NULL,
+    "destinationMasked" TEXT NOT NULL,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "maxAttempts" INTEGER NOT NULL DEFAULT 5,
+    "status" "OtpStatus" NOT NULL DEFAULT 'PENDING',
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "verifiedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "OtpVerification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "VerificationDocument" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "documentType" "DocumentType" NOT NULL,
+    "secureStorageReference" TEXT NOT NULL,
+    "ivBase64" TEXT NOT NULL,
+    "authTagBase64" TEXT NOT NULL,
+    "mimeType" TEXT NOT NULL,
+    "sizeBytes" INTEGER NOT NULL,
+    "uploadedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewStatus" "DocumentReviewStatus" NOT NULL DEFAULT 'PENDING',
+    "reviewedById" TEXT,
+    "reviewedAt" TIMESTAMP(3),
+    "reviewNote" TEXT,
+    "expiresAt" TIMESTAMP(3),
+
+    CONSTRAINT "VerificationDocument_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SecurityFlag" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "flagType" "SecurityFlagType" NOT NULL,
+    "severity" "SecurityFlagSeverity" NOT NULL DEFAULT 'MEDIUM',
+    "status" "SecurityFlagStatus" NOT NULL DEFAULT 'OPEN',
+    "assignedToId" TEXT,
+    "relatedProfileId" TEXT,
+    "description" TEXT NOT NULL,
+    "resolution" TEXT,
+    "resolvedById" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SecurityFlag_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AuditLog" (
+    "id" TEXT NOT NULL,
+    "adminId" TEXT,
+    "action" "AuditAction" NOT NULL,
+    "targetProfileId" TEXT,
+    "meta" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "correlationId" TEXT,
+
+    CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AppSettings" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "appName" TEXT NOT NULL DEFAULT 'Life Partner Pro',
+    "contactEmail" TEXT,
+    "contactWhatsapp" TEXT,
+    "contactAddress" TEXT,
+    "weightAge" INTEGER NOT NULL DEFAULT 15,
+    "weightLocation" INTEGER NOT NULL DEFAULT 15,
+    "weightEducation" INTEGER NOT NULL DEFAULT 10,
+    "weightProfession" INTEGER NOT NULL DEFAULT 10,
+    "weightIncome" INTEGER NOT NULL DEFAULT 10,
+    "weightMaritalStatus" INTEGER NOT NULL DEFAULT 10,
+    "weightHeight" INTEGER NOT NULL DEFAULT 5,
+    "weightFamily" INTEGER NOT NULL DEFAULT 10,
+    "weightReligious" INTEGER NOT NULL DEFAULT 10,
+    "weightLifestyle" INTEGER NOT NULL DEFAULT 5,
+    "weightLanguages" INTEGER NOT NULL DEFAULT 5,
+    "thresholdExcellent" INTEGER NOT NULL DEFAULT 90,
+    "thresholdVeryGood" INTEGER NOT NULL DEFAULT 80,
+    "thresholdGood" INTEGER NOT NULL DEFAULT 65,
+    "thresholdPossible" INTEGER NOT NULL DEFAULT 50,
+    "hardRequirementAge" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementLocation" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementEducation" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementProfession" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementIncome" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementMaritalStatus" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementHeight" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementFamily" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementReligious" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementLifestyle" BOOLEAN NOT NULL DEFAULT false,
+    "hardRequirementLanguages" BOOLEAN NOT NULL DEFAULT false,
+    "categoryEnabledAge" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledLocation" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledEducation" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledProfession" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledIncome" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledMaritalStatus" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledHeight" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledFamily" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledReligious" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledLifestyle" BOOLEAN NOT NULL DEFAULT true,
+    "categoryEnabledLanguages" BOOLEAN NOT NULL DEFAULT true,
+    "maxMatchResults" INTEGER NOT NULL DEFAULT 10,
+    "excludeHardRequirementFailures" BOOLEAN NOT NULL DEFAULT false,
+    "documentVerificationEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "acceptedDocumentTypes" TEXT,
+    "allowPartiallyVerifiedManualMatch" BOOLEAN NOT NULL DEFAULT false,
+    "removeFromPoolDuringReVerification" BOOLEAN NOT NULL DEFAULT true,
+    "autoReVerificationOnKeyFieldChange" BOOLEAN NOT NULL DEFAULT true,
+    "otpExpiryMinutes" INTEGER NOT NULL DEFAULT 10,
+    "otpMaxAttempts" INTEGER NOT NULL DEFAULT 5,
+    "emailNotificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "smsNotificationsEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "whatsappNotificationsEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "inAppNotificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "defaultNotificationLanguage" "Locale" NOT NULL DEFAULT 'EN',
+    "meetingReminder24hEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "meetingReminder2hEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "followUpReminderEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "pendingProposalReminderDays" INTEGER NOT NULL DEFAULT 3,
+    "notificationRetryLimit" INTEGER NOT NULL DEFAULT 3,
+    "quietHoursStart" INTEGER,
+    "quietHoursEnd" INTEGER,
+    "ageRangeBuckets" JSONB,
+    "incomeRangeBuckets" JSONB,
+    "professionCategories" JSONB,
+    "loginMaxAttempts" INTEGER NOT NULL DEFAULT 5,
+    "loginLockoutMinutes" INTEGER NOT NULL DEFAULT 15,
+    "twoFactorRequiredRoles" JSONB,
+    "passwordMinLength" INTEGER NOT NULL DEFAULT 8,
+    "caseSlaNormalFirstResponseHours" INTEGER NOT NULL DEFAULT 24,
+    "caseSlaNormalResolutionHours" INTEGER NOT NULL DEFAULT 72,
+    "caseSlaHighFirstResponseHours" INTEGER NOT NULL DEFAULT 8,
+    "caseSlaHighResolutionHours" INTEGER NOT NULL DEFAULT 24,
+    "caseSlaUrgentFirstResponseHours" INTEGER NOT NULL DEFAULT 2,
+    "caseSlaUrgentResolutionHours" INTEGER NOT NULL DEFAULT 8,
+    "caseSlaCriticalFirstResponseHours" INTEGER NOT NULL DEFAULT 1,
+    "caseSlaCriticalResolutionHours" INTEGER NOT NULL DEFAULT 4,
+    "activePaymentProvider" "PaymentProviderName" NOT NULL DEFAULT 'MANUAL',
+    "defaultCurrencyCode" TEXT NOT NULL DEFAULT 'PKR',
+    "subscriptionGracePeriodDays" INTEGER NOT NULL DEFAULT 7,
+    "paymentRetryLimit" INTEGER NOT NULL DEFAULT 3,
+    "refundApprovalRequiredAboveMinorUnits" INTEGER,
+    "paidFeatureKeys" JSONB,
+    "paymentRolloutStage" "PaymentRolloutStage" NOT NULL DEFAULT 'DISABLED',
+    "paymentsEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "checkoutEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "subscriptionsEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "refundsEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "manualPaymentEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "betaEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "publicCheckoutEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "providerWebhooksEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "paymentBetaPercentage" INTEGER NOT NULL DEFAULT 0,
+    "paymentBetaAllowedProfileIds" JSONB,
+    "paymentBetaAllowedCountries" JSONB,
+    "paymentBetaAllowedPackageIds" JSONB,
+    "paymentInternalAllowedProfileIds" JSONB,
+    "reconciliationFrequency" TEXT NOT NULL DEFAULT 'DAILY',
+    "lastScheduledReconciliationAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AppSettings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PaymentRolloutEvent" (
+    "id" TEXT NOT NULL,
+    "fromStage" "PaymentRolloutStage",
+    "toStage" "PaymentRolloutStage" NOT NULL,
+    "reason" TEXT,
+    "actorId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PaymentRolloutEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfileCodeCounter" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "lastSeq" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ProfileCodeCounter_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Notification" (
+    "id" TEXT NOT NULL,
+    "recipientProfileId" TEXT,
+    "recipientAdminId" TEXT,
+    "type" "NotificationType" NOT NULL,
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "relatedProposalId" TEXT,
+    "relatedProfileId" TEXT,
+    "actionUrl" TEXT,
+    "readAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CommunicationLog" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "proposalId" TEXT,
+    "channel" "NotificationChannel" NOT NULL,
+    "notificationType" "NotificationType" NOT NULL,
+    "templateKey" TEXT,
+    "recipientReference" TEXT,
+    "deliveryStatus" "DeliveryStatus" NOT NULL DEFAULT 'QUEUED',
+    "messageBody" TEXT,
+    "sentAt" TIMESTAMP(3),
+    "deliveredAt" TIMESTAMP(3),
+    "readAt" TIMESTAMP(3),
+    "createdById" TEXT,
+    "providerMessageId" TEXT,
+    "failureReason" TEXT,
+    "retryCount" INTEGER NOT NULL DEFAULT 0,
+    "isTest" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CommunicationLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "NotificationPreference" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "inAppProposalUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "inAppMeetingUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "inAppFollowUpReminders" BOOLEAN NOT NULL DEFAULT true,
+    "inAppMarketing" BOOLEAN NOT NULL DEFAULT false,
+    "emailProposalUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "emailMeetingUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "emailFollowUpReminders" BOOLEAN NOT NULL DEFAULT true,
+    "emailMarketing" BOOLEAN NOT NULL DEFAULT false,
+    "smsProposalUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "smsMeetingUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "smsFollowUpReminders" BOOLEAN NOT NULL DEFAULT true,
+    "smsMarketing" BOOLEAN NOT NULL DEFAULT false,
+    "whatsappProposalUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "whatsappMeetingUpdates" BOOLEAN NOT NULL DEFAULT true,
+    "whatsappFollowUpReminders" BOOLEAN NOT NULL DEFAULT true,
+    "whatsappMarketing" BOOLEAN NOT NULL DEFAULT false,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "NotificationPreference_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CommunicationConsent" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "channel" "NotificationChannel" NOT NULL,
+    "status" "ConsentStatus" NOT NULL DEFAULT 'GRANTED',
+    "consentedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "consentSource" TEXT NOT NULL,
+    "revokedAt" TIMESTAMP(3),
+
+    CONSTRAINT "CommunicationConsent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "NotificationTemplate" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "event" TEXT NOT NULL,
+    "channel" "NotificationChannel" NOT NULL,
+    "language" "Locale" NOT NULL,
+    "subject" TEXT,
+    "message" TEXT NOT NULL,
+    "status" "TemplateStatus" NOT NULL DEFAULT 'ACTIVE',
+    "variables" JSONB NOT NULL,
+    "updatedById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "NotificationTemplate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WebhookEvent" (
+    "id" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "eventType" TEXT NOT NULL,
+    "providerMessageId" TEXT,
+    "idempotencyKey" TEXT NOT NULL,
+    "payload" JSONB,
+    "processedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "WebhookEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReportExecution" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "reportKey" TEXT NOT NULL,
+    "dataSource" TEXT,
+    "filters" JSONB NOT NULL,
+    "columns" JSONB,
+    "groupBy" TEXT,
+    "sortBy" TEXT,
+    "exportType" "ReportExportType",
+    "recordCount" INTEGER NOT NULL,
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ReportExecution_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ScheduledReport" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "reportKey" TEXT NOT NULL,
+    "dataSource" TEXT,
+    "filters" JSONB NOT NULL,
+    "frequency" "ReportFrequency" NOT NULL,
+    "dayOfWeek" INTEGER,
+    "dayOfMonth" INTEGER,
+    "hourUtc" INTEGER NOT NULL,
+    "exportType" "ReportExportType" NOT NULL DEFAULT 'CSV',
+    "recipientAdminIds" JSONB NOT NULL,
+    "lastRunAt" TIMESTAMP(3),
+    "nextRunAt" TIMESTAMP(3) NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ScheduledReport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PermissionDef" (
+    "key" TEXT NOT NULL,
+    "module" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "description" TEXT,
+
+    CONSTRAINT "PermissionDef_pkey" PRIMARY KEY ("key")
+);
+
+-- CreateTable
+CREATE TABLE "CustomRole" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "baseRole" "AdminRole" NOT NULL DEFAULT 'STAFF',
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CustomRole_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CustomRolePermission" (
+    "customRoleId" TEXT NOT NULL,
+    "permissionKey" TEXT NOT NULL,
+
+    CONSTRAINT "CustomRolePermission_pkey" PRIMARY KEY ("customRoleId","permissionKey")
+);
+
+-- CreateTable
+CREATE TABLE "Department" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Department_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdminSession" (
+    "id" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
+    "deviceInfo" TEXT,
+    "userAgent" TEXT,
+    "ipAddress" TEXT,
+    "lastActiveAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "revokedAt" TIMESTAMP(3),
+    "revokedById" TEXT,
+
+    CONSTRAINT "AdminSession_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdminLoginHistory" (
+    "id" TEXT NOT NULL,
+    "adminId" TEXT,
+    "email" TEXT NOT NULL,
+    "event" "LoginHistoryEvent" NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdminLoginHistory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdminOtpChallenge" (
+    "id" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
+    "purpose" TEXT NOT NULL DEFAULT 'LOGIN_2FA',
+    "codeHash" TEXT NOT NULL,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "maxAttempts" INTEGER NOT NULL DEFAULT 5,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "consumedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdminOtpChallenge_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdminAssignment" (
+    "id" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
+    "resourceType" "AssignmentResourceType" NOT NULL,
+    "resourceId" TEXT NOT NULL,
+    "priority" "AssignmentPriority" NOT NULL DEFAULT 'NORMAL',
+    "status" "AssignmentStatus" NOT NULL DEFAULT 'ASSIGNED',
+    "assignedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "dueAt" TIMESTAMP(3),
+    "notes" TEXT,
+    "createdById" TEXT NOT NULL,
+
+    CONSTRAINT "AdminAssignment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdminTask" (
+    "id" TEXT NOT NULL,
+    "assignedToId" TEXT,
+    "taskType" "AdminTaskType" NOT NULL,
+    "resourceType" "AssignmentResourceType" NOT NULL,
+    "resourceId" TEXT NOT NULL,
+    "priority" "AssignmentPriority" NOT NULL DEFAULT 'NORMAL',
+    "status" "AdminTaskStatus" NOT NULL DEFAULT 'PENDING',
+    "dueAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdminTask_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ViewAsSession" (
+    "id" TEXT NOT NULL,
+    "superAdminId" TEXT NOT NULL,
+    "targetAdminId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "endedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ViewAsSession_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Case" (
+    "id" TEXT NOT NULL,
+    "caseNumber" TEXT NOT NULL,
+    "type" "CaseType" NOT NULL,
+    "category" "CaseCategory" NOT NULL,
+    "subject" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "priority" "CasePriority" NOT NULL DEFAULT 'NORMAL',
+    "status" "CaseStatus" NOT NULL DEFAULT 'NEW',
+    "escalationLevel" INTEGER NOT NULL DEFAULT 1,
+    "reporterProfileId" TEXT,
+    "reportedProfileId" TEXT,
+    "reportedAdminId" TEXT,
+    "relatedProposalId" TEXT,
+    "relatedMeetingId" TEXT,
+    "relatedVerificationId" TEXT,
+    "relatedCommunicationId" TEXT,
+    "relatedPaymentId" TEXT,
+    "relatedInvoiceId" TEXT,
+    "preferredResponseMethod" TEXT,
+    "firstResponseDueAt" TIMESTAMP(3),
+    "resolutionDueAt" TIMESTAMP(3),
+    "firstRespondedAt" TIMESTAMP(3),
+    "mergedIntoCaseId" TEXT,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "closedAt" TIMESTAMP(3),
+    "softDeletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Case_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseAccessGrant" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
+    "level" "CaseAccessLevel" NOT NULL,
+    "grantedById" TEXT NOT NULL,
+    "grantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseAccessGrant_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseComment" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "authorAdminId" TEXT,
+    "authorProfileId" TEXT,
+    "body" TEXT NOT NULL,
+    "visibleToUser" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseComment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseInternalNote" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "level" "CaseNoteLevel" NOT NULL DEFAULT 'STAFF',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "editedAt" TIMESTAMP(3),
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "CaseInternalNote_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseEvidence" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "uploadedByAdminId" TEXT,
+    "uploadedByProfileId" TEXT,
+    "secureStorageReference" TEXT NOT NULL,
+    "ivBase64" TEXT NOT NULL,
+    "authTagBase64" TEXT NOT NULL,
+    "mimeType" TEXT NOT NULL,
+    "sizeBytes" INTEGER NOT NULL,
+    "originalFilename" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseEvidence_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseStatusHistory" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "fromStatus" "CaseStatus",
+    "toStatus" "CaseStatus" NOT NULL,
+    "changedById" TEXT,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseStatusHistory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseEscalation" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "previousLevel" INTEGER NOT NULL,
+    "newLevel" INTEGER NOT NULL,
+    "reason" TEXT NOT NULL,
+    "escalatedById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseEscalation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseResolution" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "category" "ResolutionCategory" NOT NULL,
+    "summary" TEXT NOT NULL,
+    "actionTaken" TEXT,
+    "followUpRequired" BOOLEAN NOT NULL DEFAULT false,
+    "followUpDate" TIMESTAMP(3),
+    "resolvedById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseResolution_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseLink" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "linkedCaseId" TEXT NOT NULL,
+    "linkType" "CaseLinkType" NOT NULL,
+    "createdById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseLink_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseMerge" (
+    "id" TEXT NOT NULL,
+    "sourceCaseId" TEXT NOT NULL,
+    "targetCaseId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "mergedById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseMerge_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseAccessLog" (
+    "id" TEXT NOT NULL,
+    "caseId" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CaseAccessLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfileRestriction" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "restrictionType" "RestrictionType" NOT NULL,
+    "reason" TEXT NOT NULL,
+    "appliedById" TEXT NOT NULL,
+    "startDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endDate" TIMESTAMP(3),
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "caseId" TEXT,
+    "liftedById" TEXT,
+    "liftedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ProfileRestriction_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CaseCodeCounter" (
+    "prefix" TEXT NOT NULL,
+    "lastSeq" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "CaseCodeCounter_pkey" PRIMARY KEY ("prefix")
+);
+
+-- CreateTable
+CREATE TABLE "SupportMessage" (
+    "id" TEXT NOT NULL,
+    "profileCode" TEXT,
+    "email" TEXT NOT NULL,
+    "subject" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "resolved" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SupportMessage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ConsentGrant" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "category" "ConsentCategory" NOT NULL,
+    "status" "ConsentGrantStatus" NOT NULL,
+    "version" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "ipHash" TEXT,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ConsentGrant_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AccountDeletionRequest" (
+    "id" TEXT NOT NULL,
+    "requestCode" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "status" "DeletionRequestStatus" NOT NULL DEFAULT 'SUBMITTED',
+    "mode" "DeletionMode",
+    "reason" TEXT,
+    "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedById" TEXT,
+    "reviewedAt" TIMESTAMP(3),
+    "scheduledFor" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "rejectionReason" TEXT,
+
+    CONSTRAINT "AccountDeletionRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PrivacyRequest" (
+    "id" TEXT NOT NULL,
+    "requestCode" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "type" "PrivacyRequestType" NOT NULL,
+    "status" "PrivacyRequestStatus" NOT NULL DEFAULT 'SUBMITTED',
+    "description" TEXT,
+    "linkedRecordType" TEXT,
+    "linkedRecordId" TEXT,
+    "handledById" TEXT,
+    "resolutionNote" TEXT,
+    "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolvedAt" TIMESTAMP(3),
+
+    CONSTRAINT "PrivacyRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RetentionPolicy" (
+    "id" TEXT NOT NULL,
+    "category" "DataCategory" NOT NULL,
+    "retentionDays" INTEGER NOT NULL,
+    "action" "RetentionAction" NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "updatedById" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RetentionPolicy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DataHold" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT,
+    "recordType" TEXT,
+    "recordId" TEXT,
+    "reason" TEXT NOT NULL,
+    "placedById" TEXT NOT NULL,
+    "placedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "liftedById" TEXT,
+    "liftedAt" TIMESTAMP(3),
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "DataHold_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RetentionActionLog" (
+    "id" TEXT NOT NULL,
+    "category" "DataCategory" NOT NULL,
+    "recordType" TEXT NOT NULL,
+    "recordId" TEXT NOT NULL,
+    "action" "RetentionAction" NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "detail" TEXT,
+    "runAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "RetentionActionLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DataExportRequest" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "format" TEXT NOT NULL,
+    "secureStorageReference" TEXT,
+    "ivBase64" TEXT,
+    "authTagBase64" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "expiresAt" TIMESTAMP(3),
+    "requestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "downloadedAt" TIMESTAMP(3),
+
+    CONSTRAINT "DataExportRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PrivacyAccessLog" (
+    "id" TEXT NOT NULL,
+    "actorAdminId" TEXT,
+    "actorProfileId" TEXT,
+    "action" TEXT NOT NULL,
+    "dataCategory" "DataClassification" NOT NULL,
+    "targetProfileId" TEXT,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PrivacyAccessLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BreakGlassAccess" (
+    "id" TEXT NOT NULL,
+    "adminId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "recordType" TEXT NOT NULL,
+    "recordId" TEXT NOT NULL,
+    "grantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "usedAt" TIMESTAMP(3),
+
+    CONSTRAINT "BreakGlassAccess_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProfileSession" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "deviceInfo" TEXT,
+    "userAgent" TEXT,
+    "ipAddress" TEXT,
+    "lastActiveAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "revokedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ProfileSession_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SequenceCounter" (
+    "key" TEXT NOT NULL,
+    "lastSeq" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "SequenceCounter_pkey" PRIMARY KEY ("key")
+);
+
+-- CreateTable
+CREATE TABLE "Currency" (
+    "code" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "decimalPrecision" INTEGER NOT NULL DEFAULT 2,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "Currency_pkey" PRIMARY KEY ("code")
+);
+
+-- CreateTable
+CREATE TABLE "BankAccount" (
+    "id" TEXT NOT NULL,
+    "accountTitle" TEXT NOT NULL,
+    "accountNumber" TEXT NOT NULL,
+    "bankName" TEXT NOT NULL,
+    "branchName" TEXT,
+    "iban" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "displayOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BankAccount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Package" (
+    "id" TEXT NOT NULL,
+    "packageCode" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "billingType" "BillingType" NOT NULL,
+    "durationDays" INTEGER,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "displayOrder" INTEGER NOT NULL DEFAULT 0,
+    "trialDays" INTEGER NOT NULL DEFAULT 0,
+    "refundPolicyNote" TEXT,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Package_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PackagePrice" (
+    "id" TEXT NOT NULL,
+    "packageId" TEXT NOT NULL,
+    "amountMinor" INTEGER NOT NULL,
+    "currencyCode" TEXT NOT NULL,
+    "taxInclusive" BOOLEAN NOT NULL DEFAULT false,
+    "effectiveFrom" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PackagePrice_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PackageEntitlement" (
+    "id" TEXT NOT NULL,
+    "packageId" TEXT NOT NULL,
+    "featureKey" TEXT NOT NULL,
+    "limitValue" INTEGER,
+    "resetPeriod" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PackageEntitlement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Subscription" (
+    "id" TEXT NOT NULL,
+    "subscriptionCode" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "packageId" TEXT NOT NULL,
+    "provider" "PaymentProviderName" NOT NULL,
+    "providerSubscriptionId" TEXT,
+    "status" "SubscriptionStatus" NOT NULL DEFAULT 'PENDING',
+    "startDate" TIMESTAMP(3),
+    "endDate" TIMESTAMP(3),
+    "renewalDate" TIMESTAMP(3),
+    "autoRenew" BOOLEAN NOT NULL DEFAULT true,
+    "trialEndsAt" TIMESTAMP(3),
+    "cancelledAt" TIMESTAMP(3),
+    "cancellationReason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SubscriptionEvent" (
+    "id" TEXT NOT NULL,
+    "subscriptionId" TEXT NOT NULL,
+    "fromStatus" "SubscriptionStatus",
+    "toStatus" "SubscriptionStatus" NOT NULL,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SubscriptionEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Order" (
+    "id" TEXT NOT NULL,
+    "orderCode" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "subscriptionId" TEXT,
+    "status" "OrderStatus" NOT NULL DEFAULT 'DRAFT',
+    "currencyCode" TEXT NOT NULL,
+    "subtotalMinor" INTEGER NOT NULL,
+    "discountMinor" INTEGER NOT NULL DEFAULT 0,
+    "taxMinor" INTEGER NOT NULL DEFAULT 0,
+    "totalMinor" INTEGER NOT NULL,
+    "couponId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Order_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "OrderItem" (
+    "id" TEXT NOT NULL,
+    "orderId" TEXT NOT NULL,
+    "packageId" TEXT NOT NULL,
+    "packagePriceId" TEXT,
+    "description" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "unitPriceMinor" INTEGER NOT NULL,
+    "discountMinor" INTEGER NOT NULL DEFAULT 0,
+    "taxMinor" INTEGER NOT NULL DEFAULT 0,
+    "totalMinor" INTEGER NOT NULL,
+
+    CONSTRAINT "OrderItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Payment" (
+    "id" TEXT NOT NULL,
+    "paymentCode" TEXT NOT NULL,
+    "orderId" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "amountMinor" INTEGER NOT NULL,
+    "currencyCode" TEXT NOT NULL,
+    "method" "PaymentMethod" NOT NULL,
+    "provider" "PaymentProviderName" NOT NULL,
+    "providerTransactionId" TEXT,
+    "status" "PaymentStatus" NOT NULL DEFAULT 'CREATED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "paidAt" TIMESTAMP(3),
+    "failedAt" TIMESTAMP(3),
+    "refundedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PaymentAttempt" (
+    "id" TEXT NOT NULL,
+    "paymentId" TEXT NOT NULL,
+    "attemptNumber" INTEGER NOT NULL,
+    "status" "PaymentStatus" NOT NULL,
+    "providerErrorCode" TEXT,
+    "providerErrorMessageSafe" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PaymentAttempt_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ManualPaymentDetail" (
+    "id" TEXT NOT NULL,
+    "paymentId" TEXT NOT NULL,
+    "referenceNumber" TEXT NOT NULL,
+    "evidenceDescription" TEXT,
+    "submittedByProfileId" TEXT,
+    "enteredById" TEXT,
+    "enteredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "status" "ManualPaymentStatus" NOT NULL DEFAULT 'PENDING_VERIFICATION',
+    "verifiedById" TEXT,
+    "verifiedAt" TIMESTAMP(3),
+    "rejectionReason" TEXT,
+
+    CONSTRAINT "ManualPaymentDetail_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PaymentWebhookEvent" (
+    "id" TEXT NOT NULL,
+    "provider" "PaymentProviderName" NOT NULL,
+    "providerEventId" TEXT NOT NULL,
+    "eventType" TEXT NOT NULL,
+    "payloadHash" TEXT NOT NULL,
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "processedAt" TIMESTAMP(3),
+    "status" TEXT NOT NULL DEFAULT 'RECEIVED',
+    "retryCount" INTEGER NOT NULL DEFAULT 0,
+    "errorCode" TEXT,
+
+    CONSTRAINT "PaymentWebhookEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Invoice" (
+    "id" TEXT NOT NULL,
+    "invoiceCode" TEXT NOT NULL,
+    "orderId" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "paymentId" TEXT,
+    "subtotalMinor" INTEGER NOT NULL,
+    "discountMinor" INTEGER NOT NULL,
+    "taxMinor" INTEGER NOT NULL,
+    "totalMinor" INTEGER NOT NULL,
+    "currencyCode" TEXT NOT NULL,
+    "paymentStatus" "PaymentStatus" NOT NULL,
+    "invoiceDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "dueDate" TIMESTAMP(3),
+    "paidDate" TIMESTAMP(3),
+    "paymentReference" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Invoice_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "InvoiceItem" (
+    "id" TEXT NOT NULL,
+    "invoiceId" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL DEFAULT 1,
+    "unitPriceMinor" INTEGER NOT NULL,
+    "discountMinor" INTEGER NOT NULL DEFAULT 0,
+    "taxMinor" INTEGER NOT NULL DEFAULT 0,
+    "totalMinor" INTEGER NOT NULL,
+
+    CONSTRAINT "InvoiceItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Refund" (
+    "id" TEXT NOT NULL,
+    "refundCode" TEXT NOT NULL,
+    "paymentId" TEXT NOT NULL,
+    "amountMinor" INTEGER NOT NULL,
+    "currencyCode" TEXT NOT NULL,
+    "type" "RefundType" NOT NULL,
+    "reason" TEXT NOT NULL,
+    "provider" "PaymentProviderName" NOT NULL,
+    "providerRefundId" TEXT,
+    "requestedById" TEXT NOT NULL,
+    "approvedById" TEXT,
+    "executedById" TEXT,
+    "status" "RefundStatus" NOT NULL DEFAULT 'REQUESTED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Refund_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Coupon" (
+    "id" TEXT NOT NULL,
+    "discountCode" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "description" TEXT,
+    "discountType" "DiscountType" NOT NULL,
+    "discountValue" INTEGER NOT NULL,
+    "minPurchaseMinor" INTEGER,
+    "maxDiscountMinor" INTEGER,
+    "startDate" TIMESTAMP(3),
+    "endDate" TIMESTAMP(3),
+    "usageLimit" INTEGER,
+    "perUserLimit" INTEGER,
+    "applicablePackageIds" JSONB,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Coupon_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CouponRedemption" (
+    "id" TEXT NOT NULL,
+    "couponId" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "orderId" TEXT NOT NULL,
+    "discountAppliedMinor" INTEGER NOT NULL,
+    "redeemedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CouponRedemption_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TaxRule" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "ratePercentBasisPoints" INTEGER NOT NULL,
+    "country" TEXT NOT NULL,
+    "region" TEXT,
+    "applicableService" TEXT,
+    "effectiveDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiryDate" TIMESTAMP(3),
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TaxRule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FeatureUsage" (
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "featureKey" TEXT NOT NULL,
+    "subscriptionId" TEXT,
+    "usageCount" INTEGER NOT NULL DEFAULT 0,
+    "periodStart" TIMESTAMP(3) NOT NULL,
+    "periodEnd" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FeatureUsage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReconciliationRun" (
+    "id" TEXT NOT NULL,
+    "startedById" TEXT,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "totalChecked" INTEGER NOT NULL DEFAULT 0,
+    "matchedCount" INTEGER NOT NULL DEFAULT 0,
+    "discrepancyCount" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ReconciliationRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ReconciliationItem" (
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "paymentId" TEXT,
+    "status" "ReconciliationItemStatus" NOT NULL,
+    "detail" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ReconciliationItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SystemControl" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "operationalState" "OperationalState" NOT NULL DEFAULT 'NORMAL',
+    "operationalStateReason" TEXT,
+    "maintenanceMode" "MaintenanceMode" NOT NULL DEFAULT 'OFF',
+    "maintenanceStartsAt" TIMESTAMP(3),
+    "maintenanceEndsAt" TIMESTAMP(3),
+    "maintenanceMessage" TEXT,
+    "emergencyPaymentsDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "emergencyRegistrationsDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "emergencyProfileSubmissionsDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "emergencyMatchingDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "emergencyProposalsDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "emergencyNotificationsDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "emergencyUploadsDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "emergencyPublicAccessDisabled" BOOLEAN NOT NULL DEFAULT false,
+    "rpoMinutes" INTEGER NOT NULL DEFAULT 1440,
+    "rtoMinutes" INTEGER NOT NULL DEFAULT 240,
+    "slowQueryThresholdMs" INTEGER NOT NULL DEFAULT 500,
+    "apiLatencyWarnMs" INTEGER NOT NULL DEFAULT 2000,
+    "errorRateWarnPerHour" INTEGER NOT NULL DEFAULT 50,
+    "failedLoginSpikeThreshold" INTEGER NOT NULL DEFAULT 10,
+    "paymentFailureSpikeThreshold" INTEGER NOT NULL DEFAULT 5,
+    "webhookFailureSpikeThreshold" INTEGER NOT NULL DEFAULT 5,
+    "queueBacklogThreshold" INTEGER NOT NULL DEFAULT 100,
+    "permissionViolationThreshold" INTEGER NOT NULL DEFAULT 30,
+    "dbStorageLimitMb" INTEGER,
+    "fileStorageLimitMb" INTEGER,
+    "capacityWarnPercent" INTEGER NOT NULL DEFAULT 80,
+    "backupsEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "backupDailyKeep" INTEGER NOT NULL DEFAULT 7,
+    "backupWeeklyKeep" INTEGER NOT NULL DEFAULT 4,
+    "backupMonthlyKeep" INTEGER NOT NULL DEFAULT 6,
+    "backupStaleAfterHours" INTEGER NOT NULL DEFAULT 48,
+    "restoreTestStaleAfterDays" INTEGER NOT NULL DEFAULT 30,
+    "monitoringPeriodHours" INTEGER NOT NULL DEFAULT 24,
+    "evidenceMaxAgeDays" INTEGER NOT NULL DEFAULT 7,
+    "adminSessionMaxHours" INTEGER NOT NULL DEFAULT 12,
+    "updatedById" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SystemControl_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FeatureFlag" (
+    "key" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "description" TEXT,
+    "updatedById" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FeatureFlag_pkey" PRIMARY KEY ("key")
+);
+
+-- CreateTable
+CREATE TABLE "ErrorEvent" (
+    "id" TEXT NOT NULL,
+    "fingerprint" TEXT NOT NULL,
+    "category" "ErrorCategory" NOT NULL,
+    "severity" "ErrorSeverity" NOT NULL,
+    "service" TEXT NOT NULL,
+    "route" TEXT,
+    "message" TEXT NOT NULL,
+    "environment" TEXT NOT NULL,
+    "appVersion" TEXT,
+    "correlationId" TEXT,
+    "status" "ErrorEventStatus" NOT NULL DEFAULT 'NEW',
+    "occurrences" INTEGER NOT NULL DEFAULT 1,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "resolvedById" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ErrorEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SlowQueryStat" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "operation" TEXT NOT NULL,
+    "tableName" TEXT NOT NULL,
+    "route" TEXT,
+    "count" INTEGER NOT NULL DEFAULT 1,
+    "totalMs" INTEGER NOT NULL,
+    "maxMs" INTEGER NOT NULL,
+    "lastMs" INTEGER NOT NULL,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SlowQueryStat_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PerfSample" (
+    "id" TEXT NOT NULL,
+    "route" TEXT NOT NULL,
+    "bucketStart" TIMESTAMP(3) NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 0,
+    "errorCount" INTEGER NOT NULL DEFAULT 0,
+    "slowCount" INTEGER NOT NULL DEFAULT 0,
+    "sumMs" INTEGER NOT NULL DEFAULT 0,
+    "maxMs" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "PerfSample_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RateLimitBucket" (
+    "key" TEXT NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 0,
+    "windowStartedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "RateLimitBucket_pkey" PRIMARY KEY ("key")
+);
+
+-- CreateTable
+CREATE TABLE "BackgroundJob" (
+    "id" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "status" "JobStatus" NOT NULL DEFAULT 'PENDING',
+    "dedupKey" TEXT,
+    "payload" JSONB,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "maxAttempts" INTEGER NOT NULL DEFAULT 3,
+    "runAfter" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "startedAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "lockedUntil" TIMESTAMP(3),
+    "failureReason" TEXT,
+    "correlationId" TEXT,
+    "resolved" BOOLEAN NOT NULL DEFAULT false,
+    "resolvedById" TEXT,
+    "createdById" TEXT,
+
+    CONSTRAINT "BackgroundJob_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CronTask" (
+    "name" TEXT NOT NULL,
+    "lockedUntil" TIMESTAMP(3),
+    "lastStartedAt" TIMESTAMP(3),
+    "lastCompletedAt" TIMESTAMP(3),
+    "lastStatus" TEXT,
+    "lastDurationMs" INTEGER,
+    "consecutiveFailures" INTEGER NOT NULL DEFAULT 0,
+    "totalFailures" INTEGER NOT NULL DEFAULT 0,
+    "schedule" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CronTask_pkey" PRIMARY KEY ("name")
+);
+
+-- CreateTable
+CREATE TABLE "CronTaskRun" (
+    "id" TEXT NOT NULL,
+    "taskName" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "durationMs" INTEGER,
+    "status" TEXT NOT NULL,
+    "error" TEXT,
+    "correlationId" TEXT,
+
+    CONSTRAINT "CronTaskRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BackupRun" (
+    "id" TEXT NOT NULL,
+    "backupCode" TEXT NOT NULL,
+    "type" "BackupType" NOT NULL,
+    "trigger" "BackupTrigger" NOT NULL,
+    "status" "BackupStatus" NOT NULL DEFAULT 'RUNNING',
+    "retentionClass" "BackupRetentionClass" NOT NULL DEFAULT 'DAILY',
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "sizeBytes" INTEGER,
+    "checksumSha256" TEXT,
+    "manifest" JSONB,
+    "storageUrl" TEXT,
+    "encrypted" BOOLEAN NOT NULL DEFAULT true,
+    "separateStore" BOOLEAN NOT NULL DEFAULT false,
+    "expiresAt" TIMESTAMP(3),
+    "triggeredById" TEXT,
+    "failureReason" TEXT,
+    "verifiedAt" TIMESTAMP(3),
+    "verificationStatus" TEXT,
+    "prunedAt" TIMESTAMP(3),
+
+    CONSTRAINT "BackupRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BackupFileCopy" (
+    "id" TEXT NOT NULL,
+    "sourceUrl" TEXT NOT NULL,
+    "backupUrl" TEXT NOT NULL,
+    "sha256" TEXT NOT NULL,
+    "sizeBytes" INTEGER NOT NULL,
+    "kind" TEXT NOT NULL,
+    "copiedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BackupFileCopy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RestoreTest" (
+    "id" TEXT NOT NULL,
+    "backupId" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "result" JSONB,
+    "performedById" TEXT,
+
+    CONSTRAINT "RestoreTest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RestoreRequest" (
+    "id" TEXT NOT NULL,
+    "backupId" TEXT NOT NULL,
+    "status" "RestoreRequestStatus" NOT NULL DEFAULT 'PENDING',
+    "reason" TEXT NOT NULL,
+    "targetLabel" TEXT NOT NULL,
+    "requestedById" TEXT NOT NULL,
+    "approvedById" TEXT,
+    "requestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "decidedAt" TIMESTAMP(3),
+    "executedAt" TIMESTAMP(3),
+    "notes" TEXT,
+
+    CONSTRAINT "RestoreRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Alert" (
+    "id" TEXT NOT NULL,
+    "alertCode" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "severity" "AlertSeverity" NOT NULL,
+    "source" TEXT NOT NULL,
+    "service" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "detail" TEXT,
+    "status" "AlertStatus" NOT NULL DEFAULT 'NEW',
+    "dedupKey" TEXT NOT NULL,
+    "occurrences" INTEGER NOT NULL DEFAULT 1,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "assignedToId" TEXT,
+    "resolution" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+    "incidentCaseId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Alert_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AlertEvent" (
+    "id" TEXT NOT NULL,
+    "alertId" TEXT NOT NULL,
+    "actorId" TEXT,
+    "fromStatus" "AlertStatus",
+    "toStatus" "AlertStatus",
+    "note" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AlertEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "IntegrityCheckRun" (
+    "id" TEXT NOT NULL,
+    "trigger" TEXT NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "status" TEXT NOT NULL,
+    "totalChecks" INTEGER NOT NULL DEFAULT 0,
+    "findingCount" INTEGER NOT NULL DEFAULT 0,
+    "findings" JSONB,
+    "triggeredById" TEXT,
+
+    CONSTRAINT "IntegrityCheckRun_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Release" (
+    "id" TEXT NOT NULL,
+    "releaseCode" TEXT NOT NULL,
+    "version" TEXT NOT NULL,
+    "commitSha" TEXT NOT NULL,
+    "environment" TEXT NOT NULL,
+    "status" "ReleaseStatus" NOT NULL DEFAULT 'DEPLOYING',
+    "deployedBy" TEXT,
+    "deployedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notes" TEXT,
+    "migrations" JSONB,
+    "featureFlags" JSONB,
+    "paymentEnvironment" TEXT,
+    "testResults" JSONB,
+    "smokeResult" TEXT,
+    "rollbackTargetId" TEXT,
+    "monitoringUntil" TIMESTAMP(3),
+    "approvedById" TEXT,
+    "approvedAt" TIMESTAMP(3),
+    "verifiedAt" TIMESTAMP(3),
+    "verificationResult" JSONB,
+
+    CONSTRAINT "Release_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CiEvidence" (
+    "id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "commitSha" TEXT NOT NULL,
+    "environment" TEXT,
+    "summary" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CiEvidence_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdminUser_email_key" ON "AdminUser"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Profile_profileCode_key" ON "Profile"("profileCode");
+
+-- CreateIndex
+CREATE INDEX "Profile_gender_status_idx" ON "Profile"("gender", "status");
+
+-- CreateIndex
+CREATE INDEX "Profile_city_idx" ON "Profile"("city");
+
+-- CreateIndex
+CREATE INDEX "Profile_status_idx" ON "Profile"("status");
+
+-- CreateIndex
+CREATE INDEX "Profile_maritalStatus_idx" ON "Profile"("maritalStatus");
+
+-- CreateIndex
+CREATE INDEX "Profile_dateOfBirth_idx" ON "Profile"("dateOfBirth");
+
+-- CreateIndex
+CREATE INDEX "Profile_verified_idx" ON "Profile"("verified");
+
+-- CreateIndex
+CREATE INDEX "Profile_softDeleted_status_idx" ON "Profile"("softDeleted", "status");
+
+-- CreateIndex
+CREATE INDEX "Profile_createdAt_idx" ON "Profile"("createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ContactInfo_profileId_key" ON "ContactInfo"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EducationInfo_profileId_key" ON "EducationInfo"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProfessionInfo_profileId_key" ON "ProfessionInfo"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FamilyInfo_profileId_key" ON "FamilyInfo"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "LifestyleInfo_profileId_key" ON "LifestyleInfo"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PartnerPreference_profileId_key" ON "PartnerPreference"("profileId");
+
+-- CreateIndex
+CREATE INDEX "ProfilePhoto_profileId_idx" ON "ProfilePhoto"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ConsentRecord_profileId_key" ON "ConsentRecord"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PendingUpdate_profileId_key" ON "PendingUpdate"("profileId");
+
+-- CreateIndex
+CREATE INDEX "ProfileNote_profileId_idx" ON "ProfileNote"("profileId");
+
+-- CreateIndex
+CREATE INDEX "ProfileNote_proposalId_idx" ON "ProfileNote"("proposalId");
+
+-- CreateIndex
+CREATE INDEX "ProfileNote_matchId_idx" ON "ProfileNote"("matchId");
+
+-- CreateIndex
+CREATE INDEX "Match_profileAId_idx" ON "Match"("profileAId");
+
+-- CreateIndex
+CREATE INDEX "Match_profileBId_idx" ON "Match"("profileBId");
+
+-- CreateIndex
+CREATE INDEX "Match_status_idx" ON "Match"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Match_profileAId_profileBId_key" ON "Match"("profileAId", "profileBId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Proposal_proposalCode_key" ON "Proposal"("proposalCode");
+
+-- CreateIndex
+CREATE INDEX "Proposal_profileAId_idx" ON "Proposal"("profileAId");
+
+-- CreateIndex
+CREATE INDEX "Proposal_profileBId_idx" ON "Proposal"("profileBId");
+
+-- CreateIndex
+CREATE INDEX "Proposal_matchId_idx" ON "Proposal"("matchId");
+
+-- CreateIndex
+CREATE INDEX "Proposal_assignedToId_idx" ON "Proposal"("assignedToId");
+
+-- CreateIndex
+CREATE INDEX "Proposal_status_idx" ON "Proposal"("status");
+
+-- CreateIndex
+CREATE INDEX "Proposal_status_updatedAt_idx" ON "Proposal"("status", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "ProposalEvent_proposalId_idx" ON "ProposalEvent"("proposalId");
+
+-- CreateIndex
+CREATE INDEX "ProposalResponse_proposalId_idx" ON "ProposalResponse"("proposalId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProposalResponse_proposalId_profileId_key" ON "ProposalResponse"("proposalId", "profileId");
+
+-- CreateIndex
+CREATE INDEX "ContactPermission_proposalId_idx" ON "ContactPermission"("proposalId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ContactPermission_proposalId_profileId_key" ON "ContactPermission"("proposalId", "profileId");
+
+-- CreateIndex
+CREATE INDEX "Meeting_proposalId_idx" ON "Meeting"("proposalId");
+
+-- CreateIndex
+CREATE INDEX "Meeting_scheduledAt_idx" ON "Meeting"("scheduledAt");
+
+-- CreateIndex
+CREATE INDEX "FamilyCommunication_proposalId_idx" ON "FamilyCommunication"("proposalId");
+
+-- CreateIndex
+CREATE INDEX "FamilyCommunication_profileId_idx" ON "FamilyCommunication"("profileId");
+
+-- CreateIndex
+CREATE INDEX "Communication_profileId_idx" ON "Communication"("profileId");
+
+-- CreateIndex
+CREATE INDEX "Communication_proposalId_idx" ON "Communication"("proposalId");
+
+-- CreateIndex
+CREATE INDEX "FollowUp_dueDate_status_idx" ON "FollowUp"("dueDate", "status");
+
+-- CreateIndex
+CREATE INDEX "FollowUp_profileId_idx" ON "FollowUp"("profileId");
+
+-- CreateIndex
+CREATE INDEX "FollowUp_proposalId_idx" ON "FollowUp"("proposalId");
+
+-- CreateIndex
+CREATE INDEX "ContactShareLog_profileAId_idx" ON "ContactShareLog"("profileAId");
+
+-- CreateIndex
+CREATE INDEX "ContactShareLog_profileBId_idx" ON "ContactShareLog"("profileBId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProfileVerification_profileId_key" ON "ProfileVerification"("profileId");
+
+-- CreateIndex
+CREATE INDEX "ProfileVerification_status_idx" ON "ProfileVerification"("status");
+
+-- CreateIndex
+CREATE INDEX "ProfileVerification_assignedToId_idx" ON "ProfileVerification"("assignedToId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "VerificationItem_documentId_key" ON "VerificationItem"("documentId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "VerificationItem_profileVerificationId_itemKey_key" ON "VerificationItem"("profileVerificationId", "itemKey");
+
+-- CreateIndex
+CREATE INDEX "OtpVerification_profileId_channel_idx" ON "OtpVerification"("profileId", "channel");
+
+-- CreateIndex
+CREATE INDEX "VerificationDocument_profileId_idx" ON "VerificationDocument"("profileId");
+
+-- CreateIndex
+CREATE INDEX "SecurityFlag_profileId_idx" ON "SecurityFlag"("profileId");
+
+-- CreateIndex
+CREATE INDEX "SecurityFlag_status_idx" ON "SecurityFlag"("status");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_targetProfileId_idx" ON "AuditLog"("targetProfileId");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_adminId_idx" ON "AuditLog"("adminId");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_action_createdAt_idx" ON "AuditLog"("action", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "PaymentRolloutEvent_createdAt_idx" ON "PaymentRolloutEvent"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "Notification_recipientProfileId_readAt_createdAt_idx" ON "Notification"("recipientProfileId", "readAt", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Notification_recipientAdminId_readAt_createdAt_idx" ON "Notification"("recipientAdminId", "readAt", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Notification_type_idx" ON "Notification"("type");
+
+-- CreateIndex
+CREATE INDEX "CommunicationLog_profileId_createdAt_idx" ON "CommunicationLog"("profileId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "CommunicationLog_proposalId_idx" ON "CommunicationLog"("proposalId");
+
+-- CreateIndex
+CREATE INDEX "CommunicationLog_deliveryStatus_idx" ON "CommunicationLog"("deliveryStatus");
+
+-- CreateIndex
+CREATE INDEX "CommunicationLog_providerMessageId_idx" ON "CommunicationLog"("providerMessageId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "NotificationPreference_profileId_key" ON "NotificationPreference"("profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CommunicationConsent_profileId_channel_key" ON "CommunicationConsent"("profileId", "channel");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "NotificationTemplate_event_channel_language_key" ON "NotificationTemplate"("event", "channel", "language");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WebhookEvent_idempotencyKey_key" ON "WebhookEvent"("idempotencyKey");
+
+-- CreateIndex
+CREATE INDEX "ReportExecution_createdById_idx" ON "ReportExecution"("createdById");
+
+-- CreateIndex
+CREATE INDEX "ReportExecution_createdAt_idx" ON "ReportExecution"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "ReportExecution_reportKey_idx" ON "ReportExecution"("reportKey");
+
+-- CreateIndex
+CREATE INDEX "ScheduledReport_active_nextRunAt_idx" ON "ScheduledReport"("active", "nextRunAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CustomRole_name_key" ON "CustomRole"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Department_name_key" ON "Department"("name");
+
+-- CreateIndex
+CREATE INDEX "AdminSession_adminId_idx" ON "AdminSession"("adminId");
+
+-- CreateIndex
+CREATE INDEX "AdminLoginHistory_adminId_idx" ON "AdminLoginHistory"("adminId");
+
+-- CreateIndex
+CREATE INDEX "AdminLoginHistory_email_createdAt_idx" ON "AdminLoginHistory"("email", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdminOtpChallenge_adminId_idx" ON "AdminOtpChallenge"("adminId");
+
+-- CreateIndex
+CREATE INDEX "AdminAssignment_adminId_resourceType_idx" ON "AdminAssignment"("adminId", "resourceType");
+
+-- CreateIndex
+CREATE INDEX "AdminAssignment_resourceType_resourceId_idx" ON "AdminAssignment"("resourceType", "resourceId");
+
+-- CreateIndex
+CREATE INDEX "AdminAssignment_status_idx" ON "AdminAssignment"("status");
+
+-- CreateIndex
+CREATE INDEX "AdminTask_assignedToId_status_idx" ON "AdminTask"("assignedToId", "status");
+
+-- CreateIndex
+CREATE INDEX "AdminTask_resourceType_resourceId_idx" ON "AdminTask"("resourceType", "resourceId");
+
+-- CreateIndex
+CREATE INDEX "AdminTask_status_dueAt_idx" ON "AdminTask"("status", "dueAt");
+
+-- CreateIndex
+CREATE INDEX "ViewAsSession_superAdminId_idx" ON "ViewAsSession"("superAdminId");
+
+-- CreateIndex
+CREATE INDEX "ViewAsSession_targetAdminId_idx" ON "ViewAsSession"("targetAdminId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Case_caseNumber_key" ON "Case"("caseNumber");
+
+-- CreateIndex
+CREATE INDEX "Case_type_status_idx" ON "Case"("type", "status");
+
+-- CreateIndex
+CREATE INDEX "Case_category_idx" ON "Case"("category");
+
+-- CreateIndex
+CREATE INDEX "Case_priority_status_idx" ON "Case"("priority", "status");
+
+-- CreateIndex
+CREATE INDEX "Case_reporterProfileId_idx" ON "Case"("reporterProfileId");
+
+-- CreateIndex
+CREATE INDEX "Case_reportedProfileId_idx" ON "Case"("reportedProfileId");
+
+-- CreateIndex
+CREATE INDEX "Case_reportedAdminId_idx" ON "Case"("reportedAdminId");
+
+-- CreateIndex
+CREATE INDEX "Case_createdAt_idx" ON "Case"("createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CaseAccessGrant_caseId_adminId_key" ON "CaseAccessGrant"("caseId", "adminId");
+
+-- CreateIndex
+CREATE INDEX "CaseComment_caseId_idx" ON "CaseComment"("caseId");
+
+-- CreateIndex
+CREATE INDEX "CaseInternalNote_caseId_idx" ON "CaseInternalNote"("caseId");
+
+-- CreateIndex
+CREATE INDEX "CaseEvidence_caseId_idx" ON "CaseEvidence"("caseId");
+
+-- CreateIndex
+CREATE INDEX "CaseStatusHistory_caseId_idx" ON "CaseStatusHistory"("caseId");
+
+-- CreateIndex
+CREATE INDEX "CaseEscalation_caseId_idx" ON "CaseEscalation"("caseId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CaseResolution_caseId_key" ON "CaseResolution"("caseId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CaseLink_caseId_linkedCaseId_linkType_key" ON "CaseLink"("caseId", "linkedCaseId", "linkType");
+
+-- CreateIndex
+CREATE INDEX "CaseAccessLog_caseId_idx" ON "CaseAccessLog"("caseId");
+
+-- CreateIndex
+CREATE INDEX "ProfileRestriction_profileId_active_idx" ON "ProfileRestriction"("profileId", "active");
+
+-- CreateIndex
+CREATE INDEX "SupportMessage_resolved_idx" ON "SupportMessage"("resolved");
+
+-- CreateIndex
+CREATE INDEX "ConsentGrant_profileId_category_recordedAt_idx" ON "ConsentGrant"("profileId", "category", "recordedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AccountDeletionRequest_requestCode_key" ON "AccountDeletionRequest"("requestCode");
+
+-- CreateIndex
+CREATE INDEX "AccountDeletionRequest_profileId_idx" ON "AccountDeletionRequest"("profileId");
+
+-- CreateIndex
+CREATE INDEX "AccountDeletionRequest_status_idx" ON "AccountDeletionRequest"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PrivacyRequest_requestCode_key" ON "PrivacyRequest"("requestCode");
+
+-- CreateIndex
+CREATE INDEX "PrivacyRequest_profileId_idx" ON "PrivacyRequest"("profileId");
+
+-- CreateIndex
+CREATE INDEX "PrivacyRequest_status_idx" ON "PrivacyRequest"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RetentionPolicy_category_key" ON "RetentionPolicy"("category");
+
+-- CreateIndex
+CREATE INDEX "DataHold_profileId_active_idx" ON "DataHold"("profileId", "active");
+
+-- CreateIndex
+CREATE INDEX "DataHold_recordType_recordId_active_idx" ON "DataHold"("recordType", "recordId", "active");
+
+-- CreateIndex
+CREATE INDEX "RetentionActionLog_category_runAt_idx" ON "RetentionActionLog"("category", "runAt");
+
+-- CreateIndex
+CREATE INDEX "DataExportRequest_profileId_idx" ON "DataExportRequest"("profileId");
+
+-- CreateIndex
+CREATE INDEX "PrivacyAccessLog_targetProfileId_createdAt_idx" ON "PrivacyAccessLog"("targetProfileId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "PrivacyAccessLog_actorAdminId_createdAt_idx" ON "PrivacyAccessLog"("actorAdminId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "BreakGlassAccess_adminId_idx" ON "BreakGlassAccess"("adminId");
+
+-- CreateIndex
+CREATE INDEX "BreakGlassAccess_recordType_recordId_idx" ON "BreakGlassAccess"("recordType", "recordId");
+
+-- CreateIndex
+CREATE INDEX "ProfileSession_profileId_idx" ON "ProfileSession"("profileId");
+
+-- CreateIndex
+CREATE INDEX "BankAccount_active_displayOrder_idx" ON "BankAccount"("active", "displayOrder");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Package_packageCode_key" ON "Package"("packageCode");
+
+-- CreateIndex
+CREATE INDEX "Package_active_displayOrder_idx" ON "Package"("active", "displayOrder");
+
+-- CreateIndex
+CREATE INDEX "PackagePrice_packageId_effectiveFrom_idx" ON "PackagePrice"("packageId", "effectiveFrom");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PackageEntitlement_packageId_featureKey_key" ON "PackageEntitlement"("packageId", "featureKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Subscription_subscriptionCode_key" ON "Subscription"("subscriptionCode");
+
+-- CreateIndex
+CREATE INDEX "Subscription_profileId_status_idx" ON "Subscription"("profileId", "status");
+
+-- CreateIndex
+CREATE INDEX "Subscription_status_renewalDate_idx" ON "Subscription"("status", "renewalDate");
+
+-- CreateIndex
+CREATE INDEX "SubscriptionEvent_subscriptionId_idx" ON "SubscriptionEvent"("subscriptionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Order_orderCode_key" ON "Order"("orderCode");
+
+-- CreateIndex
+CREATE INDEX "Order_profileId_status_idx" ON "Order"("profileId", "status");
+
+-- CreateIndex
+CREATE INDEX "OrderItem_orderId_idx" ON "OrderItem"("orderId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Payment_paymentCode_key" ON "Payment"("paymentCode");
+
+-- CreateIndex
+CREATE INDEX "Payment_profileId_status_idx" ON "Payment"("profileId", "status");
+
+-- CreateIndex
+CREATE INDEX "Payment_orderId_idx" ON "Payment"("orderId");
+
+-- CreateIndex
+CREATE INDEX "Payment_status_createdAt_idx" ON "Payment"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Payment_paidAt_idx" ON "Payment"("paidAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Payment_provider_providerTransactionId_key" ON "Payment"("provider", "providerTransactionId");
+
+-- CreateIndex
+CREATE INDEX "PaymentAttempt_paymentId_idx" ON "PaymentAttempt"("paymentId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ManualPaymentDetail_paymentId_key" ON "ManualPaymentDetail"("paymentId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PaymentWebhookEvent_provider_providerEventId_key" ON "PaymentWebhookEvent"("provider", "providerEventId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Invoice_invoiceCode_key" ON "Invoice"("invoiceCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Invoice_orderId_key" ON "Invoice"("orderId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Invoice_paymentId_key" ON "Invoice"("paymentId");
+
+-- CreateIndex
+CREATE INDEX "Invoice_profileId_idx" ON "Invoice"("profileId");
+
+-- CreateIndex
+CREATE INDEX "InvoiceItem_invoiceId_idx" ON "InvoiceItem"("invoiceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Refund_refundCode_key" ON "Refund"("refundCode");
+
+-- CreateIndex
+CREATE INDEX "Refund_paymentId_idx" ON "Refund"("paymentId");
+
+-- CreateIndex
+CREATE INDEX "Refund_status_idx" ON "Refund"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Coupon_discountCode_key" ON "Coupon"("discountCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Coupon_code_key" ON "Coupon"("code");
+
+-- CreateIndex
+CREATE INDEX "CouponRedemption_couponId_profileId_idx" ON "CouponRedemption"("couponId", "profileId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CouponRedemption_couponId_orderId_key" ON "CouponRedemption"("couponId", "orderId");
+
+-- CreateIndex
+CREATE INDEX "TaxRule_country_active_idx" ON "TaxRule"("country", "active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FeatureUsage_profileId_featureKey_periodStart_key" ON "FeatureUsage"("profileId", "featureKey", "periodStart");
+
+-- CreateIndex
+CREATE INDEX "ReconciliationItem_runId_status_idx" ON "ReconciliationItem"("runId", "status");
+
+-- CreateIndex
+CREATE INDEX "ErrorEvent_status_lastSeenAt_idx" ON "ErrorEvent"("status", "lastSeenAt");
+
+-- CreateIndex
+CREATE INDEX "ErrorEvent_category_idx" ON "ErrorEvent"("category");
+
+-- CreateIndex
+CREATE INDEX "ErrorEvent_severity_idx" ON "ErrorEvent"("severity");
+
+-- CreateIndex
+CREATE INDEX "ErrorEvent_lastSeenAt_idx" ON "ErrorEvent"("lastSeenAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ErrorEvent_fingerprint_environment_key" ON "ErrorEvent"("fingerprint", "environment");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SlowQueryStat_key_key" ON "SlowQueryStat"("key");
+
+-- CreateIndex
+CREATE INDEX "SlowQueryStat_lastSeenAt_idx" ON "SlowQueryStat"("lastSeenAt");
+
+-- CreateIndex
+CREATE INDEX "PerfSample_bucketStart_idx" ON "PerfSample"("bucketStart");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PerfSample_route_bucketStart_key" ON "PerfSample"("route", "bucketStart");
+
+-- CreateIndex
+CREATE INDEX "RateLimitBucket_windowStartedAt_idx" ON "RateLimitBucket"("windowStartedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BackgroundJob_dedupKey_key" ON "BackgroundJob"("dedupKey");
+
+-- CreateIndex
+CREATE INDEX "BackgroundJob_status_runAfter_idx" ON "BackgroundJob"("status", "runAfter");
+
+-- CreateIndex
+CREATE INDEX "BackgroundJob_type_status_idx" ON "BackgroundJob"("type", "status");
+
+-- CreateIndex
+CREATE INDEX "CronTaskRun_taskName_startedAt_idx" ON "CronTaskRun"("taskName", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BackupRun_backupCode_key" ON "BackupRun"("backupCode");
+
+-- CreateIndex
+CREATE INDEX "BackupRun_type_status_startedAt_idx" ON "BackupRun"("type", "status", "startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BackupFileCopy_sourceUrl_key" ON "BackupFileCopy"("sourceUrl");
+
+-- CreateIndex
+CREATE INDEX "RestoreTest_backupId_idx" ON "RestoreTest"("backupId");
+
+-- CreateIndex
+CREATE INDEX "RestoreTest_startedAt_idx" ON "RestoreTest"("startedAt");
+
+-- CreateIndex
+CREATE INDEX "RestoreRequest_status_idx" ON "RestoreRequest"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Alert_alertCode_key" ON "Alert"("alertCode");
+
+-- CreateIndex
+CREATE INDEX "Alert_status_severity_idx" ON "Alert"("status", "severity");
+
+-- CreateIndex
+CREATE INDEX "Alert_dedupKey_idx" ON "Alert"("dedupKey");
+
+-- CreateIndex
+CREATE INDEX "AlertEvent_alertId_idx" ON "AlertEvent"("alertId");
+
+-- CreateIndex
+CREATE INDEX "IntegrityCheckRun_startedAt_idx" ON "IntegrityCheckRun"("startedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Release_releaseCode_key" ON "Release"("releaseCode");
+
+-- CreateIndex
+CREATE INDEX "Release_environment_deployedAt_idx" ON "Release"("environment", "deployedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Release_commitSha_environment_key" ON "Release"("commitSha", "environment");
+
+-- CreateIndex
+CREATE INDEX "CiEvidence_kind_createdAt_idx" ON "CiEvidence"("kind", "createdAt");
+
+-- AddForeignKey
+ALTER TABLE "AdminUser" ADD CONSTRAINT "AdminUser_customRoleId_fkey" FOREIGN KEY ("customRoleId") REFERENCES "CustomRole"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminUser" ADD CONSTRAINT "AdminUser_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ContactInfo" ADD CONSTRAINT "ContactInfo_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EducationInfo" ADD CONSTRAINT "EducationInfo_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfessionInfo" ADD CONSTRAINT "ProfessionInfo_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FamilyInfo" ADD CONSTRAINT "FamilyInfo_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LifestyleInfo" ADD CONSTRAINT "LifestyleInfo_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PartnerPreference" ADD CONSTRAINT "PartnerPreference_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfilePhoto" ADD CONSTRAINT "ProfilePhoto_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ConsentRecord" ADD CONSTRAINT "ConsentRecord_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PendingUpdate" ADD CONSTRAINT "PendingUpdate_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileNote" ADD CONSTRAINT "ProfileNote_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileNote" ADD CONSTRAINT "ProfileNote_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileNote" ADD CONSTRAINT "ProfileNote_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileNote" ADD CONSTRAINT "ProfileNote_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Match" ADD CONSTRAINT "Match_profileAId_fkey" FOREIGN KEY ("profileAId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Match" ADD CONSTRAINT "Match_profileBId_fkey" FOREIGN KEY ("profileBId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Match" ADD CONSTRAINT "Match_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Proposal" ADD CONSTRAINT "Proposal_profileAId_fkey" FOREIGN KEY ("profileAId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Proposal" ADD CONSTRAINT "Proposal_profileBId_fkey" FOREIGN KEY ("profileBId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Proposal" ADD CONSTRAINT "Proposal_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Proposal" ADD CONSTRAINT "Proposal_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Proposal" ADD CONSTRAINT "Proposal_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProposalEvent" ADD CONSTRAINT "ProposalEvent_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProposalEvent" ADD CONSTRAINT "ProposalEvent_performedByAdminId_fkey" FOREIGN KEY ("performedByAdminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProposalEvent" ADD CONSTRAINT "ProposalEvent_performedByProfileId_fkey" FOREIGN KEY ("performedByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProposalResponse" ADD CONSTRAINT "ProposalResponse_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProposalResponse" ADD CONSTRAINT "ProposalResponse_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ContactPermission" ADD CONSTRAINT "ContactPermission_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ContactPermission" ADD CONSTRAINT "ContactPermission_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ContactPermission" ADD CONSTRAINT "ContactPermission_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Meeting" ADD CONSTRAINT "Meeting_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Meeting" ADD CONSTRAINT "Meeting_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FamilyCommunication" ADD CONSTRAINT "FamilyCommunication_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FamilyCommunication" ADD CONSTRAINT "FamilyCommunication_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FamilyCommunication" ADD CONSTRAINT "FamilyCommunication_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Communication" ADD CONSTRAINT "Communication_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Communication" ADD CONSTRAINT "Communication_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Communication" ADD CONSTRAINT "Communication_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FollowUp" ADD CONSTRAINT "FollowUp_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FollowUp" ADD CONSTRAINT "FollowUp_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FollowUp" ADD CONSTRAINT "FollowUp_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ContactShareLog" ADD CONSTRAINT "ContactShareLog_profileAId_fkey" FOREIGN KEY ("profileAId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ContactShareLog" ADD CONSTRAINT "ContactShareLog_profileBId_fkey" FOREIGN KEY ("profileBId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ContactShareLog" ADD CONSTRAINT "ContactShareLog_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileVerification" ADD CONSTRAINT "ProfileVerification_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileVerification" ADD CONSTRAINT "ProfileVerification_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileVerification" ADD CONSTRAINT "ProfileVerification_lastReviewedById_fkey" FOREIGN KEY ("lastReviewedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VerificationItem" ADD CONSTRAINT "VerificationItem_profileVerificationId_fkey" FOREIGN KEY ("profileVerificationId") REFERENCES "ProfileVerification"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VerificationItem" ADD CONSTRAINT "VerificationItem_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "VerificationDocument"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VerificationItem" ADD CONSTRAINT "VerificationItem_completedById_fkey" FOREIGN KEY ("completedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OtpVerification" ADD CONSTRAINT "OtpVerification_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VerificationDocument" ADD CONSTRAINT "VerificationDocument_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "VerificationDocument" ADD CONSTRAINT "VerificationDocument_reviewedById_fkey" FOREIGN KEY ("reviewedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SecurityFlag" ADD CONSTRAINT "SecurityFlag_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SecurityFlag" ADD CONSTRAINT "SecurityFlag_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SecurityFlag" ADD CONSTRAINT "SecurityFlag_relatedProfileId_fkey" FOREIGN KEY ("relatedProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SecurityFlag" ADD CONSTRAINT "SecurityFlag_resolvedById_fkey" FOREIGN KEY ("resolvedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_targetProfileId_fkey" FOREIGN KEY ("targetProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PaymentRolloutEvent" ADD CONSTRAINT "PaymentRolloutEvent_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_recipientProfileId_fkey" FOREIGN KEY ("recipientProfileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_recipientAdminId_fkey" FOREIGN KEY ("recipientAdminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_relatedProposalId_fkey" FOREIGN KEY ("relatedProposalId") REFERENCES "Proposal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_relatedProfileId_fkey" FOREIGN KEY ("relatedProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CommunicationLog" ADD CONSTRAINT "CommunicationLog_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CommunicationLog" ADD CONSTRAINT "CommunicationLog_proposalId_fkey" FOREIGN KEY ("proposalId") REFERENCES "Proposal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CommunicationLog" ADD CONSTRAINT "CommunicationLog_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "NotificationPreference" ADD CONSTRAINT "NotificationPreference_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CommunicationConsent" ADD CONSTRAINT "CommunicationConsent_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "NotificationTemplate" ADD CONSTRAINT "NotificationTemplate_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReportExecution" ADD CONSTRAINT "ReportExecution_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ScheduledReport" ADD CONSTRAINT "ScheduledReport_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CustomRolePermission" ADD CONSTRAINT "CustomRolePermission_customRoleId_fkey" FOREIGN KEY ("customRoleId") REFERENCES "CustomRole"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CustomRolePermission" ADD CONSTRAINT "CustomRolePermission_permissionKey_fkey" FOREIGN KEY ("permissionKey") REFERENCES "PermissionDef"("key") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminSession" ADD CONSTRAINT "AdminSession_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminLoginHistory" ADD CONSTRAINT "AdminLoginHistory_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminOtpChallenge" ADD CONSTRAINT "AdminOtpChallenge_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminAssignment" ADD CONSTRAINT "AdminAssignment_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminAssignment" ADD CONSTRAINT "AdminAssignment_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminTask" ADD CONSTRAINT "AdminTask_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ViewAsSession" ADD CONSTRAINT "ViewAsSession_superAdminId_fkey" FOREIGN KEY ("superAdminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ViewAsSession" ADD CONSTRAINT "ViewAsSession_targetAdminId_fkey" FOREIGN KEY ("targetAdminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Case" ADD CONSTRAINT "Case_reporterProfileId_fkey" FOREIGN KEY ("reporterProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Case" ADD CONSTRAINT "Case_reportedProfileId_fkey" FOREIGN KEY ("reportedProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Case" ADD CONSTRAINT "Case_reportedAdminId_fkey" FOREIGN KEY ("reportedAdminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Case" ADD CONSTRAINT "Case_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseAccessGrant" ADD CONSTRAINT "CaseAccessGrant_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseAccessGrant" ADD CONSTRAINT "CaseAccessGrant_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseAccessGrant" ADD CONSTRAINT "CaseAccessGrant_grantedById_fkey" FOREIGN KEY ("grantedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseComment" ADD CONSTRAINT "CaseComment_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseComment" ADD CONSTRAINT "CaseComment_authorAdminId_fkey" FOREIGN KEY ("authorAdminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseComment" ADD CONSTRAINT "CaseComment_authorProfileId_fkey" FOREIGN KEY ("authorProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseInternalNote" ADD CONSTRAINT "CaseInternalNote_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseInternalNote" ADD CONSTRAINT "CaseInternalNote_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseEvidence" ADD CONSTRAINT "CaseEvidence_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseEvidence" ADD CONSTRAINT "CaseEvidence_uploadedByAdminId_fkey" FOREIGN KEY ("uploadedByAdminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseEvidence" ADD CONSTRAINT "CaseEvidence_uploadedByProfileId_fkey" FOREIGN KEY ("uploadedByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseStatusHistory" ADD CONSTRAINT "CaseStatusHistory_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseStatusHistory" ADD CONSTRAINT "CaseStatusHistory_changedById_fkey" FOREIGN KEY ("changedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseEscalation" ADD CONSTRAINT "CaseEscalation_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseEscalation" ADD CONSTRAINT "CaseEscalation_escalatedById_fkey" FOREIGN KEY ("escalatedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseResolution" ADD CONSTRAINT "CaseResolution_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseResolution" ADD CONSTRAINT "CaseResolution_resolvedById_fkey" FOREIGN KEY ("resolvedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseLink" ADD CONSTRAINT "CaseLink_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseLink" ADD CONSTRAINT "CaseLink_linkedCaseId_fkey" FOREIGN KEY ("linkedCaseId") REFERENCES "Case"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseLink" ADD CONSTRAINT "CaseLink_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseMerge" ADD CONSTRAINT "CaseMerge_mergedById_fkey" FOREIGN KEY ("mergedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseAccessLog" ADD CONSTRAINT "CaseAccessLog_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "Case"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CaseAccessLog" ADD CONSTRAINT "CaseAccessLog_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileRestriction" ADD CONSTRAINT "ProfileRestriction_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileRestriction" ADD CONSTRAINT "ProfileRestriction_appliedById_fkey" FOREIGN KEY ("appliedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileRestriction" ADD CONSTRAINT "ProfileRestriction_liftedById_fkey" FOREIGN KEY ("liftedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ConsentGrant" ADD CONSTRAINT "ConsentGrant_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AccountDeletionRequest" ADD CONSTRAINT "AccountDeletionRequest_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AccountDeletionRequest" ADD CONSTRAINT "AccountDeletionRequest_reviewedById_fkey" FOREIGN KEY ("reviewedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PrivacyRequest" ADD CONSTRAINT "PrivacyRequest_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PrivacyRequest" ADD CONSTRAINT "PrivacyRequest_handledById_fkey" FOREIGN KEY ("handledById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RetentionPolicy" ADD CONSTRAINT "RetentionPolicy_updatedById_fkey" FOREIGN KEY ("updatedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DataHold" ADD CONSTRAINT "DataHold_placedById_fkey" FOREIGN KEY ("placedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DataHold" ADD CONSTRAINT "DataHold_liftedById_fkey" FOREIGN KEY ("liftedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DataExportRequest" ADD CONSTRAINT "DataExportRequest_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PrivacyAccessLog" ADD CONSTRAINT "PrivacyAccessLog_actorAdminId_fkey" FOREIGN KEY ("actorAdminId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BreakGlassAccess" ADD CONSTRAINT "BreakGlassAccess_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProfileSession" ADD CONSTRAINT "ProfileSession_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BankAccount" ADD CONSTRAINT "BankAccount_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Package" ADD CONSTRAINT "Package_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PackagePrice" ADD CONSTRAINT "PackagePrice_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "Package"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PackageEntitlement" ADD CONSTRAINT "PackageEntitlement_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "Package"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "Package"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SubscriptionEvent" ADD CONSTRAINT "SubscriptionEvent_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Order" ADD CONSTRAINT "Order_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Order" ADD CONSTRAINT "Order_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "Package"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PaymentAttempt" ADD CONSTRAINT "PaymentAttempt_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "Payment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ManualPaymentDetail" ADD CONSTRAINT "ManualPaymentDetail_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "Payment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ManualPaymentDetail" ADD CONSTRAINT "ManualPaymentDetail_enteredById_fkey" FOREIGN KEY ("enteredById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ManualPaymentDetail" ADD CONSTRAINT "ManualPaymentDetail_verifiedById_fkey" FOREIGN KEY ("verifiedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "Payment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "InvoiceItem" ADD CONSTRAINT "InvoiceItem_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Refund" ADD CONSTRAINT "Refund_paymentId_fkey" FOREIGN KEY ("paymentId") REFERENCES "Payment"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Refund" ADD CONSTRAINT "Refund_requestedById_fkey" FOREIGN KEY ("requestedById") REFERENCES "AdminUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Refund" ADD CONSTRAINT "Refund_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Refund" ADD CONSTRAINT "Refund_executedById_fkey" FOREIGN KEY ("executedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Coupon" ADD CONSTRAINT "Coupon_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CouponRedemption" ADD CONSTRAINT "CouponRedemption_couponId_fkey" FOREIGN KEY ("couponId") REFERENCES "Coupon"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CouponRedemption" ADD CONSTRAINT "CouponRedemption_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TaxRule" ADD CONSTRAINT "TaxRule_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReconciliationRun" ADD CONSTRAINT "ReconciliationRun_startedById_fkey" FOREIGN KEY ("startedById") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ReconciliationItem" ADD CONSTRAINT "ReconciliationItem_runId_fkey" FOREIGN KEY ("runId") REFERENCES "ReconciliationRun"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RestoreTest" ADD CONSTRAINT "RestoreTest_backupId_fkey" FOREIGN KEY ("backupId") REFERENCES "BackupRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RestoreRequest" ADD CONSTRAINT "RestoreRequest_backupId_fkey" FOREIGN KEY ("backupId") REFERENCES "BackupRun"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AlertEvent" ADD CONSTRAINT "AlertEvent_alertId_fkey" FOREIGN KEY ("alertId") REFERENCES "Alert"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

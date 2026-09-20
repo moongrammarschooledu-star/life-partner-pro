@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyWebhookSignature } from "@/lib/notifications/webhook-verify";
 import { processWebhookEvent, type WebhookEventType } from "@/lib/notifications/webhook-processor";
+import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 
 const VALID_EVENT_TYPES: WebhookEventType[] = ["DELIVERED", "READ", "FAILED", "BOUNCED"];
 
@@ -9,6 +10,9 @@ const VALID_EVENT_TYPES: WebhookEventType[] = ["DELIVERED", "READ", "FAILED", "B
 // is unset; the admin "Simulate Webhook" action exercises this exact
 // signature-check + idempotent-processing pipeline for live verification.
 export async function POST(req: Request) {
+  // STEP 15 §19 — persistent (cross-instance) rate limit.
+  const limited = await enforcePersistentLimit(req, "webhook-notifications", 300, 60000);
+  if (limited) return limited;
   const secret = process.env.NOTIFICATION_WEBHOOK_SECRET;
   const rawBody = await req.text();
 

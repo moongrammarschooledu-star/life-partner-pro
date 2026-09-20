@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isCategoryValidForType, categoriesForType, SUPPORT_CATEGORIES, COMPLAINT_CATEGORIES, SAFETY_CATEGORIES, PRIVACY_INCIDENT_CATEGORIES, PAYMENT_INCIDENT_CATEGORIES } from "./case-categories";
+import { isCategoryValidForType, categoriesForType, SUPPORT_CATEGORIES, COMPLAINT_CATEGORIES, SAFETY_CATEGORIES, PRIVACY_INCIDENT_CATEGORIES, PAYMENT_INCIDENT_CATEGORIES, SYSTEM_INCIDENT_CATEGORIES } from "./case-categories";
 
 describe("isCategoryValidForType", () => {
   it("accepts a support category for SUPPORT", () => {
@@ -37,8 +37,12 @@ describe("categoriesForType", () => {
   it("returns the union of all category lists for INTERNAL, including privacy-incident and payment-incident categories", () => {
     const internal = categoriesForType("INTERNAL");
     expect(internal.length).toBe(
-      SUPPORT_CATEGORIES.length + COMPLAINT_CATEGORIES.length + SAFETY_CATEGORIES.length + PRIVACY_INCIDENT_CATEGORIES.length + PAYMENT_INCIDENT_CATEGORIES.length
+      SUPPORT_CATEGORIES.length + COMPLAINT_CATEGORIES.length + SAFETY_CATEGORIES.length + PRIVACY_INCIDENT_CATEGORIES.length + PAYMENT_INCIDENT_CATEGORIES.length + SYSTEM_INCIDENT_CATEGORIES.length
     );
+  });
+
+  it("returns exactly the system-incident category list for SYSTEM_INCIDENT", () => {
+    expect(categoriesForType("SYSTEM_INCIDENT")).toEqual(SYSTEM_INCIDENT_CATEGORIES);
   });
 
   it("returns exactly the privacy-incident category list for PRIVACY_INCIDENT", () => {

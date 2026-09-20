@@ -4,6 +4,8 @@ import { emailProvider } from "@/lib/notifications/providers/email-provider";
 import { smsProvider } from "@/lib/notifications/providers/sms-provider";
 import { whatsappProvider } from "@/lib/notifications/providers/whatsapp-provider";
 import type { NotificationProvider } from "@/lib/notifications/providers/types";
+import { isEmergencyDisabled } from "@/lib/ops/system-control";
+import { isFeatureEnabled } from "@/lib/ops/feature-flags";
 
 const PROVIDERS: Partial<Record<NotificationChannel, NotificationProvider>> = {
   EMAIL: emailProvider,
@@ -19,6 +21,15 @@ export async function dispatchChannel(logId: string, channel: NotificationChanne
   const provider = PROVIDERS[channel];
   if (!provider) {
     // IN_APP has no provider — the row is already DELIVERED at creation time.
+    return;
+  }
+
+  // STEP 15 §28/§56 — kill switch / feature flags for external delivery. The
+  // row is marked FAILED (not lost) so the bounded retry job can deliver it
+  // once notifications are switched back on.
+  const disabled = (await isEmergencyDisabled("notifications")) || !(await isFeatureEnabled("notifications.enabled")) || (channel === "WHATSAPP" && !(await isFeatureEnabled("whatsapp.enabled")));
+  if (disabled) {
+    await prisma.communicationLog.update({ where: { id: logId }, data: { deliveryStatus: "FAILED", failureReason: "Notifications are temporarily disabled" } });
     return;
   }
 

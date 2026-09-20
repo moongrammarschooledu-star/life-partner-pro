@@ -5,6 +5,7 @@ import { nextCaseNumber } from "@/lib/case-code";
 import { computeSlaDueDates } from "@/lib/case-sla";
 import { isValidRolloutTransition } from "@/lib/finance/status-transitions";
 import { getProvider } from "@/lib/finance/providers/registry";
+import { isEmergencyDisabled } from "@/lib/ops/system-control";
 import type { PaymentRolloutStage, CaseCategory } from "@prisma/client";
 
 // Payment Rollout Phases (STEP 14 add-on §63-86). A single global stage on
@@ -108,6 +109,13 @@ export async function assertPaymentsAvailable(profile: { id: string; country: st
   const flags = await getPaymentFeatureFlags();
 
   if (stage === "DISABLED" || !flags.paymentsEnabled) {
+    throw new PaymentsUnavailableError(NEUTRAL_UNAVAILABLE_MESSAGE);
+  }
+
+  // STEP 15 §56 — the system-wide emergency payments switch closes NEW checkout
+  // sessions too (existing subscriptions/invoices/refunds stay untouched, same
+  // as the rollout kill switch).
+  if (await isEmergencyDisabled("payments")) {
     throw new PaymentsUnavailableError(NEUTRAL_UNAVAILABLE_MESSAGE);
   }
 
