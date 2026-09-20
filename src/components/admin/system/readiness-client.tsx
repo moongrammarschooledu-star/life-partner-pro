@@ -29,7 +29,7 @@ const TABS = [
 export function ReadinessClient({ canRunTests, canManageReleases }: { canRunTests: boolean; canManageReleases: boolean }) {
   const { show } = useToast();
   const [tab, setTab] = useState("status");
-  const { data, error, loading, reload } = useApi<Readiness>("/api/admin/system/readiness");
+  const { data, error, loading, reload, updatedAt } = useApi<Readiness>("/api/admin/system/readiness");
   const releases = useApi<{ items: Release[] }>(tab === "releases" ? "/api/admin/system/releases" : null);
   const [busy, setBusy] = useState(false);
   const [releaseAction, setReleaseAction] = useState<{ id: string; action: "approve" | "record_rollback" | "reverify"; code: string } | null>(null);
@@ -54,10 +54,10 @@ export function ReadinessClient({ canRunTests, canManageReleases }: { canRunTest
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-semibold">Life Partner Pro — Production Readiness</h1>
-          <p className="text-sm text-muted">Computed from live system state and fresh pipeline evidence. It cannot be marked READY by hand: a gate passes only when there is positive proof.</p>
+          <p className="text-sm text-muted">Computed from live system state and fresh pipeline evidence{updatedAt ? ` — last evaluated ${updatedAt.toLocaleTimeString()}` : ""}. It cannot be marked READY by hand: a gate passes only when there is positive proof.</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={reload}>Re-evaluate</Button>
+          <Button size="sm" variant="outline" disabled={loading} onClick={reload}>{loading ? "Evaluating… (can take ~10 s)" : "Re-evaluate"}</Button>
           {canRunTests && <Button size="sm" disabled={busy} onClick={selfTest}>{busy ? "Running…" : "Run monitoring self-test"}</Button>}
         </div>
       </div>

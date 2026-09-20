@@ -31,7 +31,7 @@ export function HealthOverview() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">Snapshot {formatDateTime(health.timestamp)} · secrets are never displayed.</p>
-        <Button size="sm" variant="outline" onClick={reload}>Refresh</Button>
+        <Button size="sm" variant="outline" disabled={loading} onClick={reload}>{loading ? "Refreshing…" : "Refresh"}</Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

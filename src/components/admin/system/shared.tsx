@@ -14,6 +14,7 @@ export function useApi<T>(url: string | null) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!url) return;
@@ -29,6 +30,7 @@ export function useApi<T>(url: string | null) {
         } else {
           setError(null);
           setData(json as T);
+          setUpdatedAt(new Date());
         }
       })
       .catch(() => !cancelled && setError("Could not load data."))
@@ -39,7 +41,7 @@ export function useApi<T>(url: string | null) {
   }, [url, tick]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  return { data, error, loading, reload };
+  return { data, error, loading, reload, updatedAt };
 }
 
 export async function callApi<T = unknown>(url: string, method: "POST" | "PATCH" | "DELETE", body: unknown): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
