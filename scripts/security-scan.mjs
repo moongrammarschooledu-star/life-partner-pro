@@ -24,7 +24,8 @@ add("No tracked .env files", trackedEnv.length === 0, trackedEnv.join(", "));
 // 2. Secret patterns in tracked files.
 const PATTERNS = [
   ["Private key block", /-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----/],
-  ["Live payment key", /\bsk_live_[A-Za-z0-9]{10,}/],
+  // Tests use obviously fake keys to exercise the redaction/validation code.
+  ["Live payment key", /\bsk_live_[A-Za-z0-9]{10,}/, { skipInTests: true }],
   ["Payment webhook secret", /\bwhsec_[A-Za-z0-9]{10,}/],
   ["Database URL with password", /postgres(?:ql)?:\/\/[^\s:@/]+:[^\s:@/]{3,}@(?!localhost|127\.0\.0\.1|HOST|host|user)/],
   ["Vercel blob token", /vercel_blob_rw_[A-Za-z0-9_]{10,}/],
@@ -32,16 +33,18 @@ const PATTERNS = [
   ["AWS access key", /\bAKIA[0-9A-Z]{16}\b/],
 ];
 const hits = [];
+const isTest = (f) => /\.test\.(ts|tsx)$/.test(f);
 for (const file of textFiles) {
   let content;
   try { content = readFileSync(file, "utf8"); } catch { continue; }
-  for (const [label, re] of PATTERNS) if (re.test(content)) hits.push(`${file} (${label})`);
+  for (const [label, re, opts] of PATTERNS) if (!(opts?.skipInTests && isTest(file)) && re.test(content)) hits.push(`${file} (${label})`);
 }
 add("No secrets in tracked files", hits.length === 0, hits.join("; "));
 
 // 3. No secret-looking NEXT_PUBLIC_ variables anywhere.
 const exposed = [];
 for (const file of textFiles) {
+  if (isTest(file)) continue; // fixtures deliberately contain a fake NEXT_PUBLIC_*_SECRET to test the validator
   if (!/\.(ts|tsx|js|mjs)$/.test(file) && !file.endsWith(".env.example")) continue;
   const content = readFileSync(file, "utf8");
   for (const m of content.matchAll(/NEXT_PUBLIC_[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PRIVATE|API_?KEY)[A-Z0-9_]*/g)) exposed.push(`${file}: ${m[0]}`);
