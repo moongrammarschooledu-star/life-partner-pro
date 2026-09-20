@@ -21,16 +21,21 @@ permissions:
 
 jobs:
   verify-deployment:
-    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    # Only the real production project (Vercel reports it as 'Production – lifepartnerpro').
+    # Preview / other linked projects are ignored: their deployment URLs sit behind
+    # Vercel Deployment Protection and cannot be probed anonymously.
+    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production – lifepartnerpro')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Configure a GitHub Environment named "production" with REQUIRED REVIEWERS
-    # to make production verification/approval need an authorised human.
-    environment: ${{ github.event.deployment.environment == 'Production' && 'production' || 'staging' }}
+    # To require a human approval before this job runs, add `environment: production`
+    # here and configure required reviewers on that GitHub Environment (Settings →
+    # Environments). It is left off by default because a job-level environment
+    # creates its own GitHub "deployment" records, which re-trigger this workflow.
     env:
       COMMIT_SHA: ${{ github.event.deployment.sha || github.sha }}
       CI_EVIDENCE_TOKEN: ${{ secrets.CI_EVIDENCE_TOKEN }}
-      TARGET_URL: ${{ inputs.url || github.event.deployment_status.target_url }}
+      # The stable public URL (the per-deployment URL is behind Vercel Deployment Protection).
+      TARGET_URL: ${{ inputs.url || secrets.EVIDENCE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
