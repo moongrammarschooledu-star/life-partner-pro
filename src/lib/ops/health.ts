@@ -105,7 +105,8 @@ export async function getHealthReport(opts: { detail: boolean }): Promise<Health
     for (const name of ["queue", "cron", "webhooks", "payments", "system_state"]) add(name, "unknown", "Database unavailable");
   }
 
-  add("email", env.EMAIL_PROVIDER_API_KEY ? "ok" : "not_configured", env.EMAIL_PROVIDER_API_KEY ? "Provider key present" : "Messages are logged, not delivered");
+  const emailOn = Boolean(env.SMTP_USER?.trim() && env.SMTP_PASS?.trim());
+  add("email", emailOn ? "ok" : "not_configured", emailOn ? "SMTP credentials present (delivery not probed)" : "Messages are logged, not delivered");
   add("sms", env.SMS_PROVIDER_API_KEY ? "ok" : "not_configured", env.SMS_PROVIDER_API_KEY ? "Provider key present" : "Messages are logged, not delivered");
   add("whatsapp", env.WHATSAPP_ENABLED === "true" ? (env.WHATSAPP_API_KEY ? "ok" : "degraded") : "not_configured", env.WHATSAPP_ENABLED === "true" ? undefined : "Disabled");
 

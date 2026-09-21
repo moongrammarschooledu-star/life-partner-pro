@@ -59,7 +59,7 @@ operational runbooks in [`docs/RUNBOOKS.md`](docs/RUNBOOKS.md).
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for photo/document/evidence uploads. |
 | `BACKUP_ENCRYPTION_KEY`, `BACKUP_BLOB_READ_WRITE_TOKEN` | Dedicated backup encryption key; optional separate backup storage. |
 | `CRON_SECRET`, `NOTIFICATION_WEBHOOK_SECRET`, `CI_EVIDENCE_TOKEN` | Authenticate the cron, notification webhook and pipeline-evidence endpoints. |
-| `EMAIL_PROVIDER_API_KEY`, `SMS_PROVIDER_API_KEY`, `WHATSAPP_*` | Optional message providers — until set, messages (including admin OTP codes) are only logged. |
+| `SMTP_USER` + `SMTP_PASS` (optional `SMTP_HOST`, `SMTP_PORT`, `EMAIL_FROM`), `SMS_PROVIDER_API_KEY`, `WHATSAPP_*` | Optional message providers — until set, messages (including admin OTP codes) are only logged. |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Optional card gateway (Manual/bank transfer needs none). |
 | `LOG_LEVEL`, `SLOW_QUERY_THRESHOLD_MS`, `CSP_MODE`, `ALERT_WEBHOOK_URL` | Monitoring/security tuning. |
 | `SEED_ADMIN_PASSWORD` | Optional — overrides the seeded super admin's password (local seed only). |
@@ -385,7 +385,7 @@ structured so they can be added without restructuring anything else:
   tests.
 - **Real Email/SMS/WhatsApp provider credentials (STEP 9)** — `src/lib/notifications/providers/*` define a small
   `NotificationProvider` interface per channel with a console-log default; each checks for its own env var
-  (`EMAIL_PROVIDER_API_KEY`, `SMS_PROVIDER_API_KEY`, `WHATSAPP_ENABLED`+`WHATSAPP_API_KEY`) and falls back cleanly
+  (`SMTP_USER`+`SMTP_PASS`, `SMS_PROVIDER_API_KEY`, `WHATSAPP_ENABLED`+`WHATSAPP_API_KEY`) and falls back cleanly
   when unset, which is the case in this environment. Swapping in a real provider means implementing that interface
   only — nothing else in the app should import a provider SDK directly.
 - **A real distributed job queue/worker for notifications** — no queue library (Bull/BullMQ/Agenda/etc.) exists in

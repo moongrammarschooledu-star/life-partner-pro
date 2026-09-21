@@ -15,7 +15,7 @@ const goodProd = {
   APP_URL: "https://example.com",
   CI_EVIDENCE_TOKEN: "ci",
   CSP_MODE: "enforce",
-  EMAIL_PROVIDER_API_KEY: "mail",
+  SMTP_USER: "mail@example.com", SMTP_PASS: "app-pass",
 };
 
 describe("resolveAppEnv", () => {

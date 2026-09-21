@@ -29,7 +29,7 @@ export function resolveAppEnv(env: Env): AppEnv {
 const KNOWN_KEYS = [
   "DATABASE_URL", "DATABASE_ENV_LABEL", "NEXTAUTH_SECRET", "AUTH_SECRET", "APP_ENV", "APP_URL",
   "BLOB_READ_WRITE_TOKEN", "STORAGE_ENV_LABEL", "BACKUP_BLOB_READ_WRITE_TOKEN", "BACKUP_ENCRYPTION_KEY",
-  "EMAIL_PROVIDER_API_KEY", "SMS_PROVIDER_API_KEY", "WHATSAPP_ENABLED", "WHATSAPP_API_KEY",
+  "SMTP_USER", "SMTP_PASS", "EMAIL_FROM", "SMS_PROVIDER_API_KEY", "WHATSAPP_ENABLED", "WHATSAPP_API_KEY",
   "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "PAYMENT_ENVIRONMENT",
   "CRON_SECRET", "NOTIFICATION_WEBHOOK_SECRET", "CI_EVIDENCE_TOKEN", "ALERT_WEBHOOK_URL",
   "CSP_MODE", "LOG_LEVEL", "SLOW_QUERY_THRESHOLD_MS",
@@ -104,7 +104,7 @@ export function validateConfig(env: Env): { appEnv: AppEnv; issues: ConfigIssue[
   if (prod && (env.CSP_MODE ?? "report-only") !== "enforce") add("WARNING", "CSP_MODE", "Content-Security-Policy is report-only, not enforced.");
 
   // --- Communications ----------------------------------------------------------
-  if (!env.EMAIL_PROVIDER_API_KEY?.trim()) add(prod ? "WARNING" : "INFO", "EMAIL_PROVIDER_API_KEY", "No email provider configured — emails are not actually delivered.");
+  if (!env.SMTP_USER?.trim() || !env.SMTP_PASS?.trim()) add(prod ? "WARNING" : "INFO", "SMTP_USER", "No email provider configured (SMTP_USER / SMTP_PASS) — emails are not actually delivered.");
   if (!env.SMS_PROVIDER_API_KEY?.trim()) add("INFO", "SMS_PROVIDER_API_KEY", "No SMS provider configured — SMS is not delivered.");
   if (env.WHATSAPP_ENABLED === "true" && !env.WHATSAPP_API_KEY?.trim()) add("WARNING", "WHATSAPP_API_KEY", "WhatsApp is enabled but no API key is set.");
 
