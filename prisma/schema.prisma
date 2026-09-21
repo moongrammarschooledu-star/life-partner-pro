@@ -688,6 +688,23 @@ enum AuditAction {
   JOB_INTERVENTION
   ALERT_STATUS_CHANGED
   INTEGRITY_CHECK_RUN
+  AI_PROFILE_SUMMARY_GENERATED
+  AI_MATCH_EXPLANATION_GENERATED
+  AI_COMPARISON_GENERATED
+  AI_PROPOSAL_ASSISTANCE_USED
+  AI_MESSAGE_GENERATED
+  AI_COPILOT_USED
+  AI_DATA_ACCESS_DENIED
+  AI_PROVIDER_ERROR
+  AI_SAFETY_BLOCK
+  AI_CONFIGURATION_CHANGED
+  AI_KILL_SWITCH_USED
+  AI_ROLLOUT_CHANGED
+  AI_REVIEW_SUGGESTED
+  AI_OUTPUT_SAFETY_BLOCKED
+  AI_FOLLOWUP_DRAFTED
+  AI_REPORT_SUMMARY_GENERATED
+  AI_DATA_QUALITY_CHECKED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -867,6 +884,8 @@ enum ConsentCategory {
   AI_ASSISTED_MATCHING
   DATA_RETENTION
   TERMS_AND_PRIVACY_POLICY
+  AI_PROFILE_ASSISTANCE
+  AI_COMMUNICATION_ASSISTANCE
 }
 
 enum ConsentGrantStatus {
@@ -3801,4 +3820,203 @@ model CiEvidence {
   createdAt   DateTime @default(now())
 
   @@index([kind, createdAt])
+}
+
+// =====================================================================
+// STEP 16 — AI-assisted matchmaking & admin assistant (additive only).
+// AI recommends and explains; humans decide. None of these tables feeds the
+// deterministic matcher, payments, verification or any profile field.
+// Rows carry ids and metadata only — no contact details, no free-text PII.
+// =====================================================================
+
+enum AiProviderKind {
+  RULES // built-in deterministic provider — no data leaves the system
+  ANTHROPIC // external LLM adapter — off unless key + explicit config + per-profile consent
+  DISABLED
+}
+
+enum AiFeature {
+  PROFILE_SUMMARY
+  MATCH_EXPLANATION
+  COMPARE
+  PROPOSAL_ASSISTANT
+  COMMUNICATION_ASSISTANT
+  FOLLOWUP_ASSISTANT
+  COPILOT
+  REPORT_ASSISTANT
+  DATA_QUALITY
+  PROFILE_IMPROVEMENT
+}
+
+enum AiRequestStatus {
+  SUCCESS
+  FAILED
+  BLOCKED_SAFETY
+  CONSENT_REQUIRED
+  DENIED
+  RATE_LIMITED
+  QUOTA_EXCEEDED
+  DISABLED
+  FALLBACK
+}
+
+enum AiRolloutPhase {
+  DISABLED
+  INTERNAL_TEST
+  STAFF_PILOT
+  LIMITED_PRODUCTION
+  PRODUCTION
+}
+
+enum AiStorageMode {
+  DO_NOT_STORE
+  SUMMARY_ONLY
+  FULL_RESULT
+  LIMITED_PERIOD
+}
+
+// Singleton configuration (id = 1). Provider secrets are NEVER stored here —
+// the external adapter reads its key from the environment only.
+model AiConfig {
+  id Int @id @default(1)
+
+  phase             AiRolloutPhase @default(DISABLED)
+  killSwitchActive  Boolean        @default(false)
+  killSwitchReason  String?
+  killSwitchAt      DateTime?
+
+  provider                AiProviderKind @default(RULES)
+  externalProviderAllowed Boolean        @default(false)
+  model                   String         @default("lpp-rules-v1")
+  temperature             Float          @default(0.2)
+  maxOutputTokens         Int            @default(1200)
+  timeoutMs               Int            @default(15000)
+  retryCount              Int            @default(1)
+
+  dailyRequestCap   Int @default(500)
+  monthlyRequestCap Int @default(10000)
+  rateLimits        Json? // { "<feature>": { "limit": n, "windowSec": n }, roles: { "STAFF": { ... } } }
+
+  storageModes     Json? // { "<feature>": AiStorageMode }
+  retentionDays    Int   @default(30)
+  cacheTtlMinutes  Int   @default(60)
+
+  pilotAdminIds        String[] // STAFF_PILOT / LIMITED_PRODUCTION allowlist
+  priceInputPerMTokUsd  Float? // only used to ESTIMATE cost when the provider reports token usage
+  priceOutputPerMTokUsd Float?
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+// Activation history for the code-defined prompt templates (spec §65/§66).
+// Templates live in src/lib/ai/prompts; this records which version was
+// activated, when, by whom, and the passing test run that allowed it.
+model AiPromptVersion {
+  id           String   @id @default(cuid())
+  promptId     String // e.g. LPP-AI-PROFILE-SUMMARY
+  version      String // e.g. v1.0
+  feature      AiFeature
+  checksum     String
+  active       Boolean  @default(false)
+  testRunId    String?
+  activatedById String?
+  createdAt    DateTime @default(now())
+
+  @@unique([promptId, version])
+  @@index([feature, active])
+}
+
+model AiRequest {
+  id                    String          @id @default(cuid())
+  actorAdminId          String
+  actorRole             String
+  feature               AiFeature
+  status                AiRequestStatus
+  provider              AiProviderKind
+  model                 String
+  promptVersion         String
+  aiVersion             String
+  appVersion            String?
+  matchAlgorithmVersion String?
+  latencyMs             Int?
+  inputTokens           Int?
+  outputTokens          Int?
+  estimatedCostUsd      Float?
+  costIsEstimate        Boolean         @default(false)
+  correlationId         String?
+  consentOutcome        String?
+  errorCode             String?
+  fromCache             Boolean         @default(false)
+  profileIds            String[]
+  createdAt             DateTime        @default(now())
+
+  result AiResult?
+
+  @@index([createdAt])
+  @@index([actorAdminId, feature, createdAt])
+  @@index([status, createdAt])
+  @@index([profileIds], type: Gin)
+}
+
+model AiResult {
+  id          String        @id @default(cuid())
+  request     AiRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId   String        @unique
+  feature     AiFeature
+  profileIds  String[]
+  structured  Json?
+  storageMode AiStorageMode
+  expiresAt   DateTime?
+  cacheKey    String?
+  createdAt   DateTime      @default(now())
+
+  @@index([expiresAt])
+  @@index([cacheKey])
+  @@index([profileIds], type: Gin)
+}
+
+// Metadata only: which rule fired and what was done. The offending text is
+// never stored.
+model AiSafetyEvent {
+  id           String    @id @default(cuid())
+  requestId    String?
+  actorAdminId String?
+  feature      AiFeature?
+  rule         String
+  action       String // BLOCKED | REWRITTEN | DENIED
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([rule, createdAt])
+}
+
+model AiConfigHistory {
+  id           String   @id @default(cuid())
+  actorAdminId String?
+  kind         String // CONFIG | ROLLOUT | KILL_SWITCH | PROMPT | MODEL
+  before       Json?
+  after        Json?
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  @@index([kind, createdAt])
+}
+
+model AiTestRun {
+  id            String   @id @default(cuid())
+  suite         String // safety | privacy | security | reliability | analysis | all
+  testVersion   String
+  provider      AiProviderKind
+  model         String
+  promptVersions Json?
+  passed        Int
+  failed        Int
+  status        String // PASS | FAIL
+  failures      Json?
+  triggeredById String?
+  commitSha     String?
+  createdAt     DateTime @default(now())
+
+  @@index([suite, createdAt])
 }

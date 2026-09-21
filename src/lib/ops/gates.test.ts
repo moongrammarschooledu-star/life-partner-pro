@@ -120,3 +120,36 @@ describe("evaluateReadiness", () => {
     expect(stagingIds).not.toContain("release_approved");
   });
 });
+
+describe("AI Assistant gates (STEP 16)", () => {
+  const aiOff = { phase: "DISABLED", killSwitchActive: false, provider: "RULES", externalActive: false, testsValid: false, killSwitchExercised: false, promptsApproved: false, externalEverSucceeded: false };
+  const idsFor = (ai: ReadinessFacts["ai"]) => evaluateReadiness({ ...green, ai }).gates.filter((g) => g.category === "AI Assistant" && g.required && g.status !== "PASS").map((g) => g.id);
+
+  it("adds no blocker while AI is disabled or its tables do not exist yet", () => {
+    expect(idsFor(undefined)).toEqual([]);
+    expect(idsFor(aiOff)).toEqual([]);
+    expect(evaluateReadiness({ ...green, ai: aiOff }).verdict).toBe("READY");
+  });
+
+  it("blocks when AI is switched on without a current passing test run, kill-switch test or approved prompts", () => {
+    expect(idsFor({ ...aiOff, phase: "STAFF_PILOT" }).sort()).toEqual(["ai_kill_switch", "ai_prompts", "ai_state"]);
+    expect(idsFor({ ...aiOff, phase: "STAFF_PILOT", testsValid: true, killSwitchExercised: true, promptsApproved: true })).toEqual([]);
+  });
+
+  it("the kill switch being ON counts as safe", () => {
+    expect(idsFor({ ...aiOff, phase: "PRODUCTION", killSwitchActive: true })).toEqual([]);
+  });
+
+  it("blocks an active external provider that has no passing test run", () => {
+    expect(idsFor({ ...aiOff, phase: "DISABLED", provider: "ANTHROPIC", externalActive: true, testsValid: false })).toContain("ai_external");
+    expect(idsFor({ ...aiOff, phase: "DISABLED", provider: "ANTHROPIC", externalActive: true, testsValid: true })).not.toContain("ai_external");
+  });
+
+  it("always discloses the advisory limits (unverified LLM, fairness, no document analysis) without inventing a score", () => {
+    const r = evaluateReadiness({ ...green, ai: aiOff });
+    const warn = r.gates.filter((g) => g.category === "AI Assistant" && g.status === "WARN").map((g) => g.id);
+    expect(warn).toEqual(expect.arrayContaining(["ai_llm_unverified", "ai_fairness", "ai_document"]));
+    expect(r.scorecard.find((s) => s.category === "AI Assistant")!.status).toBe("PASS WITH WARNINGS");
+    expect(JSON.stringify(r.scorecard)).not.toMatch(/"score"/);
+  });
+});

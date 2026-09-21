@@ -4,6 +4,8 @@ import type { AlertSeverity, CaseCategory, CasePriority } from "@prisma/client";
 // used when an alert is escalated into an incident (spec §39/§40).
 
 export function incidentCategoryFor(alertCategory: string): CaseCategory {
+  if (/^AI_UNAUTHORIZED/.test(alertCategory)) return "SECURITY_BREACH";
+  if (/^AI_UNSAFE/.test(alertCategory)) return "DATA_INTEGRITY_INCIDENT";
   if (/^DATABASE/.test(alertCategory) || alertCategory === "DB_CAPACITY") return "DATABASE_FAILURE";
   if (/STORAGE|FILE_CAPACITY/.test(alertCategory)) return "STORAGE_FAILURE";
   if (/BACKUP|RESTORE/.test(alertCategory)) return "BACKUP_FAILURE";

@@ -194,10 +194,15 @@ describe("upload validation", () => {
 });
 
 describe("feature flag registry", () => {
-  it("only registers flags with a real consumer and defaults them to enabled", () => {
+  it("only registers flags with a real consumer; core flags default to enabled and every AI flag defaults to OFF", () => {
     expect(Object.keys(FEATURE_FLAG_DEFAULTS)).toContain("matching.enabled");
     expect(Object.keys(FEATURE_FLAG_DEFAULTS)).not.toContain("ai_matching.enabled");
-    expect(Object.values(FEATURE_FLAG_DEFAULTS).every(Boolean)).toBe(true);
+    for (const [key, value] of Object.entries(FEATURE_FLAG_DEFAULTS)) {
+      expect(value, key).toBe(!key.startsWith("ai."));
+    }
+    expect(Object.keys(FEATURE_FLAG_DEFAULTS).filter((k) => k.startsWith("ai.")).length).toBeGreaterThanOrEqual(9);
+    // document analysis (spec §50) is not implemented, so it is deliberately not registered
+    expect(Object.keys(FEATURE_FLAG_DEFAULTS)).not.toContain("ai.document_assistant.enabled");
   });
   it("treats payments.enabled as externally managed (not editable here)", () => {
     expect(isKnownFeatureFlag("payments.enabled")).toBe(false);

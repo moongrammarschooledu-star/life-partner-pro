@@ -94,3 +94,50 @@ describe("API route authorization coverage", () => {
     expect(unprotected).toEqual([]);
   });
 });
+
+// STEP 16 §73/§74 — AI routes. Every AI endpoint authenticates, and no route
+// talks to a provider directly: feature routes go through the AI pipeline
+// (which enforces permission, consent, safety and audit), admin routes need an
+// explicit ai:* permission.
+describe("AI API routes", () => {
+  const aiRoutes = routes.filter((r) => r.path.startsWith("/api/admin/ai/"));
+
+  it("exist", () => {
+    expect(aiRoutes.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it("every AI route calls requireAdmin and is wrapped in request metrics", () => {
+    const bad = aiRoutes.filter((r) => !/requireAdmin\(/.test(r.source) || !/withRequestMetrics\(/.test(r.source)).map((r) => r.path);
+    expect(bad).toEqual([]);
+  });
+
+  it("no AI route imports a provider, the prompt templates or the raw pipeline internals", () => {
+    const forbidden = /@\/lib\/ai\/providers|@\/lib\/ai\/prompts|@\/lib\/ai\/load"|@\/lib\/ai\/consent|@\/lib\/ai\/safety"/;
+    const bad = aiRoutes.filter((r) => forbidden.test(r.source)).map((r) => r.path);
+    expect(bad).toEqual([]);
+  });
+
+  it("feature routes use the pipeline; admin/ops routes require an explicit ai:* permission", () => {
+    const featureRoutes = new Set(["profile-summary", "data-quality", "match-explanation", "compare", "proposal-assistance", "communication-draft", "followup-draft", "report-summary", "copilot"]);
+    for (const r of aiRoutes) {
+      const name = r.path.split("/").pop()!;
+      if (featureRoutes.has(name)) expect(r.source, r.path).toMatch(/@\/lib\/ai\/(features|copilot\/copilot)"/);
+      else expect(r.source, r.path).toMatch(/requireAdmin\("ai:[a-z:]+"\)/);
+    }
+  });
+
+  it("state-changing admin routes require a reason and password re-confirmation", () => {
+    for (const name of ["config", "rollout", "prompts"]) {
+      const r = aiRoutes.find((x) => x.path.endsWith("/" + name))!;
+      expect(r.source, name).toMatch(/requireReason\(/);
+      expect(r.source, name).toMatch(/requireReauth\(/);
+    }
+    const kill = aiRoutes.find((x) => x.path.endsWith("/killswitch"))!;
+    expect(kill.source).toMatch(/requireReason\(/);
+    expect(kill.source).toMatch(/requireReauth\(/); // required when re-enabling
+  });
+
+  it("no AI route reads or returns provider secrets", () => {
+    for (const r of aiRoutes) expect(r.source, r.path).not.toMatch(/process\.env\.ANTHROPIC|API_KEY/);
+  });
+});

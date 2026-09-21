@@ -133,7 +133,18 @@ export type Permission =
   | "alerts:view"
   | "alerts:manage"
   | "readiness:view"
-  | "releases:manage";
+  | "releases:manage"
+  | "ai:view"
+  | "ai:use"
+  | "ai:copilot"
+  | "ai:communication:draft"
+  | "ai:report:use"
+  | "ai:config:manage"
+  | "ai:rollout:manage"
+  | "ai:killswitch"
+  | "ai:activity:view"
+  | "ai:usage:view"
+  | "ai:test:run";
 
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
@@ -264,6 +275,17 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "alerts:manage",
     "readiness:view",
     "releases:manage",
+    "ai:view",
+    "ai:use",
+    "ai:copilot",
+    "ai:communication:draft",
+    "ai:report:use",
+    "ai:config:manage",
+    "ai:rollout:manage",
+    "ai:killswitch",
+    "ai:activity:view",
+    "ai:usage:view",
+    "ai:test:run",
     "sensitive:finance:view",
     "sensitive:finance:export",
   ],
@@ -381,6 +403,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "alerts:view",
     "alerts:manage",
     "readiness:view",
+    "ai:view",
+    "ai:use",
+    "ai:copilot",
+    "ai:communication:draft",
+    "ai:report:use",
+    // ADMIN deliberately lacks ai:config/rollout/killswitch/activity/usage/test — SUPER_ADMIN only (STEP 16).
     // ADMIN deliberately lacks system:config/flags/maintenance/emergency/backup:trigger/restore/jobs:manage/releases —
     // SUPER_ADMIN only (STEP 15). ADMIN can observe and work alerts, nothing more.
     // ADMIN deliberately lacks finance:rollout:manage/enable/disable and
@@ -421,6 +449,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "finance:payments:view", // row-gated: only profiles they're assigned to
     "finance:invoices:view", // row-gated the same way
     "finance:refunds:request", // never finance:refunds:approve — spec §23
+    "ai:use", // row-gated: only profiles assigned to them — STEP 16 (src/lib/ai/authorize.ts)
   ],
   VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view"],
 };

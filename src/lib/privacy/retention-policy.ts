@@ -77,6 +77,8 @@ async function executeAccountDeletion(requestId: string) {
       }),
     ]);
 
+    // STEP 16 §53 — AI-derived data about this member is erased with the account (never blocks deletion).
+    await (await import("@/lib/ai/retention")).safeEraseAiDataForProfile(request.profileId);
     await writeAudit({ action: anonymized ? "DATA_ANONYMIZED" : "DATA_DELETED", targetProfileId: request.profileId, meta: { requestId } });
     await logOutcome("ACCOUNT_DATA", "AccountDeletionRequest", requestId, request.mode ?? "DELETE", "APPLIED");
   } catch (error) {
@@ -173,6 +175,7 @@ export async function runDueRetentionActions() {
   await sweepAuditLogs().catch(() => {});
   await sweepFinancialWebhookEvents().catch(() => {});
   await expireDataExports().catch(() => {});
+  await (await import("@/lib/ai/retention")).safeSweepAiData(); // STEP 16 §67 — expired AI results
   await flagUnautomatedCategories().catch(() => {});
   return { deletionsProcessed: dueDeletions.length };
 }

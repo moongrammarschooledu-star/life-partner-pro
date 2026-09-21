@@ -17,6 +17,7 @@ export type GateStatus = "PASS" | "WARN" | "BLOCKED";
 export const CATEGORIES = [
   "Application", "Database", "Security", "Privacy", "Authentication", "Authorization", "Matching", "Proposals", "Verification",
   "Communication", "Support", "Payments", "Backup", "Disaster Recovery", "Monitoring", "Deployment", "Performance", "Data Integrity",
+  "AI Assistant", // STEP 16
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
@@ -61,6 +62,17 @@ export interface ReadinessFacts {
   storage: { tokenConfigured: boolean };
   performance: { slowQueryRows24h: number };
   drTargetsConfigured: boolean;
+  // STEP 16 — optional: undefined means the AI tables are not available yet, which is treated as "AI not in use".
+  ai?: {
+    phase: string;
+    killSwitchActive: boolean;
+    provider: string;
+    externalActive: boolean;
+    testsValid: boolean;
+    killSwitchExercised: boolean;
+    promptsApproved: boolean;
+    externalEverSucceeded: boolean;
+  };
 }
 
 export interface Scorecard {
@@ -208,6 +220,19 @@ export function evaluateReadiness(f: ReadinessFacts): ReadinessResult {
   add(optionalEvidenceGate(f, "perf_load", "LOAD_TEST", "Performance", "Load test", "No load test recorded. No capacity claim is made."));
 
   add({ id: "integrity", category: "Data Integrity", title: "Data-integrity checks clean of high-severity findings", required: true, status: f.integrity.status != null && f.integrity.highFindings === 0 && f.integrity.ageDays != null && f.integrity.ageDays <= 2 ? "PASS" : "BLOCKED", detail: f.integrity.status == null ? "Integrity checks have never run." : `Last run ${f.integrity.status}, ${f.integrity.highFindings} high finding(s), ${Math.floor(f.integrity.ageDays ?? 0)} day(s) ago.` });
+
+  // ---- AI Assistant (STEP 16 §75) ----------------------------------------------------------------------
+  // AI is DISABLED by default, and that adds no blocker. Once AI is switched on, it must have a current
+  // passing test run, an exercised kill switch and approved prompts. No numeric AI quality score is produced.
+  const ai = f.ai;
+  const aiOn = !!ai && ai.phase !== "DISABLED" && !ai.killSwitchActive;
+  add({ id: "ai_state", category: "AI Assistant", title: "AI assistance is in a safe state", required: true, status: !ai || !aiOn || ai.testsValid ? "PASS" : "BLOCKED", detail: !ai ? "AI is not in use." : ai.killSwitchActive ? "AI is switched off by the kill switch (safe)." : ai.phase === "DISABLED" ? "AI is disabled (safe default)." : ai.testsValid ? `AI is at phase ${ai.phase} with a current passing test run.` : `AI is at phase ${ai.phase} without a current passing AI test run.`, remediation: "Admin → AI Assistant → AI Settings → Run tests, or return the phase to DISABLED." });
+  add({ id: "ai_kill_switch", category: "AI Assistant", title: "AI kill switch tested", required: aiOn, status: !aiOn || ai?.killSwitchExercised ? "PASS" : "BLOCKED", detail: !aiOn ? "Not required while AI is disabled." : ai?.killSwitchExercised ? "The kill switch has been exercised and audited." : "The AI kill switch has never been used/tested.", remediation: "Use and then re-enable the kill switch once (AI Settings)." });
+  add({ id: "ai_prompts", category: "AI Assistant", title: "AI prompt versions approved against a passing test run", required: aiOn, status: !aiOn || ai?.promptsApproved ? "PASS" : "BLOCKED", detail: !aiOn ? "Not required while AI is disabled." : ai?.promptsApproved ? "Current prompt checksums are approved." : "The current prompt versions have not been approved.", remediation: "AI Settings → Approve current prompts (needs a passing test run)." });
+  add({ id: "ai_external", category: "AI Assistant", title: "External AI provider is off or gated by tests + explicit member consent", required: true, status: !ai || !ai.externalActive || ai.testsValid ? "PASS" : "BLOCKED", detail: !ai || !ai.externalActive ? "No external AI provider is active — no member data leaves the system." : ai.testsValid ? "External provider active: only minimised pseudonymous data, and only for profiles with explicit AI consent." : "External provider is active without a current passing test run." });
+  add({ id: "ai_llm_unverified", category: "AI Assistant", title: "External LLM adapter exercised against a live provider", required: false, status: ai?.externalEverSucceeded ? "PASS" : "WARN", detail: ai?.externalEverSucceeded ? "At least one live external request succeeded." : "The external adapter is contract-tested with mocks only; it has not been exercised against a live provider (no key configured)." });
+  add({ id: "ai_fairness", category: "AI Assistant", title: "Fairness review", required: false, status: "WARN", detail: "Fairness checks are rule/probe based on synthetic profiles, not a statistical bias audit. Known limitations are listed in Admin → AI Assistant → AI Safety." });
+  add({ id: "ai_document", category: "AI Assistant", title: "AI document analysis", required: false, status: "WARN", detail: "Not implemented (spec §50); no AI processing of documents exists or can be enabled." });
 
   // ---- Scorecard + verdict -------------------------------------------------------------------------------
   const scorecard: Scorecard[] = CATEGORIES.map((category) => {

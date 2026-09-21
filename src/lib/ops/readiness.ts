@@ -155,7 +155,36 @@ export async function gatherReadinessFacts(): Promise<ReadinessFacts> {
     storage: { tokenConfigured: Boolean(env.BLOB_READ_WRITE_TOKEN?.trim()) },
     performance: { slowQueryRows24h: slow },
     drTargetsConfigured: control.rpoMinutes > 0 && control.rtoMinutes > 0,
+    ai: await gatherAiFacts(),
   };
+}
+
+// STEP 16 — guarded: if the AI tables are missing or a query fails, AI is treated as not in use.
+async function gatherAiFacts(): Promise<ReadinessFacts["ai"]> {
+  try {
+    const { getAiConfig } = await import("@/lib/ai/config");
+    const { latestPassingRun, listPrompts } = await import("@/lib/ai/admin");
+    const { externalKeyPresent } = await import("@/lib/ai/providers");
+    const cfg = await getAiConfig();
+    const [run, killUsed, prompts, extOk] = await Promise.all([
+      latestPassingRun(),
+      prisma.aiConfigHistory.count({ where: { kind: "KILL_SWITCH" } }),
+      listPrompts(),
+      prisma.aiRequest.count({ where: { provider: "ANTHROPIC", status: "SUCCESS" } }),
+    ]);
+    return {
+      phase: cfg.phase,
+      killSwitchActive: cfg.killSwitchActive,
+      provider: cfg.provider,
+      externalActive: cfg.provider === "ANTHROPIC" && cfg.externalProviderAllowed && externalKeyPresent(),
+      testsValid: Boolean(run),
+      killSwitchExercised: killUsed > 0,
+      promptsApproved: prompts.every((p) => p.approved),
+      externalEverSucceeded: extOk > 0,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export async function getReadinessReport() {

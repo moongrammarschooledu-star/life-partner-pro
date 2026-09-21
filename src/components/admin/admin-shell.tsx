@@ -42,6 +42,7 @@ import {
   Siren,
   ClipboardCheck,
   BookOpen,
+  Bot,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -76,6 +77,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/alerts", label: "Alerts & Incidents", icon: Siren, permission: "alerts:view" },
   { href: "/admin/production-readiness", label: "Production Readiness", icon: ClipboardCheck, permission: "readiness:view" },
   { href: "/admin/runbooks", label: "Runbooks", icon: BookOpen, permission: "system:view" },
+  { href: "/admin/ai", label: "AI Assistant", icon: Bot, permission: "ai:view" },
   { href: "/admin/support", label: "Support", icon: Inbox },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, permission: "audit:view" },
   { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:edit" },

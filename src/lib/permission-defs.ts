@@ -142,6 +142,17 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "alerts:manage": "Acknowledge, assign, resolve alerts and open incidents",
   "readiness:view": "View Production Readiness and release records",
   "releases:manage": "Approve releases and record rollbacks",
+  "ai:view": "View the AI Matchmaking Assistant and its overview",
+  "ai:use": "Use AI analysis (profile summary, match explanation, comparison, data quality) on profiles you can access",
+  "ai:copilot": "Use the Admin Copilot (read-only questions within your own permissions)",
+  "ai:communication:draft": "Ask the AI to DRAFT messages (sending stays a separate, confirmed action)",
+  "ai:report:use": "Ask the AI to summarise reports you are already allowed to see",
+  "ai:config:manage": "Change AI settings (provider, limits, privacy, storage, prompts)",
+  "ai:rollout:manage": "Change the AI rollout phase",
+  "ai:killswitch": "Use the AI kill switch",
+  "ai:activity:view": "View the AI activity log (metadata only)",
+  "ai:usage:view": "View AI usage and estimated cost",
+  "ai:test:run": "Run the AI safety/privacy/security/regression test suites",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

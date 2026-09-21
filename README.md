@@ -59,6 +59,7 @@ operational runbooks in [`docs/RUNBOOKS.md`](docs/RUNBOOKS.md).
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for photo/document/evidence uploads. |
 | `BACKUP_ENCRYPTION_KEY`, `BACKUP_BLOB_READ_WRITE_TOKEN` | Dedicated backup encryption key; optional separate backup storage. |
 | `CRON_SECRET`, `NOTIFICATION_WEBHOOK_SECRET`, `CI_EVIDENCE_TOKEN` | Authenticate the cron, notification webhook and pipeline-evidence endpoints. |
+| `ANTHROPIC_API_KEY` | Optional — external AI provider key (STEP 16). Never stored in the database; the built-in AI analysis works without it and sends no data anywhere. |
 | `SMTP_USER` + `SMTP_PASS` (optional `SMTP_HOST`, `SMTP_PORT`, `EMAIL_FROM`), `SMS_PROVIDER_API_KEY`, `WHATSAPP_*` | Optional message providers — until set, messages (including admin OTP codes) are only logged. |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Optional card gateway (Manual/bank transfer needs none). |
 | `LOG_LEVEL`, `SLOW_QUERY_THRESHOLD_MS`, `CSP_MODE`, `ALERT_WEBHOOK_URL` | Monitoring/security tuning. |

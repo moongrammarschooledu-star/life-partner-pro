@@ -25,6 +25,17 @@ export interface MetricsSnapshot {
   dbSizeMb: number | null;
   fileStorageMb: number | null;
   configCritical: boolean;
+  // STEP 16 — optional so existing callers/tests are unaffected; absent when AI is unused.
+  ai?: AiMetrics;
+}
+
+export interface AiMetrics {
+  requestsLastHour: number;
+  failuresLastHour: number; // FAILED + provider fallbacks
+  safetyBlocksLast24h: number;
+  deniedAccessLast24h: number;
+  estimatedCostLast24hUsd: number;
+  estimatedCostDailyAvg7dUsd: number;
 }
 
 export interface AlertThresholds {
@@ -58,6 +69,7 @@ export const RULE_CATEGORIES = [
   "FAILED_LOGIN_SPIKE", "PAYMENT_FAILURE_SPIKE", "WEBHOOK_FAILURE_SPIKE", "RECONCILIATION_MISMATCH", "QUEUE_BACKLOG",
   "DEAD_LETTER_JOBS", "CRON_FAILURES", "BACKUP_FAILURE", "BACKUP_STALE", "RESTORE_TEST_FAILED", "RESTORE_TEST_STALE",
   "DB_CAPACITY", "FILE_CAPACITY",
+  "AI_FAILURE_RATE", "AI_UNSAFE_OUTPUT", "AI_UNAUTHORIZED_ACCESS", "AI_COST_SPIKE",
 ] as const;
 
 export function evaluateAlertRules(m: MetricsSnapshot, t: AlertThresholds): AlertCandidate[] {
@@ -95,6 +107,23 @@ export function evaluateAlertRules(m: MetricsSnapshot, t: AlertThresholds): Aler
   if (dbPct != null && dbPct >= t.capacityWarnPercent) add({ category: "DB_CAPACITY", severity: dbPct >= 95 ? "CRITICAL" : "HIGH", service: "database", title: "Database storage nearing its limit", detail: `${Math.round(dbPct)}% of ${t.dbStorageLimitMb} MB`, dedupKey: "DB_CAPACITY" });
   const filePct = pct(m.fileStorageMb, t.fileStorageLimitMb);
   if (filePct != null && filePct >= t.capacityWarnPercent) add({ category: "FILE_CAPACITY", severity: filePct >= 95 ? "CRITICAL" : "HIGH", service: "storage", title: "File storage nearing its limit", detail: `${Math.round(filePct)}% of ${t.fileStorageLimitMb} MB`, dedupKey: "FILE_CAPACITY" });
+
+  // ---- STEP 16 — AI Assistant (spec §60/§61) ---------------------------------
+  const ai = m.ai;
+  if (ai) {
+    if (ai.requestsLastHour >= 5 && ai.failuresLastHour / ai.requestsLastHour >= 0.5) {
+      add({ category: "AI_FAILURE_RATE", severity: "HIGH", service: "ai", title: "AI provider / integration failing (AI provider outage or integration failure)", detail: `${ai.failuresLastHour} of ${ai.requestsLastHour} AI requests failed in the last hour. Deterministic matching is unaffected.`, dedupKey: "AI_FAILURE_RATE" });
+    }
+    if (ai.safetyBlocksLast24h >= 5) {
+      add({ category: "AI_UNSAFE_OUTPUT", severity: "WARNING", service: "ai", title: "AI unsafe-output blocks are elevated (possible prompt injection or data leakage attempt)", detail: `${ai.safetyBlocksLast24h} outputs were blocked by the safety filter in 24 h.`, dedupKey: "AI_UNSAFE_OUTPUT" });
+    }
+    if (ai.deniedAccessLast24h >= 10) {
+      add({ category: "AI_UNAUTHORIZED_ACCESS", severity: "HIGH", service: "ai", title: "Repeated AI access denials (possible unauthorized AI access)", detail: `${ai.deniedAccessLast24h} AI requests were denied in 24 h.`, dedupKey: "AI_UNAUTHORIZED_ACCESS" });
+    }
+    if (ai.estimatedCostDailyAvg7dUsd > 0 && ai.estimatedCostLast24hUsd >= 1 && ai.estimatedCostLast24hUsd >= ai.estimatedCostDailyAvg7dUsd * 3) {
+      add({ category: "AI_COST_SPIKE", severity: "WARNING", service: "ai", title: "AI cost spike", detail: `Estimated $${ai.estimatedCostLast24hUsd.toFixed(2)} in 24 h versus a 7-day daily average of $${ai.estimatedCostDailyAvg7dUsd.toFixed(2)} (estimate, not a bill).`, dedupKey: "AI_COST_SPIKE" });
+    }
+  }
 
   return out;
 }

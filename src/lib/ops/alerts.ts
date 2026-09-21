@@ -154,6 +154,7 @@ export async function gatherMetrics(): Promise<MetricsSnapshot> {
   ]);
 
   const mismatches = latestRecon ? await prisma.reconciliationItem.count({ where: { runId: latestRecon.id, status: { not: "MATCHED" } } }) : 0;
+  const ai = await gatherAiMetrics();
 
   return {
     ...empty,
@@ -174,7 +175,37 @@ export async function gatherMetrics(): Promise<MetricsSnapshot> {
     lastRestoreTestAgeDays: lastRestore ? (Date.now() - lastRestore.startedAt.getTime()) / 86_400_000 : null,
     dbSizeMb: Number(dbSize[0]?.bytes ?? 0) / 1_048_576,
     fileStorageMb: (fileBytes._sum.sizeBytes ?? 0) / 1_048_576,
+    ai,
   };
+}
+
+// STEP 16 — AI usage facts for the alert rules. Guarded: if the AI tables do not
+// exist yet (migration not applied) or the query fails, AI alerting is simply
+// skipped and the rest of monitoring is unaffected.
+async function gatherAiMetrics(): Promise<MetricsSnapshot["ai"]> {
+  try {
+    const hourAgo = new Date(Date.now() - 3_600_000);
+    const dayAgo = new Date(Date.now() - 24 * 3_600_000);
+    const weekAgo = new Date(Date.now() - 7 * 24 * 3_600_000);
+    const [requests, failures, blocks, denied, cost24, cost7] = await Promise.all([
+      prisma.aiRequest.count({ where: { createdAt: { gte: hourAgo }, status: { in: ["SUCCESS", "FALLBACK", "FAILED"] } } }),
+      prisma.aiRequest.count({ where: { createdAt: { gte: hourAgo }, status: { in: ["FAILED", "FALLBACK"] } } }),
+      prisma.aiRequest.count({ where: { createdAt: { gte: dayAgo }, status: "BLOCKED_SAFETY" } }),
+      prisma.aiRequest.count({ where: { createdAt: { gte: dayAgo }, status: "DENIED" } }),
+      prisma.aiRequest.aggregate({ where: { createdAt: { gte: dayAgo } }, _sum: { estimatedCostUsd: true } }),
+      prisma.aiRequest.aggregate({ where: { createdAt: { gte: weekAgo, lt: dayAgo } }, _sum: { estimatedCostUsd: true } }),
+    ]);
+    return {
+      requestsLastHour: requests,
+      failuresLastHour: failures,
+      safetyBlocksLast24h: blocks,
+      deniedAccessLast24h: denied,
+      estimatedCostLast24hUsd: cost24._sum.estimatedCostUsd ?? 0,
+      estimatedCostDailyAvg7dUsd: (cost7._sum.estimatedCostUsd ?? 0) / 6,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 // Cron/job entry point: evaluate every rule, raise/refresh alerts for the
