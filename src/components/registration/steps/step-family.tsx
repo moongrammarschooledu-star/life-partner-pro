@@ -1,6 +1,7 @@
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import type { WizardData } from "@/components/registration/wizard-types";
 import { useRegistrationLocale } from "@/components/registration/locale-context";
+import { OptionalSection } from "@/components/registration/steps/optional-section";
 
 export function StepFamily({
   data,
@@ -12,12 +13,6 @@ export function StepFamily({
   const { t } = useRegistrationLocale();
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label={t("fatherOccupation")} htmlFor="fatherOccupation">
-        <Input id="fatherOccupation" value={data.fatherOccupation} onChange={(e) => onChange("fatherOccupation", e.target.value)} />
-      </Field>
-      <Field label={t("motherOccupation")} htmlFor="motherOccupation">
-        <Input id="motherOccupation" value={data.motherOccupation} onChange={(e) => onChange("motherOccupation", e.target.value)} />
-      </Field>
       <Field label={t("numberOfBrothers")} htmlFor="numberOfBrothers">
         <Input id="numberOfBrothers" type="number" min={0} value={data.numberOfBrothers} onChange={(e) => onChange("numberOfBrothers", e.target.value)} />
       </Field>
@@ -39,6 +34,15 @@ export function StepFamily({
           <option value="WELL_SETTLED">Prefer Not to Say</option>
         </Select>
       </Field>
+      <div className="sm:col-span-2">
+        <OptionalSection>
+          <div className="grid gap-4 sm:grid-cols-2">
+      <Field label={t("fatherOccupation")} htmlFor="fatherOccupation">
+        <Input id="fatherOccupation" value={data.fatherOccupation} onChange={(e) => onChange("fatherOccupation", e.target.value)} />
+      </Field>
+      <Field label={t("motherOccupation")} htmlFor="motherOccupation">
+        <Input id="motherOccupation" value={data.motherOccupation} onChange={(e) => onChange("motherOccupation", e.target.value)} />
+      </Field>
       <Field label={t("familyLocation")} htmlFor="familyLocation">
         <Input id="familyLocation" value={data.familyLocation} onChange={(e) => onChange("familyLocation", e.target.value)} />
       </Field>
@@ -57,6 +61,9 @@ export function StepFamily({
         <Field label="Additional Family Information" htmlFor="additionalInfo">
           <Textarea id="additionalInfo" value={data.additionalInfo} onChange={(e) => onChange("additionalInfo", e.target.value)} />
         </Field>
+      </div>
+          </div>
+        </OptionalSection>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { Field, Input, Checkbox, Textarea } from "@/components/ui/form";
 import type { WizardData } from "@/components/registration/wizard-types";
 import { useRegistrationLocale } from "@/components/registration/locale-context";
+import { OptionalSection } from "@/components/registration/steps/optional-section";
 
 const LANGUAGE_OPTIONS = ["Urdu", "English", "Punjabi", "Arabic"];
 const PERSONALITY_OPTIONS = ["Calm", "Friendly", "Responsible", "Family Oriented", "Ambitious", "Caring", "Social", "Reserved", "Practical"];
@@ -61,16 +62,10 @@ export function StepLifestyle({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted">All fields in this section are optional.</p>
+      <p className="text-sm text-muted">{t("skipStepHint")}</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t("religion")} htmlFor="religion">
           <Input id="religion" value={data.religion} onChange={(e) => onChange("religion", e.target.value)} />
-        </Field>
-        <Field label={t("sect")} htmlFor="sect">
-          <Input id="sect" value={data.sect} onChange={(e) => onChange("sect", e.target.value)} />
-        </Field>
-        <Field label={t("religiousPractice")} htmlFor="religiousPractice">
-          <Input id="religiousPractice" value={data.religiousPractice} onChange={(e) => onChange("religiousPractice", e.target.value)} placeholder="e.g. Practicing" />
         </Field>
       </div>
 
@@ -78,36 +73,48 @@ export function StepLifestyle({
         <MultiCheckboxGroup options={LANGUAGE_OPTIONS} value={data.languages} onChange={(v) => onChange("languages", v)} allowCustom />
       </Field>
 
-      <div className="flex gap-6">
-        <Field label={t("smoking")} htmlFor="smoking">
-          <Checkbox label={t("yes")} checked={data.smoking} onChange={(e) => onChange("smoking", e.target.checked)} />
+      <OptionalSection>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+        <Field label={t("sect")} htmlFor="sect">
+          <Input id="sect" value={data.sect} onChange={(e) => onChange("sect", e.target.value)} />
         </Field>
-        <Field label={t("drinking")} htmlFor="drinking">
-          <Checkbox label={t("yes")} checked={data.drinking} onChange={(e) => onChange("drinking", e.target.checked)} />
+        <Field label={t("religiousPractice")} htmlFor="religiousPractice">
+          <Input id="religiousPractice" value={data.religiousPractice} onChange={(e) => onChange("religiousPractice", e.target.value)} placeholder="e.g. Practicing" />
         </Field>
-      </div>
+          </div>
+          <div className="flex gap-6">
+            <Field label={t("smoking")} htmlFor="smoking">
+              <Checkbox label={t("yes")} checked={data.smoking} onChange={(e) => onChange("smoking", e.target.checked)} />
+            </Field>
+            <Field label={t("drinking")} htmlFor="drinking">
+              <Checkbox label={t("yes")} checked={data.drinking} onChange={(e) => onChange("drinking", e.target.checked)} />
+            </Field>
+          </div>
 
-      <Field label={t("hobbies")} htmlFor="hobbies">
-        <Textarea
-          id="hobbies"
-          value={data.hobbies}
-          onChange={(e) => onChange("hobbies", e.target.value)}
-          placeholder="e.g. Reading, Travel, Cooking"
-          rows={2}
-        />
-      </Field>
+          <Field label={t("hobbies")} htmlFor="hobbies">
+            <Textarea
+              id="hobbies"
+              value={data.hobbies}
+              onChange={(e) => onChange("hobbies", e.target.value)}
+              placeholder="e.g. Reading, Travel, Cooking"
+              rows={2}
+            />
+          </Field>
 
-      <Field label={t("personality")} htmlFor="personality">
-        <MultiCheckboxGroup options={PERSONALITY_OPTIONS} value={data.personality} onChange={(v) => onChange("personality", v)} allowCustom />
-      </Field>
+          <Field label={t("personality")} htmlFor="personality">
+            <MultiCheckboxGroup options={PERSONALITY_OPTIONS} value={data.personality} onChange={(v) => onChange("personality", v)} allowCustom />
+          </Field>
 
-      <Field label={t("aboutMe")} htmlFor="aboutMe">
-        <Textarea id="aboutMe" value={data.aboutMe} onChange={(e) => onChange("aboutMe", e.target.value)} placeholder={t("aboutMePlaceholder")} rows={4} />
-      </Field>
+          <Field label={t("aboutMe")} htmlFor="aboutMe">
+            <Textarea id="aboutMe" value={data.aboutMe} onChange={(e) => onChange("aboutMe", e.target.value)} placeholder={t("aboutMePlaceholder")} rows={4} />
+          </Field>
 
-      <Field label="Other Lifestyle Preferences" htmlFor="otherPreferences">
-        <Textarea id="otherPreferences" value={data.otherPreferences} onChange={(e) => onChange("otherPreferences", e.target.value)} />
-      </Field>
+          <Field label="Other Lifestyle Preferences" htmlFor="otherPreferences">
+            <Textarea id="otherPreferences" value={data.otherPreferences} onChange={(e) => onChange("otherPreferences", e.target.value)} />
+          </Field>
+        </div>
+      </OptionalSection>
     </div>
   );
 }

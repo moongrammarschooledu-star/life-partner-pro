@@ -1,66 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { Field, Input, Select, Checkbox } from "@/components/ui/form";
 import type { WizardData } from "@/components/registration/wizard-types";
 import { useRegistrationLocale } from "@/components/registration/locale-context";
 import { calculateAge } from "@/lib/utils";
 import { COUNTRIES, citiesFor } from "@/lib/geo-data";
+import { HeightSelect } from "@/components/registration/steps/height-select";
+import { OptionalSection } from "@/components/registration/steps/optional-section";
 
 const CHILDREN_STATUSES = new Set(["DIVORCED", "WIDOWED", "SEPARATED"]);
-
-function cmToFeetInches(cm: number): { feet: number; inches: number } {
-  const totalInches = cm / 2.54;
-  const feet = Math.floor(totalInches / 12);
-  const inches = Math.round(totalInches - feet * 12);
-  return { feet, inches };
-}
-
-function feetInchesToCm(feet: number, inches: number): number {
-  return Math.round((feet * 12 + inches) * 2.54);
-}
-
-function HeightInput({ heightCm, onChange }: { heightCm: string; onChange: (cm: string) => void }) {
-  const { t } = useRegistrationLocale();
-  const [unit, setUnit] = useState<"cm" | "ftin">("cm");
-  const cm = Number(heightCm) || 0;
-  const { feet, inches } = cmToFeetInches(cm);
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-3 text-xs">
-        <label className="flex items-center gap-1">
-          <input type="radio" checked={unit === "cm"} onChange={() => setUnit("cm")} /> {t("heightUnitCm")}
-        </label>
-        <label className="flex items-center gap-1">
-          <input type="radio" checked={unit === "ftin"} onChange={() => setUnit("ftin")} /> {t("heightUnitFtIn")}
-        </label>
-      </div>
-      {unit === "cm" ? (
-        <Input type="number" min={100} max={230} value={heightCm} onChange={(e) => onChange(e.target.value)} />
-      ) : (
-        <div className="flex gap-2">
-          <Input
-            type="number"
-            min={3}
-            max={7}
-            placeholder={t("feet")}
-            value={heightCm ? String(feet) : ""}
-            onChange={(e) => onChange(String(feetInchesToCm(Number(e.target.value) || 0, inches)))}
-          />
-          <Input
-            type="number"
-            min={0}
-            max={11}
-            placeholder={t("inches")}
-            value={heightCm ? String(inches) : ""}
-            onChange={(e) => onChange(String(feetInchesToCm(feet, Number(e.target.value) || 0)))}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function StepBasic({
   data,
@@ -139,7 +87,7 @@ export function StepBasic({
         </>
       )}
       <Field label={t("height")} error={errors.heightCm} htmlFor="heightCm">
-        <HeightInput heightCm={data.heightCm} onChange={(v) => onChange("heightCm", v)} />
+        <HeightSelect id="heightCm" value={data.heightCm} onChange={(v) => onChange("heightCm", v)} />
       </Field>
       <Field label={t("country")} error={errors.country} htmlFor="country">
         <Select id="country" value={data.country} onChange={(e) => onChange("country", e.target.value)}>
@@ -166,12 +114,18 @@ export function StepBasic({
           ))}
         </datalist>
       </Field>
-      <Field label={t("area")} htmlFor="area">
-        <Input id="area" value={data.area} onChange={(e) => onChange("area", e.target.value)} placeholder="e.g. Model Town" />
-      </Field>
-      <Field label={t("nationality")} htmlFor="nationality">
-        <Input id="nationality" value={data.nationality} onChange={(e) => onChange("nationality", e.target.value)} placeholder="e.g. Pakistani" />
-      </Field>
+      <div className="sm:col-span-2">
+        <OptionalSection>
+          <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t("area")} htmlFor="area">
+            <Input id="area" value={data.area} onChange={(e) => onChange("area", e.target.value)} placeholder="e.g. Model Town" />
+          </Field>
+          <Field label={t("nationality")} htmlFor="nationality">
+            <Input id="nationality" value={data.nationality} onChange={(e) => onChange("nationality", e.target.value)} placeholder="e.g. Pakistani" />
+          </Field>
+          </div>
+        </OptionalSection>
+      </div>
     </div>
   );
 }
