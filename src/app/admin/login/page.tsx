@@ -63,6 +63,11 @@ function LoginForm() {
       setLoading(false);
       return;
     }
+    if (json.status === "otp_delivery_failed") {
+      setError("We could not send the login code by email. Please try again in a moment, or contact your Super Admin.");
+      setLoading(false);
+      return;
+    }
     await completeSignIn();
   }
 

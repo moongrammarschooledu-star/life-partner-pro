@@ -43,12 +43,18 @@ export async function POST(req: Request) {
     data: { adminId: result.admin.id, codeHash, expiresAt: expiresInMinutes(10) },
   });
 
-  await notificationService.send({
-    channel: "EMAIL",
-    to: result.admin.email,
-    subject: "Your Life Partner Pro admin login code",
-    body: `Your login verification code is ${code}. It expires in 10 minutes.`,
-  });
+  try {
+    await notificationService.send({
+      channel: "EMAIL",
+      to: result.admin.email,
+      subject: "Your Life Partner Pro admin login code",
+      body: `Your login verification code is ${code}. It expires in 10 minutes.`,
+    });
+  } catch {
+    // Never claim a code was sent when delivery failed; the challenge is useless without the code.
+    await prisma.adminOtpChallenge.delete({ where: { id: challenge.id } }).catch(() => {});
+    return NextResponse.json({ status: "otp_delivery_failed" }, { status: 502 });
+  }
 
   return NextResponse.json({ status: "otp_required", challengeId: challenge.id });
 }
