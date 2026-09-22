@@ -9,6 +9,8 @@ import { Field, Input, Select, Checkbox } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { EmptyState } from "@/components/ui/empty-state";
+import { formatEnumLabel } from "@/lib/utils";
+import { ADMIN_ROLES, ROLE_PERMISSIONS, SENSITIVE_PERMISSIONS, hasBroadRecordAccess, type AdminRole } from "@/lib/permissions";
 
 interface PermissionDef {
   key: string;
@@ -21,38 +23,48 @@ interface CustomRoleRow {
   id: string;
   name: string;
   description: string | null;
-  baseRole: "STAFF" | "VIEWER";
+  baseRole: AdminRole;
   active: boolean;
   permissions: string[];
+  allowedRecordTypes: string[];
+  defaultAccessLevel: string | null;
 }
 
-const SYSTEM_MATRIX: { module: string; superAdmin: string; admin: string; staff: string; viewer: string }[] = [
-  { module: "Profiles", superAdmin: "Full", admin: "Manage", staff: "Assigned", viewer: "View" },
-  { module: "Contacts", superAdmin: "Full", admin: "Permission", staff: "Restricted", viewer: "No" },
-  { module: "Matching", superAdmin: "Full", admin: "Manage", staff: "Assigned", viewer: "View" },
-  { module: "Proposals", superAdmin: "Full", admin: "Manage", staff: "Assigned", viewer: "View" },
-  { module: "Verification", superAdmin: "Full", admin: "Manage", staff: "Assigned", viewer: "View" },
-  { module: "Meetings", superAdmin: "Full", admin: "Manage", staff: "Assigned", viewer: "View" },
-  { module: "Communications", superAdmin: "Full", admin: "Manage", staff: "Assigned", viewer: "View" },
-  { module: "Reports", superAdmin: "Full", admin: "Manage", staff: "Limited", viewer: "View" },
-  { module: "Staff", superAdmin: "Full", admin: "Limited", staff: "No", viewer: "No" },
-  { module: "Settings", superAdmin: "Full", admin: "Limited", staff: "No", viewer: "No" },
-  { module: "Audit Logs", superAdmin: "Full", admin: "Limited", staff: "No", viewer: "No" },
-];
+// STEP 17 §48 — the matrix is generated live from ROLE_PERMISSIONS (the
+// actual authorization source of truth in src/lib/permissions.ts), grouped by
+// module. A row shows "✓" when the role holds at least one permission in that
+// module, with an "S" marker when any of those permissions is sensitive
+// (SENSITIVE_PERMISSIONS) — this is a disclosed simplification of spec's
+// per-permission ✓/—/A/S/C/H annotation (13 roles × ~150 permissions would be
+// unreadable at that granularity); the per-admin Effective Permissions panel
+// (admin-users page) gives the exact, ungrouped permission list when needed.
+function buildMatrix(modules: string[]) {
+  return modules.map((module) => ({
+    module,
+    cells: ADMIN_ROLES.map((role) => {
+      const inModule = (ROLE_PERMISSIONS[role] ?? []).filter((p) => p.startsWith(`${module}:`));
+      return {
+        role,
+        granted: inModule.length > 0,
+        sensitive: inModule.some((p) => (SENSITIVE_PERMISSIONS as string[]).includes(p)),
+      };
+    }),
+  }));
+}
 
-// Spec §28 — the fixed 4-system-role matrix is a read-only reference
-// (derived from src/lib/permissions.ts's ROLE_PERMISSIONS, which stays
-// hardcoded/zero-risk); "make it configurable" is satisfied by the custom
-// role editor below instead of making the 4 built-in roles DB-editable.
 export default function PermissionMatrixPage() {
   const { show } = useToast();
   const [roles, setRoles] = useState<CustomRoleRow[] | null>(null);
   const [defs, setDefs] = useState<PermissionDef[]>([]);
+  const [resourceTypes, setResourceTypes] = useState<string[]>([]);
+  const [accessLevels, setAccessLevels] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomRoleRow | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [baseRole, setBaseRole] = useState<"STAFF" | "VIEWER">("STAFF");
+  const [baseRole, setBaseRole] = useState<AdminRole>("STAFF_MATCHMAKER");
+  const [allowedRecordTypes, setAllowedRecordTypes] = useState<Set<string>>(new Set());
+  const [defaultAccessLevel, setDefaultAccessLevel] = useState<string>("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +75,8 @@ export default function PermissionMatrixPage() {
       .then((data) => {
         setRoles(data.roles ?? []);
         setDefs(data.permissionDefs ?? []);
+        setResourceTypes(data.resourceTypes ?? []);
+        setAccessLevels(data.accessLevels ?? []);
       });
   }
 
@@ -74,7 +88,9 @@ export default function PermissionMatrixPage() {
     setEditing(null);
     setName("");
     setDescription("");
-    setBaseRole("STAFF");
+    setBaseRole("STAFF_MATCHMAKER");
+    setAllowedRecordTypes(new Set());
+    setDefaultAccessLevel("");
     setSelected(new Set());
     setError(null);
     setModalOpen(true);
@@ -85,6 +101,8 @@ export default function PermissionMatrixPage() {
     setName(role.name);
     setDescription(role.description ?? "");
     setBaseRole(role.baseRole);
+    setAllowedRecordTypes(new Set(role.allowedRecordTypes ?? []));
+    setDefaultAccessLevel(role.defaultAccessLevel ?? "");
     setSelected(new Set(role.permissions));
     setError(null);
     setModalOpen(true);
@@ -99,21 +117,37 @@ export default function PermissionMatrixPage() {
     });
   }
 
+  function toggleRecordType(type: string) {
+    setAllowedRecordTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
+
   async function save() {
     setSaving(true);
     setError(null);
     try {
       const permissions = Array.from(selected);
+      const body = {
+        name,
+        description,
+        permissions,
+        allowedRecordTypes: Array.from(allowedRecordTypes),
+        defaultAccessLevel: defaultAccessLevel || null,
+      };
       const res = editing
         ? await fetch(`/api/admin/custom-roles/${editing.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, description, permissions }),
+            body: JSON.stringify(body),
           })
         : await fetch("/api/admin/custom-roles", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, description, baseRole, permissions }),
+            body: JSON.stringify({ ...body, baseRole }),
           });
       const json = await res.json();
       if (!res.ok) {
@@ -142,33 +176,45 @@ export default function PermissionMatrixPage() {
     return acc;
   }, {});
 
+  const modules = Object.keys(grouped).sort();
+  const matrix = buildMatrix(modules);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-heading text-2xl font-semibold">Permission Matrix</h1>
-        <p className="text-sm text-muted">The 4 built-in roles&rsquo; access, plus any custom roles you&rsquo;ve defined.</p>
+        <p className="text-sm text-muted">
+          The 13 system roles&rsquo; access by module, generated from the live permission table, plus any custom roles you&rsquo;ve
+          defined. &ldquo;S&rdquo; marks a module where the role holds at least one sensitive permission.
+        </p>
       </div>
 
       <Card>
         <div className="overflow-x-auto p-4">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[1400px] text-sm">
             <thead className="text-left text-xs text-muted">
               <tr>
-                <th className="pb-2">Module</th>
-                <th className="pb-2">Super Admin</th>
-                <th className="pb-2">Admin</th>
-                <th className="pb-2">Staff</th>
-                <th className="pb-2">Viewer</th>
+                <th className="pb-2 pr-3">Module</th>
+                {ADMIN_ROLES.map((role) => (
+                  <th key={role} className="whitespace-nowrap pb-2 pr-3">
+                    {formatEnumLabel(role)}
+                    <span className="block font-normal normal-case text-muted">
+                      {hasBroadRecordAccess(role) ? "Broad" : "Assigned"}
+                    </span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {SYSTEM_MATRIX.map((row) => (
+              {matrix.map((row) => (
                 <tr key={row.module} className="border-t border-border">
-                  <td className="py-2 font-medium">{row.module}</td>
-                  <td className="py-2 text-muted">{row.superAdmin}</td>
-                  <td className="py-2 text-muted">{row.admin}</td>
-                  <td className="py-2 text-muted">{row.staff}</td>
-                  <td className="py-2 text-muted">{row.viewer}</td>
+                  <td className="py-2 pr-3 font-medium capitalize">{row.module.replace(/_/g, " ")}</td>
+                  {row.cells.map((cell) => (
+                    <td key={cell.role} className="py-2 pr-3 text-muted">
+                      {cell.granted ? "✓" : "—"}
+                      {cell.sensitive && <span className="ml-1 text-danger">S</span>}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -196,10 +242,13 @@ export default function PermissionMatrixPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">
-                    {role.name} <span className="text-xs text-muted">({role.baseRole}-shaped)</span>
+                    {role.name} <span className="text-xs text-muted">({formatEnumLabel(role.baseRole)}-shaped)</span>
                   </p>
                   {role.description && <p className="text-sm text-muted">{role.description}</p>}
-                  <p className="mt-1 text-xs text-muted">{role.permissions.length} permission(s)</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {role.permissions.length} permission(s)
+                    {role.defaultAccessLevel && ` · default access ${formatEnumLabel(role.defaultAccessLevel)}`}
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <Badge variant={role.active ? "success" : "muted"}>{role.active ? "Active" : "Disabled"}</Badge>
@@ -225,10 +274,36 @@ export default function PermissionMatrixPage() {
             <Input id="roleDescription" value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
           {!editing && (
-            <Field label="Row-scoping shape" htmlFor="baseRole" hint="STAFF-shaped: only assigned records. VIEWER-shaped: read-only.">
-              <Select id="baseRole" value={baseRole} onChange={(e) => setBaseRole(e.target.value as "STAFF" | "VIEWER")}>
-                <option value="STAFF">STAFF-shaped</option>
-                <option value="VIEWER">VIEWER-shaped</option>
+            <Field label="Row-scoping shape" htmlFor="baseRole" hint="Which of the 13 system roles' record-access shape (broad vs. assigned-only) this custom role uses.">
+              <Select id="baseRole" value={baseRole} onChange={(e) => setBaseRole(e.target.value as AdminRole)}>
+                {ADMIN_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {formatEnumLabel(r)} ({hasBroadRecordAccess(r) ? "broad" : "assigned"})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          {resourceTypes.length > 0 && (
+            <div>
+              <p className="mb-1 text-sm font-medium">Allowed record types (optional)</p>
+              <p className="mb-2 text-xs text-muted">Which kinds of records this role can be assigned to. Leave empty for no restriction.</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {resourceTypes.map((t) => (
+                  <Checkbox key={t} label={formatEnumLabel(t)} checked={allowedRecordTypes.has(t)} onChange={() => toggleRecordType(t)} />
+                ))}
+              </div>
+            </div>
+          )}
+          {accessLevels.length > 0 && (
+            <Field label="Default access level (optional)" htmlFor="defaultAccessLevel" hint="Access level granted by default when this role is assigned to a record.">
+              <Select id="defaultAccessLevel" value={defaultAccessLevel} onChange={(e) => setDefaultAccessLevel(e.target.value)}>
+                <option value="">None</option>
+                {accessLevels.map((l) => (
+                  <option key={l} value={l}>
+                    {formatEnumLabel(l)}
+                  </option>
+                ))}
               </Select>
             </Field>
           )}

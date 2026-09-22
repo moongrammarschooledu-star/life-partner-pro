@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { formatEnumLabel, formatDate, formatDateTime } from "@/lib/utils";
 import { CHECKLIST_CATEGORY_LABEL } from "@/lib/verification/checklist-catalog";
+import { hasAssignedWorkQueue, type AdminRole, type Permission } from "@/lib/permissions";
 
 const REJECTION_CATEGORIES = [
   { value: "INFORMATION_INCOMPLETE", label: "Information incomplete" },
@@ -133,6 +134,7 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
   const [flagDescription, setFlagDescription] = useState("");
 
   const [busy, setBusy] = useState(false);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
 
   function load() {
     fetch(`/api/admin/profiles/${profileId}/verification`)
@@ -147,8 +149,12 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
     load();
     fetch("/api/admin/admin-users")
       .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((json) => setStaff((json.items ?? []).filter((a: { role: string; active?: boolean }) => a.role === "STAFF" && a.active !== false)))
+      .then((json) => setStaff((json.items ?? []).filter((a: { role: AdminRole; active?: boolean }) => hasAssignedWorkQueue(a.role) && a.active !== false)))
       .catch(() => {});
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((s) => setPermissions(s?.user?.permissions ?? []))
+      .catch(() => setPermissions([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId]);
 
@@ -476,21 +482,29 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
               <CardTitle className="text-base">Admin Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button size="sm" className="w-full justify-start" onClick={() => callAction({ action: "approve" }, "Verification approved")} disabled={busy}>
-                <CheckCircle2 className="h-4 w-4" /> Approve Verification
-              </Button>
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setShowRequestInfo(true)} disabled={busy}>
-                Request More Information
-              </Button>
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setRejectOpen(true)} disabled={busy}>
-                Reject Verification
-              </Button>
+              {permissions.includes("verification:approve") && (
+                <Button size="sm" className="w-full justify-start" onClick={() => callAction({ action: "approve" }, "Verification approved")} disabled={busy}>
+                  <CheckCircle2 className="h-4 w-4" /> Approve Verification
+                </Button>
+              )}
+              {permissions.includes("verification:request-info") && (
+                <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setShowRequestInfo(true)} disabled={busy}>
+                  Request More Information
+                </Button>
+              )}
+              {permissions.includes("verification:reject") && (
+                <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setRejectOpen(true)} disabled={busy}>
+                  Reject Verification
+                </Button>
+              )}
               <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setSuspendOpen(true)} disabled={busy}>
                 Suspend Profile
               </Button>
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setReverifyOpen(true)} disabled={busy}>
-                Require Re-Verification
-              </Button>
+              {permissions.includes("verification:reverify") && (
+                <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setReverifyOpen(true)} disabled={busy}>
+                  Require Re-Verification
+                </Button>
+              )}
             </CardContent>
           </Card>
 

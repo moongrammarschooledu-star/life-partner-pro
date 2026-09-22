@@ -7,6 +7,7 @@ import { nextCaseNumber } from "@/lib/case-code";
 import { isCategoryValidForType } from "@/lib/case-categories";
 import { computeSlaDueDates } from "@/lib/case-sla";
 import { typePermissionFor } from "@/lib/case-type-permission";
+import { hasBroadRecordAccess } from "@/lib/permissions";
 import type { CaseType, CaseCategory, CaseStatus, CasePriority } from "@prisma/client";
 
 // Spec §29 — search/filter. Results are pre-filtered to what this admin is
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
       ...(admin.permissions.includes("cases:staff-conduct:view") ? {} : { reportedAdminId: null }),
     };
 
-    if (admin.role === "STAFF") {
+    if (!hasBroadRecordAccess(admin.role)) {
       // No assignment/share = no record access (spec §10) — a flat query
       // join, not a post-fetch filter, so nothing unauthorized is ever read.
       const [assignedCaseIds, sharedCaseIds] = await Promise.all([

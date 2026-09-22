@@ -2,13 +2,15 @@ import { describe, it, expect } from "vitest";
 import { getReportColumns, canViewSensitiveColumns, REPORT_DEFINITIONS } from "@/lib/reports/columns";
 
 describe("canViewSensitiveColumns", () => {
-  it("allows SUPER_ADMIN and ADMIN", () => {
+  it("allows SUPER_ADMIN, legacy ADMIN, and its STEP 17 successor OPERATIONS_ADMIN", () => {
     expect(canViewSensitiveColumns("SUPER_ADMIN")).toBe(true);
     expect(canViewSensitiveColumns("ADMIN")).toBe(true);
+    expect(canViewSensitiveColumns("OPERATIONS_ADMIN")).toBe(true);
   });
 
-  it("blocks STAFF and VIEWER", () => {
+  it("blocks STAFF, STAFF_MATCHMAKER, and VIEWER", () => {
     expect(canViewSensitiveColumns("STAFF")).toBe(false);
+    expect(canViewSensitiveColumns("STAFF_MATCHMAKER")).toBe(false);
     expect(canViewSensitiveColumns("VIEWER")).toBe(false);
   });
 });

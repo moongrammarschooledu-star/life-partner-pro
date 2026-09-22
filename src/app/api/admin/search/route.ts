@@ -4,11 +4,12 @@ import { requireAdmin, handleApiError } from "@/lib/route-guard";
 import { calculateAge } from "@/lib/utils";
 import { withRequestMetrics } from "@/lib/observability/metrics";
 import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
+import { hasBroadRecordAccess } from "@/lib/permissions";
 
 // Global topbar search (spec §27) — profiles and proposals. Match has no
 // natural human-searchable key so it's out of scope (documented deferred).
-// Results respect the same STAFF row-scoping as the dedicated list pages —
-// a STAFF searcher only ever sees proposals assigned to them.
+// Results respect the same assignment row-scoping as the dedicated list
+// pages — an assignment-scoped searcher only ever sees proposals assigned to them.
 async function getHandler(req: Request) {
   // STEP 15 §19 — persistent (cross-instance) rate limit.
   const limited = await enforcePersistentLimit(req, "admin-search", 120, 60000);
@@ -47,7 +48,7 @@ async function getHandler(req: Request) {
       prisma.proposal.findMany({
         where: {
           proposalCode: { contains: q, mode: "insensitive" },
-          ...(admin.role === "STAFF" ? { assignedToId: admin.id } : {}),
+          ...(hasBroadRecordAccess(admin.role) ? {} : { assignedToId: admin.id }),
         },
         select: {
           id: true,

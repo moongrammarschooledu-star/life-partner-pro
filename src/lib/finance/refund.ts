@@ -4,6 +4,7 @@ import { nextSequenceCode } from "@/lib/privacy/codes";
 import { isValidRefundStatusTransition, isValidPaymentStatusTransition } from "@/lib/finance/status-transitions";
 import { getProvider } from "@/lib/finance/providers/registry";
 import { notifyRefundRequested, notifyRefundCompleted } from "@/lib/notifications/events";
+import { ApiError } from "@/lib/route-guard";
 import type { RefundType, RefundStatus } from "@prisma/client";
 
 // Spec §23 — RBAC tiers enforced by the caller (route checks the
@@ -45,8 +46,15 @@ async function transitionRefund(refundId: string, toStatus: RefundStatus) {
   return refund;
 }
 
+// STEP 17 §26 separation of duties — the admin who requested a refund can
+// never also be the one who approves it, even if they independently hold
+// finance:refunds:approve (e.g. FINANCE_MANAGER, who can do both actions on
+// someone else's request but not rubber-stamp their own).
 export async function approveRefund(refundId: string, approvedById: string) {
   const refund = await transitionRefund(refundId, "APPROVED");
+  if (refund.requestedById === approvedById) {
+    throw new ApiError(403, "You cannot approve a refund you requested yourself — ask another finance admin to approve it.");
+  }
   await prisma.refund.update({ where: { id: refundId }, data: { status: "APPROVED", approvedById } });
   await writeAudit({ action: "REFUND_APPROVED", adminId: approvedById, meta: { refundId } });
   return refund;

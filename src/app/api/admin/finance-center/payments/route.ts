@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
+import { hasBroadRecordAccess } from "@/lib/permissions";
 
-// Spec §36 — admin payment table. STAFF only ever sees payments for
-// profiles they're assigned to (row-scoped, same AdminAssignment join
-// pattern used by every other STAFF-facing list in this codebase).
+// Spec §36 — admin payment table. An assignment-scoped role only ever sees
+// payments for profiles they're assigned to (row-scoped, same AdminAssignment
+// join pattern used by every other assignment-scoped list in this codebase).
 export async function GET(req: Request) {
   try {
     const admin = await requireAdmin("finance:payments:view");
@@ -13,7 +14,7 @@ export async function GET(req: Request) {
 
     const where: Record<string, unknown> = status ? { status } : {};
 
-    if (admin.role === "STAFF") {
+    if (!hasBroadRecordAccess(admin.role)) {
       const assigned = await prisma.adminAssignment.findMany({ where: { resourceType: "PROFILE", adminId: admin.id, status: { not: "REASSIGNED" } }, select: { resourceId: true } });
       where.profileId = { in: assigned.map((a) => a.resourceId) };
     }

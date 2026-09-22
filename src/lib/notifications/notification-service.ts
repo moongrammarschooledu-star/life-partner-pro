@@ -235,8 +235,9 @@ export async function sendAdminComposedMessage(params: {
 }
 
 // Notifies the assigned admin if one exists, else every active
-// SUPER_ADMIN/ADMIN (small headcount — one row each). Admin notifications
-// stay IN_APP only, no external dispatch (spec §4 just asks for mark-read/
+// SUPER_ADMIN/OPERATIONS_ADMIN (small headcount — one row each; legacy ADMIN
+// kept for any not-yet-migrated row, STEP 17). Admin notifications stay
+// IN_APP only, no external dispatch (spec §4 just asks for mark-read/
 // mark-all-read/open-record, not SMS/email to staff).
 export async function notifyAdmins(input: NotifyAdminsInput): Promise<void> {
   try {
@@ -245,7 +246,7 @@ export async function notifyAdmins(input: NotifyAdminsInput): Promise<void> {
       return;
     }
     const admins = await prisma.adminUser.findMany({
-      where: { active: true, role: { in: ["SUPER_ADMIN", "ADMIN"] } },
+      where: { active: true, role: { in: ["SUPER_ADMIN", "ADMIN", "OPERATIONS_ADMIN"] } },
       select: { id: true },
     });
     await Promise.all(admins.map((a) => sendNotification({ adminId: a.id, type: input.type, data: input.data })));

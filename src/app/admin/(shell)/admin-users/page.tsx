@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, UserPlus, ShieldCheck, KeyRound, Eye } from "lucide-react";
+import { Loader2, UserPlus, ShieldCheck, KeyRound, Eye, ListChecks } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -11,13 +11,15 @@ import { Field, Input, Select, Checkbox } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime, formatEnumLabel } from "@/lib/utils";
+import { ADMIN_ROLES, type AdminRole } from "@/lib/permissions";
 import Link from "next/link";
+import { EffectivePermissionsPanel } from "./effective-permissions-panel";
 
 interface AdminUserRow {
   id: string;
   name: string;
   email: string;
-  role: "SUPER_ADMIN" | "ADMIN" | "STAFF" | "VIEWER";
+  role: AdminRole;
   active: boolean;
   createdAt: string;
   lastLogin: string | null;
@@ -26,7 +28,10 @@ interface AdminUserRow {
   customRole: { id: string; name: string } | null;
 }
 
-const ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "VIEWER"];
+// STEP 17 — the 13 assignable roles, replacing the old 4-role list. Legacy
+// ADMIN/STAFF accounts are migrated at the DB level; the dropdown never offers
+// those two retired labels for a fresh assignment.
+const ROLES = ADMIN_ROLES;
 
 export default function AdminUsersPage() {
   const { show } = useToast();
@@ -38,7 +43,7 @@ export default function AdminUsersPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("STAFF");
+  const [role, setRole] = useState("STAFF_MATCHMAKER");
   const [departmentId, setDepartmentId] = useState("");
   const [customRoleId, setCustomRoleId] = useState("");
   const [creating, setCreating] = useState(false);
@@ -50,6 +55,13 @@ export default function AdminUsersPage() {
   const [stepUpPassword, setStepUpPassword] = useState("");
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
   const [deactivateBusy, setDeactivateBusy] = useState(false);
+  const [viewingPermissionsFor, setViewingPermissionsFor] = useState<string | null>(null);
+
+  const [roleChange, setRoleChange] = useState<{ admin: AdminUserRow; newRole: string } | null>(null);
+  const [roleChangeReason, setRoleChangeReason] = useState("");
+  const [roleChangeStepUpPassword, setRoleChangeStepUpPassword] = useState("");
+  const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
+  const [roleChangeBusy, setRoleChangeBusy] = useState(false);
 
   function load() {
     fetch("/api/admin/admin-users")
@@ -89,7 +101,7 @@ export default function AdminUsersPage() {
       setName("");
       setEmail("");
       setPassword("");
-      setRole("STAFF");
+      setRole("STAFF_MATCHMAKER");
       setDepartmentId("");
       setCustomRoleId("");
       load();
@@ -142,6 +154,47 @@ export default function AdminUsersPage() {
     }
     router.push("/admin/dashboard");
     router.refresh();
+  }
+
+  function openRoleChange(a: AdminUserRow, newRole: string) {
+    setRoleChange({ admin: a, newRole });
+    setRoleChangeReason("");
+    setRoleChangeStepUpPassword("");
+    setRoleChangeError(null);
+  }
+
+  async function confirmRoleChange() {
+    if (!roleChange) return;
+    setRoleChangeBusy(true);
+    setRoleChangeError(null);
+    try {
+      const reauth = await fetch("/api/admin/auth/reauth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: roleChangeStepUpPassword }),
+      });
+      const reauthJson = await reauth.json();
+      if (!reauth.ok) {
+        setRoleChangeError(reauthJson.error ?? "Incorrect password.");
+        return;
+      }
+
+      const res = await fetch(`/api/admin/admin-users/${roleChange.admin.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: roleChange.newRole, reason: roleChangeReason, stepUpToken: reauthJson.token }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setRoleChangeError(json.error ?? "Could not change role.");
+        return;
+      }
+      show("Role updated", "success");
+      setRoleChange(null);
+      load();
+    } finally {
+      setRoleChangeBusy(false);
+    }
   }
 
   function openDeactivate(a: AdminUserRow) {
@@ -229,7 +282,14 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="p-3 text-muted">{a.email}</td>
                     <td className="p-3">
-                      <Select value={a.role} onChange={(e) => updateAdmin(a.id, { role: e.target.value })} className="h-8 w-auto text-xs">
+                      <Select
+                        value={a.role}
+                        onChange={(e) => (e.target.value !== a.role ? openRoleChange(a, e.target.value) : undefined)}
+                        className="h-8 w-auto text-xs"
+                      >
+                        {!ROLES.includes(a.role) && (
+                          <option value={a.role}>{formatEnumLabel(a.role)} (legacy)</option>
+                        )}
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
                             {formatEnumLabel(r)}
@@ -267,6 +327,9 @@ export default function AdminUsersPage() {
                         <Link href={`/admin/admin-users/${a.id}/sessions`} className="text-xs font-medium text-primary hover:underline">
                           Sessions
                         </Link>
+                        <Button size="sm" variant="outline" onClick={() => setViewingPermissionsFor(a.id)}>
+                          <ListChecks className="h-3.5 w-3.5" /> Permissions
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => resetPassword(a.id)}>
                           <KeyRound className="h-3.5 w-3.5" /> Reset
                         </Button>
@@ -374,6 +437,34 @@ export default function AdminUsersPage() {
           <Input id="stepUpPassword" type="password" value={stepUpPassword} onChange={(e) => setStepUpPassword(e.target.value)} />
         </Field>
         {deactivateError && <p className="text-sm text-danger">{deactivateError}</p>}
+      </ConfirmDialog>
+
+      {viewingPermissionsFor && (
+        <EffectivePermissionsPanel adminId={viewingPermissionsFor} onClose={() => setViewingPermissionsFor(null)} />
+      )}
+
+      <ConfirmDialog
+        open={!!roleChange}
+        title={`Change ${roleChange?.admin.name ?? ""}'s role`}
+        description={`This changes ${roleChange?.admin.name ?? "this admin"} from ${roleChange ? formatEnumLabel(roleChange.admin.role) : ""} to ${roleChange ? formatEnumLabel(roleChange.newRole) : ""}. Every role change is audited and requires a reason.`}
+        confirmLabel="Change Role"
+        danger
+        confirmDisabled={roleChangeBusy || !roleChangeReason.trim() || !roleChangeStepUpPassword}
+        onConfirm={confirmRoleChange}
+        onCancel={() => setRoleChange(null)}
+      >
+        <Field label="Reason for this change" htmlFor="roleChangeReason" hint="Required — recorded in the audit log.">
+          <Input id="roleChangeReason" value={roleChangeReason} onChange={(e) => setRoleChangeReason(e.target.value)} />
+        </Field>
+        <Field label="Confirm your password" htmlFor="roleChangeStepUpPassword" hint="Required for this sensitive action.">
+          <Input
+            id="roleChangeStepUpPassword"
+            type="password"
+            value={roleChangeStepUpPassword}
+            onChange={(e) => setRoleChangeStepUpPassword(e.target.value)}
+          />
+        </Field>
+        {roleChangeError && <p className="text-sm text-danger">{roleChangeError}</p>}
       </ConfirmDialog>
     </div>
   );

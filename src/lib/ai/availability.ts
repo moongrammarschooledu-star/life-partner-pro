@@ -1,5 +1,5 @@
 import type { AiFeature } from "@prisma/client";
-import type { Permission } from "@/lib/permissions";
+import { hasBroadRecordAccess, type AdminRole, type Permission } from "@/lib/permissions";
 import type { AiConfigValues } from "@/lib/ai/config";
 
 // Spec §57/§58/§59 — whether AI is usable at all for THIS admin and feature.
@@ -54,6 +54,10 @@ export function evaluateAvailability(params: {
   if (!flags["ai.enabled"] || !flags[FEATURE_FLAG_FOR[feature]]) return { available: false, reason: "FLAG_OFF" };
 
   const isSuper = admin.role === "SUPER_ADMIN";
+  // STEP 17 — "ADMIN" was the only other broad role when this was written;
+  // LIMITED_PRODUCTION now reads as "any manager-tier (broad-access) role",
+  // matching the rollout phase's "selected authorized users" intent.
+  const isBroad = hasBroadRecordAccess(admin.role as AdminRole);
   const isPilot = config.pilotAdminIds.includes(admin.id);
   let inRollout: boolean;
   switch (config.phase) {
@@ -64,7 +68,7 @@ export function evaluateAvailability(params: {
       inRollout = isSuper || isPilot;
       break;
     case "LIMITED_PRODUCTION":
-      inRollout = isSuper || admin.role === "ADMIN" || isPilot;
+      inRollout = isSuper || isBroad || isPilot;
       break;
     default:
       inRollout = true; // PRODUCTION — anyone holding the permission

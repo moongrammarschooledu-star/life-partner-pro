@@ -32,6 +32,7 @@ import { CompatibilityBreakdownList } from "@/components/admin/compatibility-bre
 import { SELECTABLE_STATUSES, ADMIN_STATUS_LABEL, isLegacyStatus } from "@/lib/proposal-status-labels";
 import type { ProfileDetailDto } from "@/lib/serializers";
 import type { CompatibilityRow } from "@/components/admin/compatibility-breakdown";
+import { hasAssignedWorkQueue, type AdminRole } from "@/lib/permissions";
 
 const PRIORITY_VARIANT: Record<string, "danger" | "warning" | "muted"> = { HIGH: "danger", MEDIUM: "warning", LOW: "muted" };
 const DECLINE_REASONS = ["DIFFERENT_EXPECTATIONS", "LOCATION", "AGE", "EDUCATION", "PROFESSION", "FAMILY_PREFERENCE", "PERSONAL_PREFERENCE", "OTHER"];
@@ -215,7 +216,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
     load();
     fetch("/api/admin/admin-users")
       .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((data) => setStaff((data.items ?? []).filter((a: { role: string; active?: boolean }) => a.role === "STAFF" && a.active !== false)))
+      .then((data) => setStaff((data.items ?? []).filter((a: { role: AdminRole; active?: boolean }) => hasAssignedWorkQueue(a.role) && a.active !== false)))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);

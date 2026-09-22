@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/route-guard";
 import { getCurrentAssigneeId } from "@/lib/admin-assignment";
 import { hasActiveBreakGlass } from "@/lib/privacy/break-glass";
-import type { AdminRole, Permission } from "@/lib/permissions";
+import { hasBroadRecordAccess, type AdminRole, type Permission } from "@/lib/permissions";
 import type { Case } from "@prisma/client";
 
 // Spec §11 — the concrete, Cases-only implementation of VIEW/COMMENT/EDIT/
@@ -31,7 +31,7 @@ function staffConductGateBlocks(admin: AccessAdmin, caseRecord: Pick<Case, "repo
 export async function resolveCaseAccessLevel(admin: AccessAdmin, caseRecord: Pick<Case, "id" | "reportedAdminId">): Promise<CaseAccessLevel> {
   if (staffConductGateBlocks(admin, caseRecord)) return "NONE";
 
-  if (admin.role === "SUPER_ADMIN" || admin.role === "ADMIN") return "MANAGE";
+  if (hasBroadRecordAccess(admin.role)) return "MANAGE";
 
   const assigneeId = await getCurrentAssigneeId("CASE", caseRecord.id);
   if (assigneeId === admin.id) return "MANAGE";
@@ -73,11 +73,15 @@ const NOTE_LEVEL_RANK: Record<"STAFF" | "ADMIN" | "SENIOR_ADMIN" | "SUPER_ADMIN"
   SUPER_ADMIN: 4,
 };
 
+// STEP 17 — generalized from the old literal "role === ADMIN" check to any
+// broad-access role, so every *_MANAGER role reaches the same tiers legacy
+// ADMIN did (rank 3 requires cases:escalate:senior, granted to SUPPORT_MANAGER
+// and SUPER_ADMIN by default; other managers land at rank 2 unless granted it).
 export function resolveNoteViewRank(admin: AccessAdmin): NoteRank {
   if (admin.permissions.includes("sensitive:case:notes:view")) return 4;
   if (admin.role === "SUPER_ADMIN") return 4;
-  if (admin.role === "ADMIN") return admin.permissions.includes("cases:escalate:senior") ? 3 : 2;
-  return 1; // STAFF (VIEWER never reaches here — no case permissions at all)
+  if (hasBroadRecordAccess(admin.role)) return admin.permissions.includes("cases:escalate:senior") ? 3 : 2;
+  return 1; // assignment-scoped role (VIEWER/REPORTING_ANALYST never reach here — no case permissions at all)
 }
 
 export function canViewNoteLevel(admin: AccessAdmin, noteLevel: keyof typeof NOTE_LEVEL_RANK): boolean {

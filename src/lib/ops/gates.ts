@@ -161,8 +161,13 @@ export function evaluateReadiness(f: ReadinessFacts): ReadinessResult {
   add({ id: "encrypted_keys", category: "Security", title: "Independent encryption-key rotation", required: false, status: "WARN", detail: "File/session/step-up keys are all derived from NEXTAUTH_SECRET; rotating it invalidates every stored file and session. Key versioning is a documented follow-up." });
 
   // ---- Authentication / Authorization / Privacy ------------------------------------
-  const twoFa = f.security.twoFactorRoles.includes("SUPER_ADMIN") && f.security.twoFactorRoles.includes("ADMIN");
-  add({ id: "admin_2fa", category: "Authentication", title: "2FA required for SUPER_ADMIN and ADMIN", required: true, status: twoFa ? "PASS" : "BLOCKED", detail: `2FA required for: ${f.security.twoFactorRoles.join(", ") || "no roles"}.` });
+  // STEP 17 — ADMIN was retired in favor of OPERATIONS_ADMIN; a role list
+  // containing either satisfies this gate so it stays meaningful for both a
+  // freshly-migrated install (OPERATIONS_ADMIN) and any not-yet-reconfigured one.
+  const twoFa =
+    f.security.twoFactorRoles.includes("SUPER_ADMIN") &&
+    (f.security.twoFactorRoles.includes("OPERATIONS_ADMIN") || f.security.twoFactorRoles.includes("ADMIN"));
+  add({ id: "admin_2fa", category: "Authentication", title: "2FA required for SUPER_ADMIN and OPERATIONS_ADMIN", required: true, status: twoFa ? "PASS" : "BLOCKED", detail: `2FA required for: ${f.security.twoFactorRoles.join(", ") || "no roles"}.` });
   add({ id: "admin_lockout", category: "Authentication", title: "Admin lockout + persistent login throttling", required: true, status: f.security.lockoutConfigured && f.rateLimitProbeOk ? "PASS" : "BLOCKED", detail: "Per-account lockout plus per-IP/per-email persistent throttle." });
   add({ id: "admin_session", category: "Authentication", title: "Admin session lifetime ≤ 24 h", required: false, status: f.security.adminSessionMaxHours <= 24 ? "PASS" : "WARN", detail: `Configured: ${f.security.adminSessionMaxHours} h.` });
   add(optionalEvidenceGate(f, "auth_e2e", "SMOKE_AUTH", "Authentication", "Authenticated login/2FA smoke", "Authenticated flows (login, OTP) are not automated — never run with real credentials by this system."));

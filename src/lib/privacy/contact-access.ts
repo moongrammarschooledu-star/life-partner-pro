@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { hasActiveBreakGlass } from "@/lib/privacy/break-glass";
+import { resolveEffectiveConsent } from "@/lib/privacy/consent";
+import { logPrivacyAccess } from "@/lib/privacy/access-log";
 import type { ContactAccessLevel } from "@prisma/client";
 import type { Permission } from "@/lib/permissions";
 
@@ -13,10 +15,13 @@ export interface ContactAccessAdmin {
 }
 
 // Ad-hoc single-profile lookup (no proposal context) — gated at the
-// existing contact:reveal permission alone. A legitimate, named tier for
-// admin support workflows, not a bypass of the graded system below.
+// existing contact:reveal permission, OR the independently-grantable
+// sensitive:contact:view permission (STEP 17 §17: a narrower role can be
+// given just this sensitive permission without the broader contact:reveal
+// grant). A legitimate, named tier for admin support workflows, not a
+// bypass of the graded system below.
 export function resolveAdHocContactAccessLevel(admin: ContactAccessAdmin): ContactAccessLevel {
-  return admin.permissions.includes("contact:reveal") ? "ADMIN_ONLY" : "HIDDEN";
+  return admin.permissions.includes("contact:reveal") || admin.permissions.includes("sensitive:contact:view") ? "ADMIN_ONLY" : "HIDDEN";
 }
 
 // Two-profile share, driven by a specific proposal's ContactPermission rows.
@@ -27,12 +32,35 @@ export async function resolveProposalContactAccessLevel(proposalId: string, prof
   return "STAFF_AUTHORIZED";
 }
 
+async function denyAndLog(params: { admin: ContactAccessAdmin; profileAId: string; profileBId: string; reason: string }): Promise<never> {
+  await logPrivacyAccess({
+    actorAdminId: params.admin.id,
+    action: "CONTACT_SHARE_DENIED",
+    field: "mobileNumber",
+    targetProfileId: params.profileAId,
+    reason: params.reason,
+  });
+  throw new ContactShareDeniedError(params.reason);
+}
+
 export async function assertContactShareAllowed(params: {
   admin: ContactAccessAdmin;
   proposalId?: string;
   profileAId: string;
   profileBId: string;
 }): Promise<{ level: ContactAccessLevel; overrideReason?: string }> {
+  // Spec §18 step — either profile explicitly revoking CONTACT_SHARING
+  // consent is a hard stop, even ahead of an otherwise-approved proposal.
+  // Absence of a consent row is treated as granted (backfill default —
+  // src/lib/privacy/consent-backfill.ts), so only an explicit REVOKED blocks.
+  const [consentA, consentB] = await Promise.all([
+    resolveEffectiveConsent(params.profileAId),
+    resolveEffectiveConsent(params.profileBId),
+  ]);
+  if (consentA.CONTACT_SHARING === "REVOKED" || consentB.CONTACT_SHARING === "REVOKED") {
+    return denyAndLog({ ...params, reason: "One of these profiles has revoked contact-sharing consent." });
+  }
+
   if (params.proposalId) {
     const level = await resolveProposalContactAccessLevel(params.proposalId, params.profileAId, params.profileBId);
     if (level === "PROPOSAL_APPROVED") return { level };
@@ -49,12 +77,12 @@ export async function assertContactShareAllowed(params: {
     return { level: "USER_APPROVED" };
   }
 
-  throw new ContactShareDeniedError();
+  return denyAndLog({ ...params, reason: "No approved proposal, override permission, or emergency access." });
 }
 
 export class ContactShareDeniedError extends Error {
-  constructor() {
-    super("Contact sharing requires an approved proposal, an explicit override with reason, or emergency access.");
+  constructor(message = "Contact sharing requires an approved proposal, an explicit override with reason, or emergency access.") {
+    super(message);
     this.name = "ContactShareDeniedError";
   }
 }

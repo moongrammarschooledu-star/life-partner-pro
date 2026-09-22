@@ -14,7 +14,10 @@ import { redactForAudit } from "@/lib/privacy/audit-redaction";
 // proposal-driven share path in POST below.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const admin = await requireAdmin("contact:reveal");
+    // STEP 17 §17 — contact:reveal or sensitive:contact:view (either is
+    // sufficient — see resolveAdHocContactAccessLevel) gates this endpoint;
+    // requireAdmin() here only enforces authentication + session validity.
+    const admin = await requireAdmin();
     const { id } = await params;
 
     if (resolveAdHocContactAccessLevel(admin) === "HIDDEN") {

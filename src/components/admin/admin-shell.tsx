@@ -46,7 +46,7 @@ import {
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
-import type { Permission, AdminRole } from "@/lib/permissions";
+import type { Permission } from "@/lib/permissions";
 import { GlobalSearch } from "@/components/admin/global-search";
 import { NotificationsPanel } from "@/components/admin/notifications-panel";
 import { AdminNotificationBell } from "@/components/admin/admin-notification-bell";
@@ -101,12 +101,15 @@ export function AdminShell({
   const searchParams = useSearchParams();
   const { theme, toggle } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const role = user.role as AdminRole;
   const permissions = user.permissions ?? [];
 
+  // STEP 17 — admin-users/permission-matrix/departments/security-alerts are
+  // all gated server-side on "admin:manage" (SUPER_ADMIN only today); nav
+  // visibility follows that permission rather than a hardcoded role check, so
+  // it stays correct if a future role is ever granted admin:manage.
   const navItems = [
     ...NAV.filter((item) => !item.permission || permissions.includes(item.permission)),
-    ...(role === "SUPER_ADMIN" ? SUPER_ADMIN_NAV : []),
+    ...(permissions.includes("admin:manage") ? SUPER_ADMIN_NAV : []),
   ];
 
   const NavLinks = (

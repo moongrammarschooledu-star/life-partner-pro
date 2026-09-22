@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
+import { hasBroadRecordAccess } from "@/lib/permissions";
 
 // Spec §37 — Payment/Customer/Order/Invoice/Refunds/Timeline/Audit sections.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -9,7 +10,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const admin = await requireAdmin("finance:payments:view");
     const { id } = await params;
 
-    if (admin.role === "STAFF") {
+    if (!hasBroadRecordAccess(admin.role)) {
       const payment = await prisma.payment.findUnique({ where: { id }, select: { profileId: true } });
       if (payment) {
         const assigned = await prisma.adminAssignment.findFirst({ where: { resourceType: "PROFILE", resourceId: payment.profileId, adminId: admin.id, status: { not: "REASSIGNED" } } });

@@ -8,6 +8,7 @@ import { STATUS_GROUPS } from "@/lib/proposal-status-labels";
 import { notifyProposalCreated } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { blockedResponse } from "@/lib/ops/guards";
+import { hasBroadRecordAccess } from "@/lib/permissions";
 
 const proposalListInclude = {
   profileA: { select: { id: true, profileCode: true, fullName: true, gender: true, city: true } },
@@ -96,11 +97,11 @@ export async function POST(req: Request) {
     }
 
     const proposalCode = await nextProposalCode();
-    // A STAFF-created proposal is auto-assigned to its creator so the
-    // row-level access gate (src/lib/proposal-access.ts) never locks them
-    // out of the proposal they just made; ADMIN/SUPER_ADMIN-created
+    // A proposal created by an assignment-scoped role is auto-assigned to its
+    // creator so the row-level access gate (src/lib/proposal-access.ts) never
+    // locks them out of the proposal they just made; a broad-access role's
     // proposals stay unassigned until a Super Admin assigns one explicitly.
-    const assignedToId = admin.role === "STAFF" ? admin.id : undefined;
+    const assignedToId = !hasBroadRecordAccess(admin.role) ? admin.id : undefined;
 
     const proposal = await prisma.proposal.create({
       data: {

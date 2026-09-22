@@ -7,6 +7,8 @@ import { Field, Input, Checkbox, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { ALGORITHM_VERSION } from "@/lib/matching";
+import { ADMIN_ROLES } from "@/lib/permissions";
+import { formatEnumLabel } from "@/lib/utils";
 
 interface Settings {
   appName: string;
@@ -76,7 +78,6 @@ interface Settings {
   passwordMinLength: number;
 }
 
-const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "VIEWER"];
 
 const WEIGHT_FIELDS: { key: keyof Settings; label: string; hardKey: keyof Settings; enabledKey: keyof Settings }[] = [
   { key: "weightAge", label: "Age", hardKey: "hardRequirementAge", enabledKey: "categoryEnabledAge" },
@@ -495,7 +496,7 @@ export default function SettingsPage() {
               {ADMIN_ROLES.map((r) => (
                 <Checkbox
                   key={r}
-                  label={r}
+                  label={formatEnumLabel(r)}
                   checked={(settings.twoFactorRequiredRoles ?? []).includes(r)}
                   onChange={(e) => {
                     const current = new Set(settings.twoFactorRequiredRoles ?? []);

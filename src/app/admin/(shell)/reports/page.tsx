@@ -24,6 +24,7 @@ import { FollowupsSection } from "@/components/admin/reports/followups-section";
 import { CasesSection } from "@/components/admin/reports/cases-section";
 import { PrivacySection } from "@/components/admin/reports/privacy-section";
 import { FinanceSection } from "@/components/admin/reports/finance-section";
+import type { Permission } from "@/lib/permissions";
 
 type Tab =
   | "overview" | "registration" | "demographics" | "income" | "verification" | "completeness"
@@ -49,7 +50,7 @@ const ALL_TABS: { value: Tab; label: string }[] = [
 ];
 
 export default function ReportsPage() {
-  const [role, setRole] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [tab, setTab] = useState<Tab>("overview");
   const [visited, setVisited] = useState<Set<Tab>>(new Set(["overview"]));
   const [filters, setFilters] = useState<ReportFilterState>(EMPTY_REPORT_FILTERS);
@@ -61,8 +62,8 @@ export default function ReportsPage() {
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
-      .then((s) => setRole(s?.user?.role ?? null))
-      .catch(() => setRole(null));
+      .then((s) => setPermissions(s?.user?.permissions ?? []))
+      .catch(() => setPermissions([]));
     fetch("/api/admin/reports/admins")
       .then((r) => r.json())
       .then((j) => setAdmins(j.items ?? []))
@@ -95,11 +96,11 @@ export default function ReportsPage() {
   }, [filters, preset, customFrom, customTo]);
 
   const visibleTabs = ALL_TABS.filter((t) => {
-    if (t.value === "income") return role === "SUPER_ADMIN" || role === "ADMIN";
-    if (t.value === "staff") return role === "SUPER_ADMIN";
-    if (t.value === "cases") return role !== "VIEWER";
-    if (t.value === "privacy") return role !== "VIEWER";
-    if (t.value === "finance") return role === "SUPER_ADMIN" || role === "ADMIN";
+    if (t.value === "income") return permissions.includes("reports:income:view");
+    if (t.value === "staff") return permissions.includes("reports:staff-performance:view");
+    if (t.value === "cases") return permissions.includes("cases:view");
+    if (t.value === "privacy") return permissions.includes("privacy:view");
+    if (t.value === "finance") return permissions.includes("finance:reports:view");
     return true;
   });
 
@@ -117,7 +118,7 @@ export default function ReportsPage() {
           <Link href="/admin/reports/history" className={buttonClass({ variant: "outline", size: "sm" })}>
             <History className="h-4 w-4" /> History
           </Link>
-          {role === "SUPER_ADMIN" && (
+          {permissions.includes("reports:schedule:manage") && (
             <Link href="/admin/reports/scheduled" className={buttonClass({ variant: "outline", size: "sm" })}>
               <CalendarClock className="h-4 w-4" /> Scheduled Reports
             </Link>

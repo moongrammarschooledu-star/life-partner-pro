@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { assertCanGrantRole, assertCanGrantPermissions } from "@/lib/role-management";
+import type { AdminRole, Permission } from "@/lib/permissions";
 
 export async function GET() {
   try {
@@ -54,13 +56,24 @@ export async function POST(req: Request) {
     const existing = await prisma.adminUser.findUnique({ where: { email: email.toLowerCase() } });
     if (existing) throw new ApiError(409, "An admin with this email already exists");
 
+    // STEP 17 §39/§41 — cannot create an admin with a role carrying permissions
+    // the creator does not hold themselves (privilege-escalation guard).
+    const assignedRole: AdminRole = role ?? "STAFF_MATCHMAKER";
+    if (customRoleId) {
+      const customRole = await prisma.customRole.findUnique({ where: { id: customRoleId }, include: { permissions: { select: { permissionKey: true } } } });
+      if (!customRole) throw new ApiError(400, "Custom role not found.");
+      await assertCanGrantPermissions(admin, customRole.permissions.map((p) => p.permissionKey as Permission));
+    } else {
+      await assertCanGrantRole(admin, assignedRole);
+    }
+
     const passwordHash = await bcrypt.hash(password, 12);
     const created = await prisma.adminUser.create({
       data: {
         name,
         email: email.toLowerCase(),
         passwordHash,
-        role: role ?? "STAFF",
+        role: assignedRole,
         departmentId: departmentId || null,
         customRoleId: customRoleId || null,
       },

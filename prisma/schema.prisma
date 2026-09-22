@@ -15,11 +15,39 @@ datasource db {
 
 // ---------- Enums ----------
 
+// STEP 17 — SUPER_ADMIN/VIEWER are reused unchanged by the new 13-role
+// hierarchy below; ADMIN and STAFF are kept only as inert legacy labels
+// (Postgres enum values are not safely dropped) — no admin is assigned
+// either after the STEP 17 migration (ADMIN -> OPERATIONS_ADMIN,
+// STAFF -> STAFF_MATCHMAKER). See src/lib/permissions.ts ADMIN_ROLES for the
+// canonical list of roles actually assignable today.
 enum AdminRole {
   SUPER_ADMIN
-  ADMIN
-  STAFF
+  ADMIN // legacy — retired, see comment above
+  STAFF // legacy — retired, see comment above
   VIEWER
+  OPERATIONS_ADMIN
+  MATCHMAKING_MANAGER
+  VERIFICATION_MANAGER
+  SUPPORT_MANAGER
+  COMMUNICATION_MANAGER
+  FINANCE_MANAGER
+  STAFF_MATCHMAKER
+  VERIFICATION_STAFF
+  SUPPORT_STAFF
+  COMMUNICATION_STAFF
+  REPORTING_ANALYST
+}
+
+// STEP 17 §3 — cross-cutting graded record access. Ordered least to most:
+// a helper granting MANAGE implicitly satisfies a check that only requires VIEW.
+enum AccessLevel {
+  VIEW
+  COMMENT
+  EDIT
+  MANAGE
+  APPROVE
+  OWNER
 }
 
 // ---------- Staff Management & Permissions (STEP 11) ----------
@@ -705,6 +733,19 @@ enum AuditAction {
   AI_FOLLOWUP_DRAFTED
   AI_REPORT_SUMMARY_GENERATED
   AI_DATA_QUALITY_CHECKED
+
+  // ---------- Exact Admin Roles & Granular Permission Matrix (STEP 17) ----------
+  // Existing ADMIN_USER_ROLE_CHANGED / ADMIN_SESSION_REVOKED / ASSIGNMENT_CREATED /
+  // ASSIGNMENT_REASSIGNED are reused as-is, not duplicated here (spec §52).
+  ADMIN_ROLE_ASSIGNED
+  ADMIN_ROLE_REMOVED
+  ADMIN_PERMISSION_GRANTED
+  ADMIN_PERMISSION_REVOKED
+  ADMIN_SENSITIVE_PERMISSION_GRANTED
+  ADMIN_SENSITIVE_PERMISSION_REVOKED
+  ASSIGNMENT_REVOKED
+  ASSIGNMENT_EXPIRED
+  ASSIGNMENT_ACCESS_LEVEL_CHANGED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -2315,6 +2356,13 @@ model CustomRole {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  // STEP 17 §42 — closes out the custom-role fields the spec asks for beyond
+  // what STEP 11 already built (id/name/description/permissions/active above).
+  // Both optional/defaulted: an existing custom role with neither set behaves
+  // exactly as before.
+  allowedRecordTypes AssignmentResourceType[] @default([])
+  defaultAccessLevel AccessLevel?
+
   permissions CustomRolePermission[]
   admins      AdminUser[]
 }
@@ -2404,8 +2452,17 @@ model AdminAssignment {
   resourceId   String
   priority     AssignmentPriority     @default(NORMAL)
   status       AssignmentStatus       @default(ASSIGNED)
+  // STEP 17 §3 — the level this assignment grants; defaults to MANAGE, i.e. the
+  // full "owner" access every assignment has always implicitly granted, so
+  // every pre-STEP-17 row keeps its current effective behavior unchanged.
+  accessLevel  AccessLevel            @default(MANAGE)
   assignedAt   DateTime               @default(now())
   dueAt        DateTime?
+  // STEP 17 §20 — temporary access. Checked lazily at read time by every
+  // access-check helper (an assignment past expiresAt is treated as if it
+  // doesn't exist) — same lazy-expiry convention as BreakGlassAccess.expiresAt
+  // and ProfileRestriction.endDate. No cron sweep; null = never expires.
+  expiresAt    DateTime?
   notes        String?
   createdBy    AdminUser              @relation("AdminAssignmentCreator", fields: [createdById], references: [id])
   createdById  String

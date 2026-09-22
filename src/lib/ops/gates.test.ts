@@ -21,7 +21,7 @@ const green: ReadinessFacts = {
   integrity: { status: "CLEAN", ageDays: 0.5, highFindings: 0 },
   payments: { provider: "MANUAL", activeBankAccounts: 1, stage: "PRODUCTION", envSafe: true, checklist: { successfulPayment: true, failedPayment: true, cancelledOrder: true, completedRefund: true, processedWebhookEvent: false, activeSubscription: true, invoiceGenerated: true }, reconciliationClean: true, killSwitchExercised: true, webhooksEnabled: true },
   comms: { email: true, sms: true, whatsappEnabled: false, whatsappConfigured: false },
-  security: { twoFactorRoles: ["SUPER_ADMIN", "ADMIN"], adminSessionMaxHours: 12, legacyUnencryptedPhotos: 0, lockoutConfigured: true },
+  security: { twoFactorRoles: ["SUPER_ADMIN", "OPERATIONS_ADMIN"], adminSessionMaxHours: 12, legacyUnencryptedPhotos: 0, lockoutConfigured: true },
   release: { hasCurrent: true, healthy: true, approved: true, hasRollbackTarget: true },
   selfTest: { status: "PASS", ageDays: 1 },
   storage: { tokenConfigured: true },
@@ -95,6 +95,10 @@ describe("evaluateReadiness", () => {
     expect(blockedIds({ ...green, security: { ...green.security, legacyUnencryptedPhotos: 2 } })).toContain("legacy_photos");
     expect(blockedIds({ ...green, alerts: { openCritical: 1 } })).toContain("monitor_criticals");
     expect(blockedIds({ ...green, security: { ...green.security, twoFactorRoles: ["SUPER_ADMIN"] } })).toContain("admin_2fa");
+  });
+
+  it("also accepts the legacy ADMIN label for the 2FA gate (STEP 17 role migration)", () => {
+    expect(blockedIds({ ...green, security: { ...green.security, twoFactorRoles: ["SUPER_ADMIN", "ADMIN"] } })).not.toContain("admin_2fa");
   });
 
   it("warns (but does not block) for optional gates", () => {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ApiError, type SessionAdmin } from "@/lib/route-guard";
-import type { Permission } from "@/lib/permissions";
+import { hasBroadRecordAccess, type Permission } from "@/lib/permissions";
 import { typePermissionFor } from "@/lib/case-type-permission";
 import { resolveDateRange } from "@/lib/reports/date-range";
 import { computeProposalAnalytics } from "@/lib/reports/aggregate/proposals";
@@ -61,7 +61,7 @@ async function assertInternalConsent(profileIds: string[]): Promise<void> {
 }
 
 async function assignedProfileIds(admin: SessionAdmin): Promise<string[] | null> {
-  if (admin.role !== "STAFF") return null;
+  if (hasBroadRecordAccess(admin.role)) return null;
   const rows = await prisma.adminAssignment.findMany({ where: { resourceType: "PROFILE", adminId: admin.id, status: { not: "REASSIGNED" } }, select: { resourceId: true } });
   return rows.map((r) => r.resourceId);
 }
@@ -128,11 +128,12 @@ const TOOLS = {
     permissions: ["proposal:create"],
     schema: z.object({}).strict(),
     async execute(admin) {
-      const where = admin.role === "STAFF" ? { assignedToId: admin.id } : {};
+      const scoped = !hasBroadRecordAccess(admin.role);
+      const where = scoped ? { assignedToId: admin.id } : {};
       const groups = await prisma.proposal.groupBy({ by: ["status"], where, _count: { _all: true } });
       const total = groups.reduce((n, g) => n + g._count._all, 0);
       return {
-        heading: `${total} proposal(s)${admin.role === "STAFF" ? " assigned to you" : ""}.`,
+        heading: `${total} proposal(s)${scoped ? " assigned to you" : ""}.`,
         lines: groups.map((g) => db(`Proposals — ${g.status.replace(/_/g, " ").toLowerCase()}`, g._count._all)),
         next: total ? "Open Proposals to review those needing action." : null,
       };
@@ -144,13 +145,14 @@ const TOOLS = {
     schema: z.object({ scope: z.enum(["PENDING", "OVERDUE"]).default("PENDING") }).strict(),
     async execute(admin, args) {
       const now = new Date();
-      const where = { status: "PENDING" as const, ...(args.scope === "OVERDUE" ? { dueDate: { lt: now } } : {}), ...(admin.role === "STAFF" ? { adminId: admin.id } : {}) };
+      const scoped = !hasBroadRecordAccess(admin.role);
+      const where = { status: "PENDING" as const, ...(args.scope === "OVERDUE" ? { dueDate: { lt: now } } : {}), ...(scoped ? { adminId: admin.id } : {}) };
       const [count, rows] = await Promise.all([
         prisma.followUp.count({ where }),
         prisma.followUp.findMany({ where, take: 10, orderBy: { dueDate: "asc" }, select: { purpose: true, priority: true, dueDate: true, profile: { select: { profileCode: true } } } }),
       ]);
       return {
-        heading: `${count} ${args.scope === "OVERDUE" ? "overdue" : "pending"} follow-up(s)${admin.role === "STAFF" ? " assigned to you" : ""}.`,
+        heading: `${count} ${args.scope === "OVERDUE" ? "overdue" : "pending"} follow-up(s)${scoped ? " assigned to you" : ""}.`,
         lines: rows.map((r) => db(r.profile.profileCode, `${r.priority} · due ${r.dueDate.toISOString().slice(0, 10)}${r.purpose ? ` · ${r.purpose.slice(0, 80)}` : ""}`)),
         next: count ? "Ask me to draft a gentle reminder for one of these profiles." : null,
       };
@@ -163,13 +165,13 @@ const TOOLS = {
     async execute(admin) {
       const allTypes = ["SUPPORT", "COMPLAINT", "SAFETY_REPORT", "INTERNAL", "PRIVACY_INCIDENT", "SYSTEM_INCIDENT"] as const;
       // A type with its own permission needs that permission; a type with none
-      // (INTERNAL, SYSTEM_INCIDENT) is only summarised for SUPER_ADMIN / ADMIN.
+      // (INTERNAL, SYSTEM_INCIDENT) is only summarised for a broad-access role.
       const allowed = allTypes.filter((t) => {
         const p = typePermissionFor(t, "view");
-        return p ? admin.permissions.includes(p) : admin.role === "SUPER_ADMIN" || admin.role === "ADMIN";
+        return p ? admin.permissions.includes(p) : hasBroadRecordAccess(admin.role);
       });
       let caseIdFilter: { id: { in: string[] } } | Record<string, never> = {};
-      if (admin.role === "STAFF") {
+      if (!hasBroadRecordAccess(admin.role)) {
         const rows = await prisma.adminAssignment.findMany({ where: { resourceType: "CASE", adminId: admin.id, status: { not: "REASSIGNED" } }, select: { resourceId: true } });
         caseIdFilter = { id: { in: rows.map((r) => r.resourceId) } };
       }

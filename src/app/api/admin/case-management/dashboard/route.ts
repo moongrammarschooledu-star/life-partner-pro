@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
 import { classifySla } from "@/lib/case-sla";
 import { typePermissionFor } from "@/lib/case-type-permission";
+import { hasBroadRecordAccess } from "@/lib/permissions";
 import { startOfDay } from "date-fns";
 import type { CaseType } from "@prisma/client";
 
@@ -23,7 +24,7 @@ export async function GET() {
     };
 
     let scopeWhere = baseWhere;
-    if (admin.role === "STAFF") {
+    if (!hasBroadRecordAccess(admin.role)) {
       const [assigned, shared] = await Promise.all([
         prisma.adminAssignment.findMany({ where: { resourceType: "CASE", adminId: admin.id, status: { not: "REASSIGNED" } }, select: { resourceId: true } }),
         prisma.caseAccessGrant.findMany({ where: { adminId: admin.id }, select: { caseId: true } }),

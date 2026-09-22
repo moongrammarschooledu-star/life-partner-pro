@@ -89,9 +89,12 @@ export async function reassignAssignment(params: {
 
 // Resolves the current assignee for a resource tracked only in
 // AdminAssignment (Profile, FollowUp) — used by the access-check helpers.
+// STEP 17 §20 — an assignment past its expiresAt is treated as if it doesn't
+// exist (lazy expiry, same convention as BreakGlassAccess/ProfileRestriction;
+// no cron sweep). expiresAt: null never expires.
 export async function getCurrentAssigneeId(resourceType: AssignmentResourceType, resourceId: string): Promise<string | null> {
   const latest = await prisma.adminAssignment.findFirst({
-    where: { resourceType, resourceId, status: { not: "REASSIGNED" } },
+    where: { resourceType, resourceId, status: { not: "REASSIGNED" }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
     orderBy: { assignedAt: "desc" },
   });
   return latest?.adminId ?? null;

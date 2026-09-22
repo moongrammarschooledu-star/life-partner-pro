@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
+import { hasBroadRecordAccess, type AdminRole } from "@/lib/permissions";
 import { assertVerificationAccess } from "@/lib/verification-access";
 import { setVerificationStatus, suspendProfile } from "@/lib/verification/status";
 import { writeAudit } from "@/lib/audit";
 import { createAssignment } from "@/lib/admin-assignment";
 import { notifyVerificationAssigned } from "@/lib/notifications/events";
+
+// STEP 17 §25 — a narrow-role admin (VERIFICATION_STAFF etc.) who has been
+// separately granted an approve/reject/reverify permission still cannot
+// rubber-stamp a case they personally reviewed; a broad-access manager role
+// (VERIFICATION_MANAGER/SUPER_ADMIN/OPERATIONS_ADMIN) is expected to be able
+// to review and decide solo, so this only guards the narrower roles.
+function assertNotSelfReviewed(admin: { id: string; role: string }, verification: { lastReviewedById: string | null }) {
+  if (!hasBroadRecordAccess(admin.role as AdminRole) && verification.lastReviewedById && verification.lastReviewedById === admin.id) {
+    throw new ApiError(403, "You cannot approve, reject, or require re-verification for a case you already reviewed — assign it to another reviewer.");
+  }
+}
 
 const REJECTION_CATEGORIES = ["INFORMATION_INCOMPLETE", "INFORMATION_INCONSISTENT", "VERIFICATION_FAILED", "DUPLICATE_ACCOUNT_SUSPECTED", "POLICY_VIOLATION", "OTHER"];
 
@@ -29,16 +41,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     switch (action) {
       case "approve": {
+        if (!admin.permissions.includes("verification:approve")) throw new ApiError(403, "You do not have permission to approve verifications.");
+        assertNotSelfReviewed(admin, verification);
         await setVerificationStatus(id, "VERIFIED", { adminId: admin.id, note: body.note });
         break;
       }
       case "request_more_info": {
+        if (!admin.permissions.includes("verification:request-info")) throw new ApiError(403, "You do not have permission to request more information.");
         const items: string[] = Array.isArray(body.items) ? body.items : [];
         if (items.length === 0) throw new ApiError(400, "Select at least one item to request.");
         await setVerificationStatus(id, "VERIFICATION_REQUIRED", { adminId: admin.id, note: body.note, requestedInfoItems: items });
         break;
       }
       case "reject": {
+        if (!admin.permissions.includes("verification:reject")) throw new ApiError(403, "You do not have permission to reject verifications.");
+        assertNotSelfReviewed(admin, verification);
         if (!body.rejectionReasonCategory || !REJECTION_CATEGORIES.includes(body.rejectionReasonCategory)) {
           throw new ApiError(400, "A rejection reason category is required.");
         }
@@ -54,6 +71,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         break;
       }
       case "require_reverification": {
+        if (!admin.permissions.includes("verification:reverify")) throw new ApiError(403, "You do not have permission to require re-verification.");
+        assertNotSelfReviewed(admin, verification);
         await setVerificationStatus(id, "RE_VERIFICATION_REQUIRED", { adminId: admin.id, reVerificationReason: body.reason, note: body.note });
         break;
       }

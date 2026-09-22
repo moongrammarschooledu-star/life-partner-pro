@@ -130,11 +130,13 @@ export const REPORT_DEFINITIONS: Record<DataSource, ReportDefinition> = {
   },
 };
 
-// Only SUPER_ADMIN/ADMIN ever see sensitive columns (mobile/WhatsApp/email/
-// income/family/private-notes) — STAFF and VIEWER never do, in either the
-// on-screen Custom Report table or any exported file (spec §23).
+// Only SUPER_ADMIN/OPERATIONS_ADMIN ever see sensitive columns (mobile/
+// WhatsApp/email/income/family/private-notes) in the on-screen Custom Report
+// table or any exported file (spec §23). `ADMIN` is kept alongside its STEP
+// 17 successor `OPERATIONS_ADMIN` for any not-yet-migrated row — STAFF/
+// STAFF_MATCHMAKER and every other scoped role never see these columns.
 export function canViewSensitiveColumns(role: AdminRole): boolean {
-  return role === "SUPER_ADMIN" || role === "ADMIN";
+  return role === "SUPER_ADMIN" || role === "ADMIN" || role === "OPERATIONS_ADMIN";
 }
 
 // The single point of truth for redaction — called identically by the
