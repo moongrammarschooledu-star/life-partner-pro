@@ -367,4 +367,50 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Task Reopened", body: "A completed task has been reopened." },
     UR: { title: "ٹاسک دوبارہ کھولا گیا", body: "ایک مکمل شدہ ٹاسک دوبارہ کھولا گیا ہے۔" },
   },
+
+  // ---------- Approval Governance (STEP 19) ----------
+  APPROVAL_REQUESTED: {
+    EN: { title: "Approval Requested", body: "A high-risk action needs your approval." },
+    UR: { title: "منظوری درکار ہے", body: "ایک حساس اقدام کو آپ کی منظوری درکار ہے۔" },
+  },
+  APPROVAL_ASSIGNED: {
+    EN: { title: "Approval Assigned", body: "An approval request has been assigned to you." },
+    UR: { title: "منظوری تفویض کی گئی", body: "ایک منظوری کی درخواست آپ کو تفویض کی گئی ہے۔" },
+  },
+  APPROVAL_APPROVED: {
+    EN: { title: "Approval Granted", body: "Your approval request has been approved." },
+    UR: { title: "منظوری دے دی گئی", body: "آپ کی منظوری کی درخواست منظور ہو گئی ہے۔" },
+  },
+  APPROVAL_REJECTED: {
+    EN: { title: "Approval Rejected", body: "Your approval request has been rejected." },
+    UR: { title: "منظوری مسترد", body: "آپ کی منظوری کی درخواست مسترد کر دی گئی ہے۔" },
+  },
+  APPROVAL_CHANGES_REQUESTED: {
+    EN: { title: "Changes Requested", body: "Changes have been requested on your approval request." },
+    UR: { title: "تبدیلی کی درخواست", body: "آپ کی منظوری کی درخواست میں تبدیلی مانگی گئی ہے۔" },
+  },
+  APPROVAL_EXPIRING: {
+    EN: { title: "Approval Expiring Soon", body: "A pending approval request is about to expire." },
+    UR: { title: "منظوری کی میعاد ختم ہونے والی ہے", body: "ایک زیر التواء منظوری کی میعاد جلد ختم ہو جائے گی۔" },
+  },
+  APPROVAL_EXPIRED: {
+    EN: { title: "Approval Expired", body: "Your approval request has expired without a decision." },
+    UR: { title: "منظوری کی میعاد ختم", body: "آپ کی منظوری کی درخواست بغیر فیصلے کے ختم ہو گئی۔" },
+  },
+  APPROVAL_EXECUTION_STARTED: {
+    EN: { title: "Execution Started", body: "Your approved action is now being executed." },
+    UR: { title: "عملدرآمد شروع", body: "آپ کے منظور شدہ اقدام پر عملدرآمد شروع ہو گیا ہے۔" },
+  },
+  APPROVAL_EXECUTED: {
+    EN: { title: "Action Executed", body: "Your approved action has been executed successfully." },
+    UR: { title: "اقدام مکمل", body: "آپ کا منظور شدہ اقدام کامیابی سے مکمل ہو گیا ہے۔" },
+  },
+  APPROVAL_EXECUTION_FAILED: {
+    EN: { title: "Execution Failed", body: "Your approved action could not be executed." },
+    UR: { title: "عملدرآمد ناکام", body: "آپ کا منظور شدہ اقدام مکمل نہیں ہو سکا۔" },
+  },
+  EMERGENCY_OVERRIDE_USED: {
+    EN: { title: "Emergency Override Used", body: "An emergency override was used on a high-risk action." },
+    UR: { title: "ہنگامی اختیار استعمال ہوا", body: "ایک حساس اقدام پر ہنگامی اختیار استعمال کیا گیا۔" },
+  },
 };

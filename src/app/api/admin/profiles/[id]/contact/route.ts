@@ -6,6 +6,7 @@ import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { assertContactShareAllowed, resolveAdHocContactAccessLevel, ContactShareDeniedError } from "@/lib/privacy/contact-access";
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
 import { redactForAudit } from "@/lib/privacy/audit-redaction";
+import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 
 // Reveals contact info for a single profile. Every call is audited — this is
 // the only code path in the app that ever reads ContactInfo for display.
@@ -78,6 +79,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       throw new ApiError(400, "A reason is required to share contact information outside an approved proposal.");
     }
 
+    // STEP 19 §11 — maker-checker gate. assertContactShareAllowed() above
+    // has ALREADY re-validated consent from the live DB on every call to
+    // this route (including this one, whether it's the first attempt or the
+    // follow-up call after approval), so an approved-but-stale request can
+    // never override consent that was since revoked — the gate only decides
+    // go/no-go on top of a check that was already independently satisfied.
+    const gate = await enforceApprovalGate({
+      actionType: accessResult.level === "FAMILY_CONTACT_APPROVED" ? "CONTACT_SHARE_OVERRIDE" : "CONTACT_SHARE",
+      sourceType: proposalId ? "PROPOSAL" : "PROFILE",
+      sourceId: proposalId ?? id,
+      actor: admin,
+      reason: overrideReason?.trim() || `Contact share between ${id} and ${otherProfileId}`,
+      requestedPayload: { profileId: id, otherProfileId, phoneShared: !!phoneShared, whatsappShared: !!whatsappShared, emailShared: !!emailShared },
+    });
+    if (gate.requiresApproval && gate.status !== "READY_TO_EXECUTE") {
+      return NextResponse.json({ approvalRequired: true, approvalCode: gate.approvalCode, status: gate.status }, { status: 202 });
+    }
+
     const [profileAId, profileBId] = [id, otherProfileId].sort();
 
     const share = await prisma.contactShareLog.create({
@@ -98,6 +117,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       meta: { otherProfileId, shareId: share.id, accessLevel: accessResult.level, overrideReason: overrideReason ?? null, phoneShared: !!phoneShared, whatsappShared: !!whatsappShared, emailShared: !!emailShared },
     });
     await logPrivacyAccess({ actorAdminId: admin.id, action: "CONTACT_SHARED", field: "mobileNumber", targetProfileId: id, reason: overrideReason ?? null });
+    if (gate.requiresApproval) await markApprovalExecuted(gate.approvalRequestId, admin.id);
 
     return NextResponse.json({ ok: true, sharedAt: share.sharedAt, accessLevel: accessResult.level });
   } catch (error) {

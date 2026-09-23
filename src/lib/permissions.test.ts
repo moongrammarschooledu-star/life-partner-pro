@@ -248,3 +248,90 @@ describe("STEP 18 — Workflow & Task Management permission wiring", () => {
     }
   });
 });
+
+// ---------- Approval Governance (STEP 19) ----------
+describe("permissions — Approval Governance (STEP 19)", () => {
+  const MANAGER_ROLES = ["MATCHMAKING_MANAGER", "VERIFICATION_MANAGER", "SUPPORT_MANAGER", "COMMUNICATION_MANAGER", "FINANCE_MANAGER"] as const;
+  const STAFF_ROLES = ["STAFF_MATCHMAKER", "VERIFICATION_STAFF", "SUPPORT_STAFF", "COMMUNICATION_STAFF"] as const;
+
+  it("only SUPER_ADMIN holds approvals:policy:manage and approvals:emergency-override (spec §9/§25)", () => {
+    expect(hasPermission("SUPER_ADMIN", "approvals:policy:manage")).toBe(true);
+    expect(hasPermission("SUPER_ADMIN", "approvals:emergency-override")).toBe(true);
+    for (const role of ADMIN_ROLES.filter((r) => r !== "SUPER_ADMIN")) {
+      expect(hasPermission(role, "approvals:policy:manage"), role).toBe(false);
+      expect(hasPermission(role, "approvals:emergency-override"), role).toBe(false);
+    }
+  });
+
+  it("OPERATIONS_ADMIN gets the full governance permission set except policy:manage and emergency-override", () => {
+    expect(hasPermission("OPERATIONS_ADMIN", "approvals:approve")).toBe(true);
+    expect(hasPermission("OPERATIONS_ADMIN", "approvals:execute")).toBe(true);
+    expect(hasPermission("OPERATIONS_ADMIN", "ai:approval:approve")).toBe(true);
+    expect(hasPermission("OPERATIONS_ADMIN", "approvals:policy:manage")).toBe(false);
+    expect(hasPermission("OPERATIONS_ADMIN", "approvals:emergency-override")).toBe(false);
+  });
+
+  it("every *_MANAGER role can create/approve/reject/escalate but never execute or manage policy (spec §39)", () => {
+    for (const role of MANAGER_ROLES) {
+      expect(hasPermission(role, "approvals:view"), role).toBe(true);
+      expect(hasPermission(role, "approvals:create"), role).toBe(true);
+      expect(hasPermission(role, "approvals:approve"), role).toBe(true);
+      expect(hasPermission(role, "approvals:reject"), role).toBe(true);
+      expect(hasPermission(role, "approvals:execute"), role).toBe(false);
+      expect(hasPermission(role, "approvals:policy:manage"), role).toBe(false);
+      expect(hasPermission(role, "approvals:emergency-override"), role).toBe(false);
+    }
+  });
+
+  it("FINANCE_MANAGER alone among managers holds finance:approval:execute", () => {
+    expect(hasPermission("FINANCE_MANAGER", "finance:approval:execute")).toBe(true);
+    for (const role of MANAGER_ROLES.filter((r) => r !== "FINANCE_MANAGER")) {
+      expect(hasPermission(role, "finance:approval:execute"), role).toBe(false);
+    }
+  });
+
+  it("SUPPORT_MANAGER alone among managers holds security:approval:view/approve (mirrors its safety_cases ownership)", () => {
+    expect(hasPermission("SUPPORT_MANAGER", "security:approval:approve")).toBe(true);
+    for (const role of MANAGER_ROLES.filter((r) => r !== "SUPPORT_MANAGER")) {
+      expect(hasPermission(role, "security:approval:approve"), role).toBe(false);
+    }
+  });
+
+  it("every *_STAFF role can create/submit a request (the maker) but can NEVER approve/reject/execute one (spec §5/§39)", () => {
+    for (const role of STAFF_ROLES) {
+      expect(hasPermission(role, "approvals:view"), role).toBe(true);
+      expect(hasPermission(role, "approvals:create"), role).toBe(true);
+      expect(hasPermission(role, "approvals:submit"), role).toBe(true);
+      for (const p of ["approvals:approve", "approvals:reject", "approvals:request-changes", "approvals:execute", "approvals:escalate", "approvals:policy:manage"] as const) {
+        expect(hasPermission(role, p), `${role} / ${p}`).toBe(false);
+      }
+    }
+  });
+
+  it("REPORTING_ANALYST is read-only governance visibility with zero decision permissions", () => {
+    expect(hasPermission("REPORTING_ANALYST", "approvals:view")).toBe(true);
+    expect(hasPermission("REPORTING_ANALYST", "approvals:audit:view")).toBe(true);
+    for (const p of ["approvals:create", "approvals:approve", "approvals:reject", "approvals:execute"] as const) {
+      expect(hasPermission("REPORTING_ANALYST", p)).toBe(false);
+    }
+  });
+
+  it("VIEWER can only view approvals, nothing else", () => {
+    expect(hasPermission("VIEWER", "approvals:view")).toBe(true);
+    for (const p of ["approvals:create", "approvals:approve", "approvals:execute"] as const) {
+      expect(hasPermission("VIEWER", p)).toBe(false);
+    }
+  });
+
+  it("legacy ADMIN/STAFF roles are untouched by STEP 19 (no approvals:* granted, matching the STEP 18 precedent)", () => {
+    for (const p of ["approvals:view", "approvals:create", "approvals:approve"] as const) {
+      expect(hasPermission("ADMIN", p)).toBe(false);
+      expect(hasPermission("STAFF", p)).toBe(false);
+    }
+  });
+
+  it("sensitive:approval:view/approve are included in SENSITIVE_PERMISSIONS", () => {
+    expect(SENSITIVE_PERMISSIONS).toContain("sensitive:approval:view");
+    expect(SENSITIVE_PERMISSIONS).toContain("sensitive:approval:approve");
+  });
+});

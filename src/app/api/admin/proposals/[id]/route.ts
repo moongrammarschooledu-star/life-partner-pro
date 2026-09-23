@@ -7,7 +7,12 @@ import { assertProposalAccess } from "@/lib/proposal-access";
 import { SELECTABLE_STATUSES, isLegacyStatus } from "@/lib/proposal-status-labels";
 import { profileDetailInclude, toDetailDto } from "@/lib/serializers";
 import { notifyProposalStatusChanged } from "@/lib/notifications/events";
+import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 import type { AuditAction, ProfileStatus, ProposalStatus } from "@prisma/client";
+
+// STEP 19 §14 — MARRIED/FINALIZED are irreversible terminal states cascaded
+// onto both profiles; both go through the maker-checker gate first.
+const GOVERNED_PROPOSAL_STATUS: Partial<Record<ProposalStatus, string>> = { MARRIED: "PROPOSAL_MARK_MARRIED", FINALIZED: "PROPOSAL_FINALIZE" };
 
 const proposalDetailInclude = {
   profileA: { include: profileDetailInclude },
@@ -91,6 +96,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
     }
 
+    let gate: Awaited<ReturnType<typeof enforceApprovalGate>> | null = null;
+    if (status && GOVERNED_PROPOSAL_STATUS[status] && status !== existing.status) {
+      gate = await enforceApprovalGate({
+        actionType: GOVERNED_PROPOSAL_STATUS[status]!,
+        sourceType: "PROPOSAL",
+        sourceId: id,
+        actor: admin,
+        reason: note?.trim() || `Set proposal status to ${status}.`,
+        requestedPayload: { status, finalNotes: finalNotes ?? null, marriageNotes: marriageNotes ?? null },
+      });
+      if (gate.requiresApproval && gate.status !== "READY_TO_EXECUTE") {
+        return NextResponse.json({ approvalRequired: true, approvalCode: gate.approvalCode, status: gate.status }, { status: 202 });
+      }
+    }
+
     const now = new Date();
     const statusFields =
       status === "FINALIZED"
@@ -133,6 +153,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (status && status !== existing.status) {
       await notifyProposalStatusChanged({ id, profileAId: proposal.profileAId, profileBId: proposal.profileBId }, status);
     }
+    if (gate?.requiresApproval) await markApprovalExecuted(gate.approvalRequestId, admin.id);
 
     return NextResponse.json({ status: proposal.status, priority: proposal.priority });
   } catch (error) {

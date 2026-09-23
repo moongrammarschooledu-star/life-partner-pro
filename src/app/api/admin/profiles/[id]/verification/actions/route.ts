@@ -7,6 +7,7 @@ import { setVerificationStatus, suspendProfile } from "@/lib/verification/status
 import { writeAudit } from "@/lib/audit";
 import { createAssignment } from "@/lib/admin-assignment";
 import { notifyVerificationAssigned } from "@/lib/notifications/events";
+import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 
 // STEP 17 §25 — a narrow-role admin (VERIFICATION_STAFF etc.) who has been
 // separately granted an approve/reject/reverify permission still cannot
@@ -43,7 +44,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       case "approve": {
         if (!admin.permissions.includes("verification:approve")) throw new ApiError(403, "You do not have permission to approve verifications.");
         assertNotSelfReviewed(admin, verification);
+
+        // STEP 19 §13 — maker-checker gate on the formal verification
+        // decision. sourceId is the ProfileVerification row's own id (not
+        // profileId) so src/lib/approvals/conflict.ts's
+        // VERIFICATION_MAKER_CONFLICT check can look it back up directly.
+        const gate = await enforceApprovalGate({
+          actionType: "VERIFICATION_APPROVE",
+          sourceType: "VERIFICATION",
+          sourceId: verification.id,
+          actor: admin,
+          reason: body.note?.trim() || "Verification approved.",
+        });
+        if (gate.requiresApproval && gate.status !== "READY_TO_EXECUTE") {
+          return NextResponse.json({ approvalRequired: true, approvalCode: gate.approvalCode, status: gate.status }, { status: 202 });
+        }
+
         await setVerificationStatus(id, "VERIFIED", { adminId: admin.id, note: body.note });
+        if (gate.requiresApproval) await markApprovalExecuted(gate.approvalRequestId, admin.id);
         break;
       }
       case "request_more_info": {

@@ -5,6 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { requireReason, requireReauth } from "@/lib/ops/admin-route";
 import { ADMIN_ROLES, hasBroadRecordAccess, ROLE_PERMISSIONS, type AdminRole, type Permission } from "@/lib/permissions";
 import { assertCanGrantRole, assertCanGrantPermissions, auditRoleChange, currentEffectivePermissions } from "@/lib/role-management";
+import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -60,6 +61,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
     }
 
+    // STEP 19 §16 — maker-checker gate on role/permission escalation.
+    // sourceType ADMIN_USER, sourceId = the TARGET admin's id (never the
+    // actor's) — IDOR-hardened by construction, since `id` came from the
+    // trusted route param, not a client-controlled body field.
+    let gate: Awaited<ReturnType<typeof enforceApprovalGate>> | null = null;
+    if (roleOrCustomChanging) {
+      gate = await enforceApprovalGate({
+        actionType: customRoleId !== undefined && role === undefined ? "PERMISSION_CHANGE" : role === "SUPER_ADMIN" ? "SUPER_ADMIN_CHANGE" : "ROLE_ASSIGNMENT",
+        sourceType: "ADMIN_USER",
+        sourceId: id,
+        actor: admin,
+        reason: reasonText,
+        requestedPayload: { role: role ?? null, customRoleId: customRoleId ?? null },
+      });
+      if (gate.requiresApproval && gate.status !== "READY_TO_EXECUTE") {
+        return NextResponse.json({ approvalRequired: true, approvalCode: gate.approvalCode, status: gate.status }, { status: 202 });
+      }
+    }
+
     const updated = await prisma.adminUser.update({
       where: { id },
       data: {
@@ -91,6 +111,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (typeof twoFactorEnabled === "boolean") {
       await writeAudit({ action: twoFactorEnabled ? "TWO_FACTOR_ENABLED" : "TWO_FACTOR_DISABLED", adminId: admin.id, meta: { targetAdminId: id } });
+    }
+
+    if (roleOrCustomChanging) {
+      // STEP 19 §16 — "Terminate/reissue affected sessions where required":
+      // the target's JWT still carries the OLD role/permissions until they
+      // re-authenticate, so every currently active session is revoked here,
+      // forcing a fresh login (and a fresh, correctly-scoped session) on
+      // their very next request (see requireAdmin()'s revokedAt check).
+      await prisma.adminSession.updateMany({ where: { adminId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      if (gate?.requiresApproval) await markApprovalExecuted(gate.approvalRequestId, admin.id);
     }
 
     return NextResponse.json(updated);

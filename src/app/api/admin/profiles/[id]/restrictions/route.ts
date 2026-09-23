@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { applyRestriction, liftRestriction } from "@/lib/profile-restrictions";
 import { notifyProfileRestricted } from "@/lib/notifications/events";
+import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 import type { RestrictionType } from "@prisma/client";
 
 const VALID_TYPES: RestrictionType[] = ["CANNOT_MATCH", "CANNOT_RECEIVE_PROPOSAL", "CANNOT_CONTACT_SHARE", "CANNOT_SCHEDULE_MEETING", "CANNOT_UPDATE_FIELDS"];
@@ -38,6 +39,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!restrictionType || !VALID_TYPES.includes(restrictionType as RestrictionType)) throw new ApiError(400, "A valid restriction type is required.");
     if (!reason?.trim()) throw new ApiError(400, "A reason is required.");
 
+    // STEP 19 §12 — maker-checker gate for high-risk profile restriction.
+    const gate = await enforceApprovalGate({
+      actionType: "PROFILE_RESTRICT",
+      sourceType: "PROFILE",
+      sourceId: id,
+      actor: admin,
+      reason: reason.trim(),
+      requestedPayload: { restrictionType, endDate: endDate ?? null, caseId: caseId ?? null },
+    });
+    if (gate.requiresApproval && gate.status !== "READY_TO_EXECUTE") {
+      return NextResponse.json({ approvalRequired: true, approvalCode: gate.approvalCode, status: gate.status }, { status: 202 });
+    }
+
     const restriction = await applyRestriction({
       profileId: id,
       restrictionType: restrictionType as RestrictionType,
@@ -47,6 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       caseId: caseId || null,
     });
     await notifyProfileRestricted(id);
+    if (gate.requiresApproval) await markApprovalExecuted(gate.approvalRequestId, admin.id);
 
     return NextResponse.json(restriction);
   } catch (error) {

@@ -44,6 +44,7 @@ import {
   BookOpen,
   Bot,
   ListChecks,
+  Gavel,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -66,6 +67,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/meetings", label: "Meetings", icon: CalendarDays, permission: "proposal:create" },
   { href: "/admin/follow-ups", label: "Follow-ups", icon: CalendarClock },
   { href: "/admin/workflow", label: "Workflow & Tasks", icon: ListChecks, permission: "tasks:view" },
+  { href: "/admin/approvals", label: "Approvals", icon: Gavel, permission: "approvals:view" },
   { href: "/admin/communication-center", label: "Communication Center", icon: MessageSquare, permission: "communication:view" },
   { href: "/admin/notification-templates", label: "Notification Templates", icon: FileText, permission: "notification:template:manage" },
   { href: "/admin/reports", label: "Reports & Analytics", icon: BarChart3, permission: "reports:view" },

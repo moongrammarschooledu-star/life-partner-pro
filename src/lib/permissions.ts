@@ -240,7 +240,40 @@ export type Permission =
   | "tasks:workflow-failures:view"
   | "tasks:workflow-failures:resolve"
   | "tasks:reports:view"
-  | "staff:availability:manage";
+  | "staff:availability:manage"
+  // ---------- Approval Governance (STEP 19) ----------
+  | "approvals:view"
+  | "approvals:create"
+  | "approvals:submit"
+  | "approvals:approve"
+  | "approvals:reject"
+  | "approvals:request-changes"
+  | "approvals:assign"
+  | "approvals:delegate"
+  | "approvals:escalate"
+  | "approvals:cancel"
+  | "approvals:execute"
+  | "approvals:audit:view"
+  | "approvals:policy:view"
+  | "approvals:policy:manage"
+  | "approvals:emergency-override"
+  | "approvals:bulk:view"
+  | "approvals:bulk:approve"
+  | "sensitive:approval:view"
+  | "sensitive:approval:approve"
+  | "sensitive:approval:execute"
+  | "finance:approval:view"
+  | "finance:approval:approve"
+  | "finance:approval:execute"
+  | "privacy:approval:view"
+  | "privacy:approval:approve"
+  | "privacy:approval:execute"
+  | "security:approval:view"
+  | "security:approval:approve"
+  | "security:approval:execute"
+  | "ai:approval:view"
+  | "ai:approval:approve"
+  | "ai:approval:execute";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -258,6 +291,8 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "sensitive:photos:view",
   "sensitive:finance:view",
   "sensitive:finance:export",
+  "sensitive:approval:view",
+  "sensitive:approval:approve",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -478,6 +513,77 @@ const MANAGER_TASK_PERMISSIONS: Permission[] = [
 // queue only — no create/assign/reassign/escalate/bulk-actions.
 const STAFF_TASK_PERMISSIONS: Permission[] = ["tasks:view", "tasks:view:own", "tasks:accept", "tasks:complete", "tasks:comment", "tasks:attachments:upload", "tasks:attachments:view"];
 
+// STEP 19 — full governance permission set (SUPER_ADMIN only): the 16
+// approvals:* strings plus every domain-tiered sensitive/finance/privacy/
+// security/ai approval permission. approvals:policy:manage and
+// approvals:emergency-override are exclusive to this bundle — spec §9/§25
+// restrict both to Super Admin explicitly.
+const APPROVALS_ALL_PERMISSIONS: Permission[] = [
+  "approvals:view",
+  "approvals:create",
+  "approvals:submit",
+  "approvals:approve",
+  "approvals:reject",
+  "approvals:request-changes",
+  "approvals:assign",
+  "approvals:delegate",
+  "approvals:escalate",
+  "approvals:cancel",
+  "approvals:execute",
+  "approvals:audit:view",
+  "approvals:policy:view",
+  "approvals:policy:manage",
+  "approvals:emergency-override",
+  "approvals:bulk:view",
+  "approvals:bulk:approve",
+  "sensitive:approval:view",
+  "sensitive:approval:approve",
+  "sensitive:approval:execute",
+  "finance:approval:view",
+  "finance:approval:approve",
+  "finance:approval:execute",
+  "privacy:approval:view",
+  "privacy:approval:approve",
+  "privacy:approval:execute",
+  "security:approval:view",
+  "security:approval:approve",
+  "security:approval:execute",
+  "ai:approval:view",
+  "ai:approval:approve",
+  "ai:approval:execute",
+];
+
+// STEP 19 — OPERATIONS_ADMIN gets everything SUPER_ADMIN has for governance
+// EXCEPT policy configuration and the emergency override (spec §9/§25 name
+// Super Admin specifically for both).
+const OPERATIONS_APPROVAL_PERMISSIONS: Permission[] = APPROVALS_ALL_PERMISSIONS.filter(
+  (p) => p !== "approvals:policy:manage" && p !== "approvals:emergency-override",
+);
+
+// STEP 19 — each *_MANAGER role's baseline governance permissions: can
+// create, decide (approve/reject/request-changes), cancel and escalate
+// requests in their own domain (the actual domain scoping comes from each
+// ApprovalPolicy's allowedRoles, not from holding this permission set), plus
+// read the audit trail. Never policy:manage, emergency-override, or execute —
+// execution stays with Super Admin/Operations Admin or a domain-specific
+// finance:approval:execute-style grant (spec §39: "never grant approval
+// permissions merely because a role exists").
+const MANAGER_APPROVAL_PERMISSIONS: Permission[] = [
+  "approvals:view",
+  "approvals:create",
+  "approvals:submit",
+  "approvals:approve",
+  "approvals:reject",
+  "approvals:request-changes",
+  "approvals:cancel",
+  "approvals:escalate",
+  "approvals:audit:view",
+];
+
+// STEP 19 — every *_STAFF role: may create/submit a high-risk action request
+// (the "maker") but can never approve/reject/execute one, per spec §39.
+const STAFF_APPROVAL_PERMISSIONS: Permission[] = ["approvals:view", "approvals:create", "approvals:submit"];
+
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // ---------------------------------------------------------------- SUPER_ADMIN (spec §4)
   SUPER_ADMIN: [
@@ -536,6 +642,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...AI_ALL_PERMISSIONS,
     ...ROLES_ALL_PERMISSIONS,
     ...TASKS_ALL_PERMISSIONS,
+    ...APPROVALS_ALL_PERMISSIONS,
   ],
   // legacy — retired, kept only so a not-yet-migrated row keeps its historical permission set unchanged
   ADMIN: [
@@ -693,7 +800,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // bundled into match:run/proposal:create, which also let the holder act, not just view) —
   // disclosed gap, not silently worked around by granting an action permission to a
   // read-only role. system:view is read-only (System Health/Config pages; no system:*:manage).
-  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view", "system:view", "tasks:view", "tasks:view:own"],
+  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view"],
 
   // ---------------------------------------------------------------- OPERATIONS_ADMIN (spec §5)
   OPERATIONS_ADMIN: [
@@ -724,10 +831,13 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "settings:edit",
     "audit:view",
     ...TASKS_ALL_PERMISSIONS,
+    ...OPERATIONS_APPROVAL_PERMISSIONS,
     // deliberately lacks: admin:manage/roles:* (no role/permission management), finance:provider:manage,
     // finance:rollout:* (no unrestricted payment rollout control unless separately delegated),
     // system:restore:approve (no system recovery), releases:manage (no deployment control),
     // profile:delete (no permanent destructive action) — spec §5.
+    // approvals:policy:manage/approvals:emergency-override deliberately excluded from
+    // OPERATIONS_APPROVAL_PERMISSIONS — spec §9/§25 reserve both to Super Admin.
   ],
 
   // ---------------------------------------------------------------- MATCHMAKING_MANAGER (spec §6)
@@ -750,6 +860,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     "reports:view",
     ...MANAGER_TASK_PERMISSIONS,
+    ...MANAGER_APPROVAL_PERMISSIONS,
     // deliberately lacks match:configure (cannot change matching algorithm weights, spec §6),
     // admin:manage / staff:view / roles:* (cannot manage staff permissions),
     // finance:* (cannot manage payment settings).
@@ -774,6 +885,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:view",
     "audit:view",
     ...MANAGER_TASK_PERMISSIONS,
+    ...MANAGER_APPROVAL_PERMISSIONS,
     // deliberately lacks proposal:finalize/contact:reveal (spec §7: cannot finalize proposals or
     // share contacts merely because verification is complete), finance:*, roles:*.
   ],
@@ -808,7 +920,11 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "audit:view",
     ...MANAGER_TASK_PERMISSIONS,
     "tasks:escalate:senior", // spec's "senior" case-escalation tier already lives here (cases:escalate:senior above) — mirrors it for tasks
-    // deliberately lacks sensitive:finance:*, proposal:finalize, roles:*.
+    ...MANAGER_APPROVAL_PERMISSIONS,
+    "security:approval:view",
+    "security:approval:approve", // STEP 19 §6 SAFETY domain (SAFETY_RESTRICTION/PROFILE_SUSPENSION/SAFETY_CASE_ESCALATION) sits with Support Manager, mirroring safety_cases:* above
+    // deliberately lacks sensitive:finance:*, proposal:finalize, roles:*, security:approval:execute
+    // (execution of a security override stays with Super Admin/Operations Admin).
   ],
 
   // ---------------------------------------------------------------- COMMUNICATION_MANAGER (spec §9)
@@ -821,6 +937,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "ai:use",
     "ai:communication:draft",
     ...MANAGER_TASK_PERMISSIONS,
+    ...MANAGER_APPROVAL_PERMISSIONS,
     // deliberately lacks sensitive:contact:view/contact:reveal (cannot access private contact
     // details unless separately granted), contact:reveal:override, profile:edit, verification:*, finance:*.
     // Spec §9 also lists proposals.view/proposal_communications.view/meetings.view: same disclosed
@@ -834,6 +951,10 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:export",
     "audit:view",
     ...MANAGER_TASK_PERMISSIONS,
+    ...MANAGER_APPROVAL_PERMISSIONS,
+    "finance:approval:view",
+    "finance:approval:approve",
+    "finance:approval:execute",
     // deliberately lacks sensitive:income/family/notes/documents/contact:view, verification:*,
     // match:*, proposal:finalize, roles:*.
   ],
@@ -854,6 +975,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "ai:copilot",
     "ai:communication:draft",
     ...STAFF_TASK_PERMISSIONS,
+    ...STAFF_APPROVAL_PERMISSIONS,
     // sensitive:contact:view intentionally NOT granted by default — spec §11: requires the
     // permission AND approved consent/workflow, granted per-admin when actually needed.
   ],
@@ -870,6 +992,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:view",
     "communication:send",
     ...STAFF_TASK_PERMISSIONS,
+    ...STAFF_APPROVAL_PERMISSIONS,
     // deliberately lacks verification:approve/reject — only granted per-admin when explicitly
     // authorized (spec §12).
   ],
@@ -884,6 +1007,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:view",
     "communication:send",
     ...STAFF_TASK_PERMISSIONS,
+    ...STAFF_APPROVAL_PERMISSIONS,
     // deliberately lacks sensitive:documents/income/contact/notes:view (spec §13) unless separately granted.
   ],
 
@@ -892,6 +1016,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:view",
     "communication:send",
     ...STAFF_TASK_PERMISSIONS,
+    ...STAFF_APPROVAL_PERMISSIONS,
     // deliberately lacks contact:reveal/sensitive:contact:view, profile:edit, verification:*, finance:*.
   ],
 
@@ -904,9 +1029,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "tasks:view",
     "tasks:view:all",
     "tasks:reports:view",
+    "approvals:view",
+    "approvals:audit:view",
     // deliberately lacks profile:edit, proposal:edit, verification:review, contact:reveal,
     // finance:payments:manage, finance:refunds:*, staff:view, roles:*, settings:edit, and every
     // task mutation permission (create/assign/complete/escalate/etc.) — read-only analytics only.
+    // Same for approvals:* — no create/approve/reject/execute, read-only governance analytics (spec §39).
   ],
 };
 

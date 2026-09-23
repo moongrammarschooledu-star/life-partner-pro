@@ -5,6 +5,7 @@ import { requireReason } from "@/lib/ops/admin-route";
 import { assertTaskAccess } from "@/lib/workflow/access";
 import { assignTask, reassignTask, transitionTask, WorkflowError } from "@/lib/workflow/engine";
 import { writeAudit } from "@/lib/audit";
+import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 import type { AssignmentPriority } from "@prisma/client";
 
 type BulkAction = "assign" | "priority" | "due_date" | "reassign" | "archive";
@@ -34,6 +35,28 @@ export async function POST(req: Request) {
     if (taskIds.length > 200) throw new ApiError(400, "Cannot bulk-act on more than 200 tasks at once.");
 
     const reasonText = action === "reassign" || action === "archive" ? requireReason(body.reason) : undefined;
+
+    // STEP 19 §26 — sensitive bulk operations must go through the approval
+    // engine too. One ApprovalRequest governs the WHOLE batch (never
+    // per-record) so a checker sees "archive 47 tasks," not 47 separate
+    // requests — the per-record assertTaskAccess() check below still runs
+    // independently for every task regardless of this gate's outcome.
+    let bulkGate: Awaited<ReturnType<typeof enforceApprovalGate>> | null = null;
+    if (action === "archive") {
+      const batchKey = [...taskIds].sort().join(",").slice(0, 400);
+      bulkGate = await enforceApprovalGate({
+        actionType: "BULK_SENSITIVE_TASK_ACTION",
+        sourceType: "ADMIN_TASK",
+        sourceId: `bulk-archive:${batchKey}`,
+        actor: admin,
+        reason: reasonText!,
+        context: { recordCount: taskIds.length },
+        requestedPayload: { action, taskIds },
+      });
+      if (bulkGate.requiresApproval && bulkGate.status !== "READY_TO_EXECUTE") {
+        return NextResponse.json({ approvalRequired: true, approvalCode: bulkGate.approvalCode, status: bulkGate.status, affectedRecordCount: taskIds.length }, { status: 202 });
+      }
+    }
 
     const succeeded: string[] = [];
     const failed: Array<{ taskId: string; reason: string }> = [];
@@ -85,6 +108,8 @@ export async function POST(req: Request) {
         failed.push({ taskId, reason: error instanceof Error ? error.message : "Unknown error" });
       }
     }
+
+    if (bulkGate?.requiresApproval) await markApprovalExecuted(bulkGate.approvalRequestId, admin.id);
 
     return NextResponse.json({ succeeded, failed });
   } catch (error) {

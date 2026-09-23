@@ -3,6 +3,7 @@ import { writeAudit } from "@/lib/audit";
 import { nextSequenceCode } from "@/lib/privacy/codes";
 import { notifyDeletionRequestReceived, notifyDeletionCompleted } from "@/lib/notifications/events";
 import { getRetentionPolicy } from "@/lib/privacy/retention-policy";
+import { hasActiveHold } from "@/lib/privacy/data-hold";
 import type { DeletionMode } from "@prisma/client";
 
 // Spec §14 — no financial/payment system exists anywhere in this codebase,
@@ -36,6 +37,14 @@ export async function reviewDeletionRequest(params: {
   if (!request) throw new Error("Deletion request not found");
 
   if (params.decision === "approve") {
+    // STEP 19 §15 — "Never allow a normal admin to bypass retention/legal-hold
+    // rules." Checked again here, at the moment of execution, even though an
+    // approval may already exist for this request — an approval can never
+    // override an active hold; the hold must be lifted through its own
+    // governed flow first.
+    if (await hasActiveHold({ profileId: request.profileId })) {
+      throw new Error("This profile has an active legal/admin hold — deletion cannot proceed until the hold is lifted.");
+    }
     const policy = await getRetentionPolicy("ACCOUNT_DATA");
     const mode: DeletionMode = params.mode ?? (policy?.action === "ANONYMIZE" ? "ANONYMIZE" : "DELETE");
     const scheduledFor = new Date(Date.now() + (params.coolingOffDays ?? 7) * 24 * 60 * 60 * 1000);

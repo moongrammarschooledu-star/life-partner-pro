@@ -372,3 +372,53 @@ export async function notifyTaskDependencyCompleted(assignedAdminId: string, tas
 export async function notifyTaskReopened(assignedAdminId: string | null, taskCode: string, title: string) {
   await notifyAdmins({ type: "TASK_REOPENED", data: { templateVars: { taskCode, title } }, assignedAdminId: assignedAdminId ?? undefined });
 }
+
+// ---------- Approval Governance (STEP 19) ----------
+// All internal-only, admin-facing — see src/lib/approvals/engine.ts's
+// callers. Omitting assignedAdminId broadcasts to every active
+// SUPER_ADMIN/ADMIN/OPERATIONS_ADMIN (notifyAdmins()'s own fallback), used
+// for events with no single natural recipient (e.g. an emergency override).
+
+export async function notifyApprovalRequested(checkerId: string | null, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_REQUESTED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: checkerId ?? undefined });
+}
+
+export async function notifyApprovalAssigned(assignedAdminId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_ASSIGNED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId });
+}
+
+export async function notifyApprovalApproved(makerId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_APPROVED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: makerId });
+}
+
+export async function notifyApprovalRejected(makerId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_REJECTED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: makerId });
+}
+
+export async function notifyApprovalChangesRequested(makerId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_CHANGES_REQUESTED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: makerId });
+}
+
+export async function notifyApprovalExpiring(checkerId: string | null, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_EXPIRING", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: checkerId ?? undefined });
+}
+
+export async function notifyApprovalExpired(makerId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_EXPIRED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: makerId });
+}
+
+export async function notifyApprovalExecutionStarted(makerId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_EXECUTION_STARTED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: makerId });
+}
+
+export async function notifyApprovalExecuted(makerId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_EXECUTED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: makerId });
+}
+
+export async function notifyApprovalExecutionFailed(makerId: string, approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "APPROVAL_EXECUTION_FAILED", data: { templateVars: { approvalCode, actionType } }, assignedAdminId: makerId });
+}
+
+export async function notifyEmergencyOverrideUsed(approvalCode: string, actionType: string) {
+  await notifyAdmins({ type: "EMERGENCY_OVERRIDE_USED", data: { templateVars: { approvalCode, actionType } } });
+}

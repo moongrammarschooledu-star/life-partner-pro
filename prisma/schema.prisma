@@ -55,6 +55,9 @@ enum AccessLevel {
 // STEP 18 — PAYMENT/PRIVACY_REQUEST/AI_SAFETY_EVENT let those domains'
 // system-detected issues become real tasks; ADMIN_TASK lets AdminAssignment
 // itself track task assignment history (src/lib/workflow/engine.ts).
+// STEP 19 — ADMIN_USER lets role/permission/staff-disable governance actions
+// (src/lib/approvals/catalog.ts) target an AdminUser as their source record;
+// no other resourceType above fits an admin-account-targeted action.
 enum AssignmentResourceType {
   PROPOSAL
   VERIFICATION
@@ -66,6 +69,7 @@ enum AssignmentResourceType {
   PRIVACY_REQUEST
   AI_SAFETY_EVENT
   ADMIN_TASK
+  ADMIN_USER
 }
 
 // STEP 18 — CRITICAL added to match CasePriority's 5-value scale exactly.
@@ -116,6 +120,19 @@ enum AdminTaskType {
   DELETION_REQUEST_TASK // PRIVACY_REQUEST — a deletion request needs review
   AI_SAFETY_REVIEW // AI_SAFETY_EVENT — a blocked/denied AI output needs human review
   GENERAL_ADMIN_TASK // any resourceType — manual "Create Task" catch-all
+
+  // STEP 19 — approval-review work items created alongside an ApprovalRequest
+  // (src/lib/approvals/engine.ts) so a checker's queue shows pending decisions
+  // the same way every other work item does.
+  APPROVAL_REVIEW // any resourceType — generic approval review
+  HIGH_RISK_APPROVAL // any resourceType — HIGH risk_level approval
+  CRITICAL_APPROVAL // any resourceType — CRITICAL risk_level approval
+  FINANCE_APPROVAL // PAYMENT — refund/rollout/pricing approval review
+  CONTACT_APPROVAL // PROPOSAL/PROFILE — contact-sharing approval review
+  VERIFICATION_APPROVAL // PROFILE — verification decision approval review
+  PRIVACY_APPROVAL // PRIVACY_REQUEST — deletion/export approval review
+  SECURITY_APPROVAL // CASE/PROFILE — safety/restriction approval review
+  AI_APPROVAL // AI_SAFETY_EVENT — AI governance approval review
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -821,6 +838,25 @@ enum AuditAction {
   WORKFLOW_FAILURE_RESOLVED
   STAFF_AVAILABILITY_CREATED
   STAFF_AVAILABILITY_UPDATED
+
+  // ---------- Approval Governance (STEP 19) ----------
+  APPROVAL_CREATED
+  APPROVAL_SUBMITTED
+  APPROVAL_VIEWED
+  APPROVAL_ASSIGNED
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  APPROVAL_CHANGES_REQUESTED
+  APPROVAL_DELEGATED
+  APPROVAL_ESCALATED
+  APPROVAL_EXPIRED
+  APPROVAL_CANCELLED
+  APPROVAL_EXECUTION_STARTED
+  APPROVAL_EXECUTED
+  APPROVAL_EXECUTION_FAILED
+  APPROVAL_OVERRIDE_USED
+  APPROVAL_CONFLICT_BLOCKED
+  APPROVAL_POLICY_UPDATED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -974,6 +1010,20 @@ enum NotificationType {
   TASK_COMMENT_MENTION
   TASK_DEPENDENCY_COMPLETED
   TASK_REOPENED
+
+  // ---------- Approval Governance (STEP 19) ----------
+  // Internal-only, admin-facing — never sent to a profile.
+  APPROVAL_REQUESTED
+  APPROVAL_ASSIGNED
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  APPROVAL_CHANGES_REQUESTED
+  APPROVAL_EXPIRING
+  APPROVAL_EXPIRED
+  APPROVAL_EXECUTION_STARTED
+  APPROVAL_EXECUTED
+  APPROVAL_EXECUTION_FAILED
+  EMERGENCY_OVERRIDE_USED
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1048,6 +1098,7 @@ enum DataCategory {
   SECURITY_LOGS
   FINANCIAL_RECORDS // stored but inapplicable — no payment/financial system exists in this app
   WORKFLOW_TASK_DATA
+  GOVERNANCE_APPROVAL_DATA
 }
 
 enum RetentionAction {
@@ -1241,97 +1292,110 @@ model AdminUser {
   contactShares     ContactShareLog[]
   proposalsCreated  Proposal[]
   matchesCreated    Match[]
-  assignedProposals Proposal[] @relation("AssignedProposals")
+  assignedProposals Proposal[]        @relation("AssignedProposals")
 
   contactPermissionsApproved ContactPermission[]
   meetingsCreated            Meeting[]
   familyCommunicationsLogged FamilyCommunication[]
   performedProposalEvents    ProposalEvent[]
 
-  verificationsAssigned      ProfileVerification[] @relation("VerificationAssignee")
-  verificationsReviewed      ProfileVerification[] @relation("VerificationReviewer")
+  verificationsAssigned      ProfileVerification[]  @relation("VerificationAssignee")
+  verificationsReviewed      ProfileVerification[]  @relation("VerificationReviewer")
   verificationItemsCompleted VerificationItem[]
   documentsReviewed          VerificationDocument[]
   securityFlagsAssigned      SecurityFlag[]         @relation("SecurityFlagAssignee")
   securityFlagsResolved      SecurityFlag[]         @relation("SecurityFlagResolver")
 
-  notificationsReceived      Notification[]         @relation("NotificationRecipientAdmin")
-  communicationLogsSent      CommunicationLog[]
+  notificationsReceived       Notification[]         @relation("NotificationRecipientAdmin")
+  communicationLogsSent       CommunicationLog[]
   notificationTemplatesEdited NotificationTemplate[]
 
-  reportExecutions  ReportExecution[]
-  scheduledReports  ScheduledReport[]
+  reportExecutions ReportExecution[]
+  scheduledReports ScheduledReport[]
 
   // ---------- Staff Management & Permissions (STEP 11) ----------
   sessions            AdminSession[]
   loginHistory        AdminLoginHistory[]
   otpChallenges       AdminOtpChallenge[]
-  assignmentsReceived AdminAssignment[]    @relation("AdminAssignmentAssignee")
-  assignmentsCreated  AdminAssignment[]    @relation("AdminAssignmentCreator")
-  tasksAssigned       AdminTask[]          @relation("AdminTaskAssignee")
-  viewAsInitiated     ViewAsSession[]      @relation("ViewAsInitiator")
-  viewAsTargeted      ViewAsSession[]      @relation("ViewAsTarget")
+  assignmentsReceived AdminAssignment[]   @relation("AdminAssignmentAssignee")
+  assignmentsCreated  AdminAssignment[]   @relation("AdminAssignmentCreator")
+  tasksAssigned       AdminTask[]         @relation("AdminTaskAssignee")
+  viewAsInitiated     ViewAsSession[]     @relation("ViewAsInitiator")
+  viewAsTargeted      ViewAsSession[]     @relation("ViewAsTarget")
 
   // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
-  casesCreated              Case[]               @relation("CaseCreatedBy")
-  casesReportedAbout        Case[]               @relation("CaseReportedAdmin")
-  caseAccessGrantsReceived  CaseAccessGrant[]     @relation("CaseAccessGrantee")
-  caseAccessGrantsGiven     CaseAccessGrant[]     @relation("CaseAccessGranter")
-  caseComments              CaseComment[]
-  caseInternalNotes         CaseInternalNote[]
-  caseEvidenceUploaded      CaseEvidence[]
-  caseStatusChanges         CaseStatusHistory[]
-  caseEscalationsRaised     CaseEscalation[]
-  caseResolutionsCreated    CaseResolution[]
-  caseLinksCreated          CaseLink[]
-  caseMergesPerformed       CaseMerge[]
-  caseAccessLogs            CaseAccessLog[]
-  restrictionsApplied       ProfileRestriction[] @relation("RestrictionAppliedBy")
-  restrictionsLifted        ProfileRestriction[] @relation("RestrictionLiftedBy")
+  casesCreated             Case[]               @relation("CaseCreatedBy")
+  casesReportedAbout       Case[]               @relation("CaseReportedAdmin")
+  caseAccessGrantsReceived CaseAccessGrant[]    @relation("CaseAccessGrantee")
+  caseAccessGrantsGiven    CaseAccessGrant[]    @relation("CaseAccessGranter")
+  caseComments             CaseComment[]
+  caseInternalNotes        CaseInternalNote[]
+  caseEvidenceUploaded     CaseEvidence[]
+  caseStatusChanges        CaseStatusHistory[]
+  caseEscalationsRaised    CaseEscalation[]
+  caseResolutionsCreated   CaseResolution[]
+  caseLinksCreated         CaseLink[]
+  caseMergesPerformed      CaseMerge[]
+  caseAccessLogs           CaseAccessLog[]
+  restrictionsApplied      ProfileRestriction[] @relation("RestrictionAppliedBy")
+  restrictionsLifted       ProfileRestriction[] @relation("RestrictionLiftedBy")
 
   // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
-  deletionRequestsReviewed  AccountDeletionRequest[]
-  privacyRequestsHandled    PrivacyRequest[]
-  retentionPoliciesUpdated  RetentionPolicy[]
-  dataHoldsPlaced           DataHold[]              @relation("DataHoldPlacedBy")
-  dataHoldsLifted           DataHold[]              @relation("DataHoldLiftedBy")
-  breakGlassGrants          BreakGlassAccess[]
-  privacyAccessLogs         PrivacyAccessLog[]
+  deletionRequestsReviewed AccountDeletionRequest[]
+  privacyRequestsHandled   PrivacyRequest[]
+  retentionPoliciesUpdated RetentionPolicy[]
+  dataHoldsPlaced          DataHold[]               @relation("DataHoldPlacedBy")
+  dataHoldsLifted          DataHold[]               @relation("DataHoldLiftedBy")
+  breakGlassGrants         BreakGlassAccess[]
+  privacyAccessLogs        PrivacyAccessLog[]
 
   // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
   packagesCreated           Package[]
   couponsCreated            Coupon[]
   taxRulesCreated           TaxRule[]
-  manualPaymentsEntered     ManualPaymentDetail[]  @relation("ManualPaymentEnteredBy")
-  manualPaymentsVerified    ManualPaymentDetail[]  @relation("ManualPaymentVerifiedBy")
-  refundsRequested          Refund[]               @relation("RefundRequestedBy")
-  refundsApproved           Refund[]               @relation("RefundApprovedBy")
-  refundsExecuted           Refund[]               @relation("RefundExecutedBy")
+  manualPaymentsEntered     ManualPaymentDetail[] @relation("ManualPaymentEnteredBy")
+  manualPaymentsVerified    ManualPaymentDetail[] @relation("ManualPaymentVerifiedBy")
+  refundsRequested          Refund[]              @relation("RefundRequestedBy")
+  refundsApproved           Refund[]              @relation("RefundApprovedBy")
+  refundsExecuted           Refund[]              @relation("RefundExecutedBy")
   reconciliationRunsStarted ReconciliationRun[]
   bankAccountsCreated       BankAccount[]
   paymentRolloutEvents      PaymentRolloutEvent[]
 
   // ---------- Workflow & Task Management (STEP 18) ----------
-  tasksCreated              AdminTask[]           @relation("AdminTaskCreator")
-  taskComments              TaskComment[]
+  tasksCreated                AdminTask[]         @relation("AdminTaskCreator")
+  taskComments                TaskComment[]
   taskChecklistItemsCompleted TaskChecklistItem[]
-  taskDependenciesCreated   TaskDependency[]
-  taskEscalationsRaised     TaskEscalation[]
-  taskStatusChanges         TaskStatusHistory[]
-  taskAttachmentsUploaded   TaskAttachment[]
-  taskAccessLogs            TaskAccessLog[]
-  taskTemplatesCreated      TaskTemplate[]
-  workflowFailuresResolved  WorkflowFailure[]
-  staffAvailability         StaffAvailability[]   @relation("StaffAvailabilityAdmin")
-  staffAvailabilityBackupFor StaffAvailability[]  @relation("StaffAvailabilityBackup")
-  staffAvailabilityCreated  StaffAvailability[]   @relation("StaffAvailabilityCreator")
+  taskDependenciesCreated     TaskDependency[]
+  taskEscalationsRaised       TaskEscalation[]
+  taskStatusChanges           TaskStatusHistory[]
+  taskAttachmentsUploaded     TaskAttachment[]
+  taskAccessLogs              TaskAccessLog[]
+  taskTemplatesCreated        TaskTemplate[]
+  workflowFailuresResolved    WorkflowFailure[]
+  staffAvailability           StaffAvailability[] @relation("StaffAvailabilityAdmin")
+  staffAvailabilityBackupFor  StaffAvailability[] @relation("StaffAvailabilityBackup")
+  staffAvailabilityCreated    StaffAvailability[] @relation("StaffAvailabilityCreator")
+
+  // ---------- Approval Governance (STEP 19) ----------
+  approvalRequestsMade       ApprovalRequest[]      @relation("ApprovalMaker")
+  approvalsAssignedAsChecker ApprovalRequest[]      @relation("ApprovalAssignedChecker")
+  approvalPoliciesCreated    ApprovalPolicy[]       @relation("ApprovalPolicyCreator")
+  approvalPoliciesUpdated    ApprovalPolicy[]       @relation("ApprovalPolicyUpdater")
+  approvalDecisions          ApprovalReviewer[]
+  approvalExecutionsRun      ApprovalExecutionLog[]
+  approvalConflictsFlagged   ApprovalConflict[]
+  approvalEventsActed        ApprovalEvent[]
+  delegationsGiven           ApprovalDelegation[]   @relation("ApprovalDelegator")
+  delegationsReceived        ApprovalDelegation[]   @relation("ApprovalDelegate")
+  delegationsCreated         ApprovalDelegation[]   @relation("ApprovalDelegationCreator")
 }
 
 // ---------- Core profile ----------
 
 model Profile {
-  id            String        @id @default(cuid())
-  profileCode   String        @unique // e.g. LPP-000001, cosmetic display id only
+  id          String @id @default(cuid())
+  profileCode String @unique // e.g. LPP-000001, cosmetic display id only
 
   fullName      String
   gender        Gender
@@ -1339,57 +1403,57 @@ model Profile {
   maritalStatus MaritalStatus
   heightCm      Int
 
-  city          String
-  area          String?
-  country       String
-  nationality   String?
+  city        String
+  area        String?
+  country     String
+  nationality String?
 
-  hasChildren       Boolean?      // only meaningful for Divorced/Widowed/Separated
-  numberOfChildren  Int?
+  hasChildren      Boolean? // only meaningful for Divorced/Widowed/Separated
+  numberOfChildren Int?
 
-  status        ProfileStatus @default(NEW)
-  verified      Boolean       @default(false)
-  softDeleted   Boolean       @default(false)
+  status            ProfileStatus @default(NEW)
+  verified          Boolean       @default(false)
+  softDeleted       Boolean       @default(false)
   // Orthogonal to `status` (STEP 13) — see AccountStatus enum comment.
-  accountStatus AccountStatus @default(ACTIVE)
-  profileCompletion Int       @default(0) // 0-100, recomputed whenever the profile or its sections are written
-  preferredLanguage Locale    @default(EN) // drives server-side notification template language (STEP 9)
+  accountStatus     AccountStatus @default(ACTIVE)
+  profileCompletion Int           @default(0) // 0-100, recomputed whenever the profile or its sections are written
+  preferredLanguage Locale        @default(EN) // drives server-side notification template language (STEP 9)
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  contact             ContactInfo?
-  education           EducationInfo?
-  profession          ProfessionInfo?
-  family              FamilyInfo?
-  lifestyle           LifestyleInfo?
-  preference          PartnerPreference?
-  photos              ProfilePhoto[]
-  notes               ProfileNote[]
-  consent             ConsentRecord?
-  communications      Communication[]
-  followUps           FollowUp[]
-  pendingUpdate       PendingUpdate?
+  contact        ContactInfo?
+  education      EducationInfo?
+  profession     ProfessionInfo?
+  family         FamilyInfo?
+  lifestyle      LifestyleInfo?
+  preference     PartnerPreference?
+  photos         ProfilePhoto[]
+  notes          ProfileNote[]
+  consent        ConsentRecord?
+  communications Communication[]
+  followUps      FollowUp[]
+  pendingUpdate  PendingUpdate?
 
-  matchesAsA          Match[]    @relation("MatchProfileA")
-  matchesAsB          Match[]    @relation("MatchProfileB")
-  proposalsAsA        Proposal[] @relation("ProposalProfileA")
-  proposalsAsB        Proposal[] @relation("ProposalProfileB")
+  matchesAsA   Match[]    @relation("MatchProfileA")
+  matchesAsB   Match[]    @relation("MatchProfileB")
+  proposalsAsA Proposal[] @relation("ProposalProfileA")
+  proposalsAsB Proposal[] @relation("ProposalProfileB")
 
-  auditLogs           AuditLog[]
-  contactSharesAsA    ContactShareLog[] @relation("ShareProfileA")
-  contactSharesAsB    ContactShareLog[] @relation("ShareProfileB")
+  auditLogs        AuditLog[]
+  contactSharesAsA ContactShareLog[] @relation("ShareProfileA")
+  contactSharesAsB ContactShareLog[] @relation("ShareProfileB")
 
-  proposalResponses     ProposalResponse[]
-  contactPermissions    ContactPermission[]
-  familyCommunications  FamilyCommunication[]
+  proposalResponses       ProposalResponse[]
+  contactPermissions      ContactPermission[]
+  familyCommunications    FamilyCommunication[]
   performedProposalEvents ProposalEvent[]
 
   verification          ProfileVerification?
-  otpVerifications       OtpVerification[]
-  verificationDocuments  VerificationDocument[]
-  securityFlags          SecurityFlag[]         @relation("SecurityFlagProfile")
-  relatedSecurityFlags   SecurityFlag[]         @relation("SecurityFlagRelatedProfile")
+  otpVerifications      OtpVerification[]
+  verificationDocuments VerificationDocument[]
+  securityFlags         SecurityFlag[]         @relation("SecurityFlagProfile")
+  relatedSecurityFlags  SecurityFlag[]         @relation("SecurityFlagRelatedProfile")
 
   notificationsReceived  Notification[]          @relation("NotificationRecipientProfile")
   notificationsRelated   Notification[]          @relation("NotificationRelatedProfile")
@@ -1398,24 +1462,24 @@ model Profile {
   communicationConsents  CommunicationConsent[]
 
   // ---------- Support, Complaints, Safety & Case Management (STEP 12) ----------
-  casesFiled     Case[]               @relation("CaseReporterProfile")
-  casesReported  Case[]               @relation("CaseReportedProfile")
-  caseComments   CaseComment[]
-  caseEvidence   CaseEvidence[]
-  restrictions   ProfileRestriction[]
+  casesFiled    Case[]               @relation("CaseReporterProfile")
+  casesReported Case[]               @relation("CaseReportedProfile")
+  caseComments  CaseComment[]
+  caseEvidence  CaseEvidence[]
+  restrictions  ProfileRestriction[]
 
   // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
-  consentGrants           ConsentGrant[]
-  deletionRequests        AccountDeletionRequest[]
-  privacyRequests         PrivacyRequest[]
-  dataExportRequests      DataExportRequest[]
-  sessions                ProfileSession[]
+  consentGrants      ConsentGrant[]
+  deletionRequests   AccountDeletionRequest[]
+  privacyRequests    PrivacyRequest[]
+  dataExportRequests DataExportRequest[]
+  sessions           ProfileSession[]
 
   // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
-  subscriptions  Subscription[]
-  orders         Order[]
-  payments       Payment[]
-  invoices       Invoice[]
+  subscriptions     Subscription[]
+  orders            Order[]
+  payments          Payment[]
+  invoices          Invoice[]
   couponRedemptions CouponRedemption[]
 
   @@index([gender, status])
@@ -1429,108 +1493,108 @@ model Profile {
 }
 
 model ContactInfo {
-  id                    String        @id @default(cuid())
-  profile               Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId             String        @unique
+  id        String  @id @default(cuid())
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String  @unique
 
-  mobileNumber          String
-  whatsappNumber        String?
-  email                 String
+  mobileNumber           String
+  whatsappNumber         String?
+  email                  String
   preferredContactMethod ContactMethod @default(PHONE)
-  contactVerified       Boolean       @default(false)
+  contactVerified        Boolean       @default(false)
 }
 
 model EducationInfo {
-  id            String  @id @default(cuid())
-  profile       Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId     String  @unique
+  id        String  @id @default(cuid())
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String  @unique
 
-  level         String  // e.g. Bachelor's, Master's, PhD
-  degree        String?
-  institution   String?
+  level       String // e.g. Bachelor's, Master's, PhD
+  degree      String?
+  institution String?
 }
 
 model ProfessionInfo {
-  id                String          @id @default(cuid())
-  profile           Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId         String          @unique
+  id        String  @id @default(cuid())
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String  @unique
 
-  profession        String
-  jobTitle          String?
-  companyName       String?
-  employmentType    EmploymentType  @default(PRIVATE)
-  monthlyIncome     Int?            // stored in smallest currency unit-agnostic integer (e.g. USD)
-  annualIncome      Int?
-  workLocation      String?
-  businessDetails   String?
-  program           String? // Student employment type only
+  profession         String
+  jobTitle           String?
+  companyName        String?
+  employmentType     EmploymentType @default(PRIVATE)
+  monthlyIncome      Int? // stored in smallest currency unit-agnostic integer (e.g. USD)
+  annualIncome       Int?
+  workLocation       String?
+  businessDetails    String?
+  program            String? // Student employment type only
   expectedGraduation String? // Student employment type only
 }
 
 model FamilyInfo {
-  id                    String        @id @default(cuid())
-  profile               Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId             String        @unique
+  id        String  @id @default(cuid())
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String  @unique
 
-  fatherOccupation      String?
-  motherOccupation      String?
-  numberOfBrothers      Int           @default(0)
-  numberOfSisters       Int           @default(0)
-  familyType            FamilyType    @default(NUCLEAR)
-  familyStatus          FamilyStatus  @default(MIDDLE_CLASS)
-  familyLocation        String?
-  familyBackground      String?
-  additionalInfo        String?
+  fatherOccupation String?
+  motherOccupation String?
+  numberOfBrothers Int          @default(0)
+  numberOfSisters  Int          @default(0)
+  familyType       FamilyType   @default(NUCLEAR)
+  familyStatus     FamilyStatus @default(MIDDLE_CLASS)
+  familyLocation   String?
+  familyBackground String?
+  additionalInfo   String?
 }
 
 model LifestyleInfo {
-  id                    String  @id @default(cuid())
-  profile               Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId             String  @unique
+  id        String  @id @default(cuid())
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String  @unique
 
-  religion              String?
-  sect                  String?
-  religiousPractice     String?  // e.g. Practicing, Moderate, Liberal
-  languages             String?  // comma separated
-  smoking               Boolean  @default(false)
-  drinking              Boolean  @default(false)
-  hobbies               String?
-  personality           String?
-  aboutMe               String?
-  otherPreferences      String?
+  religion          String?
+  sect              String?
+  religiousPractice String? // e.g. Practicing, Moderate, Liberal
+  languages         String? // comma separated
+  smoking           Boolean @default(false)
+  drinking          Boolean @default(false)
+  hobbies           String?
+  personality       String?
+  aboutMe           String?
+  otherPreferences  String?
 }
 
 model PartnerPreference {
-  id                    String   @id @default(cuid())
-  profile               Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId             String   @unique
+  id        String  @id @default(cuid())
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String  @unique
 
-  minAge                Int?
-  maxAge                Int?
+  minAge Int?
+  maxAge Int?
 
-  preferredCountry      String?
-  preferredCity         String?
-  preferredArea         String?
+  preferredCountry String?
+  preferredCity    String?
+  preferredArea    String?
 
-  minEducation           String?
-  preferredEducation     String?
+  minEducation       String?
+  preferredEducation String?
 
-  professionPreference   String? // free text or "ANY"
+  professionPreference String? // free text or "ANY"
 
-  minIncome              Int?
-  maxIncome              Int?
-  incomeFlexible         Boolean  @default(true)
+  minIncome      Int?
+  maxIncome      Int?
+  incomeFlexible Boolean @default(true)
 
   maritalStatusPreference String? // comma-separated MaritalStatus values or "ANY"
 
-  minHeightCm            Int?
-  maxHeightCm            Int?
+  minHeightCm Int?
+  maxHeightCm Int?
 
-  familyTypePreference    String?
+  familyTypePreference       String?
   familyBackgroundPreference String?
-  otherFamilyRequirements String?
+  otherFamilyRequirements    String?
 
-  additionalExpectations  String? // large free text
+  additionalExpectations String? // large free text
 
   // Captured at registration for future matching-engine consumption — the
   // engine (src/lib/matching.ts) does not yet weight by these (spec §8).
@@ -1544,7 +1608,7 @@ model ProfilePhoto {
   id            String   @id @default(cuid())
   profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId     String
-  storageKey    String   // Vercel Blob URL — never sent to the client directly, see src/lib/storage.ts
+  storageKey    String // Vercel Blob URL — never sent to the client directly, see src/lib/storage.ts
   mimeType      String
   sizeBytes     Int
   isPrimary     Boolean  @default(true)
@@ -1579,23 +1643,23 @@ model PendingUpdate {
   id          String   @id @default(cuid())
   profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId   String   @unique
-  payload     String   // JSON blob of the proposed changes
+  payload     String // JSON blob of the proposed changes
   submittedAt DateTime @default(now())
 }
 
 model ProfileNote {
-  id          String    @id @default(cuid())
-  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId   String
-  proposal    Proposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  proposalId  String?
-  match       Match?    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  matchId     String?
-  admin       AdminUser @relation(fields: [adminId], references: [id])
-  adminId     String
-  text        String
-  pinned      Boolean   @default(false)
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(cuid())
+  profile    Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId  String
+  proposal   Proposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId String?
+  match      Match?    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  matchId    String?
+  admin      AdminUser @relation(fields: [adminId], references: [id])
+  adminId    String
+  text       String
+  pinned     Boolean   @default(false)
+  createdAt  DateTime  @default(now())
 
   @@index([profileId])
   @@index([proposalId])
@@ -1605,27 +1669,27 @@ model ProfileNote {
 // ---------- Matching & proposals ----------
 
 model Match {
-  id            String   @id @default(cuid())
-  profileA      Profile  @relation("MatchProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
-  profileAId    String
-  profileB      Profile  @relation("MatchProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
-  profileBId    String
+  id         String  @id @default(cuid())
+  profileA   Profile @relation("MatchProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileAId String
+  profileB   Profile @relation("MatchProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
+  profileBId String
 
-  score               Int // overall mutual compatibility score, 0-100
-  ageScore            Int
-  locationScore       Int
-  educationScore      Int
-  professionScore     Int
-  incomeScore         Int
-  maritalStatusScore  Int
-  heightScore         Int
-  familyScore         Int
-  religiousScore      Int
-  lifestyleScore      Int
-  languagesScore      Int      @default(0)
-  directionAToB       Int      @default(0) // how well B satisfies A's stated preference
-  directionBToA       Int      @default(0) // how well A satisfies B's stated preference
-  breakdown           String // JSON: [{category, weight, score, status, reason}] — full explanation, see src/lib/matching.ts
+  score              Int // overall mutual compatibility score, 0-100
+  ageScore           Int
+  locationScore      Int
+  educationScore     Int
+  professionScore    Int
+  incomeScore        Int
+  maritalStatusScore Int
+  heightScore        Int
+  familyScore        Int
+  religiousScore     Int
+  lifestyleScore     Int
+  languagesScore     Int    @default(0)
+  directionAToB      Int    @default(0) // how well B satisfies A's stated preference
+  directionBToA      Int    @default(0) // how well A satisfies B's stated preference
+  breakdown          String // JSON: [{category, weight, score, status, reason}] — full explanation, see src/lib/matching.ts
 
   // Versioning + recalculation audit trail (STEP 6 §33/§34) — historical
   // rows are never silently rewritten; recalculating snapshots the prior
@@ -1638,13 +1702,13 @@ model Match {
   status         MatchStatus          @default(SUGGESTED)
   recommendation MatchRecommendation?
 
-  createdBy     AdminUser? @relation(fields: [createdById], references: [id])
-  createdById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdBy   AdminUser? @relation(fields: [createdById], references: [id])
+  createdById String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  notes         ProfileNote[]
-  proposals     Proposal[]
+  notes     ProfileNote[]
+  proposals Proposal[]
 
   @@unique([profileAId, profileBId])
   @@index([profileAId])
@@ -1653,30 +1717,30 @@ model Match {
 }
 
 model Proposal {
-  id            String         @id @default(cuid())
+  id           String           @id @default(cuid())
   // LPP-RP-000001 style, cosmetic display id — see src/lib/proposal-code.ts.
   // Nullable: a live table already has rows when this column was added;
   // new proposals get one at creation, old rows are lazily backfilled by
   // ensureProposalCode() the first time they're read (see plan §Schema).
-  proposalCode  String?        @unique
-  profileA      Profile        @relation("ProposalProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
-  profileAId    String
-  profileB      Profile        @relation("ProposalProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
-  profileBId    String
-  match         Match?         @relation(fields: [matchId], references: [id])
-  matchId       String?
-  matchScore    Int? // snapshot of Match.score at proposal-creation time
-  status        ProposalStatus   @default(DRAFT)
-  priority      ProposalPriority @default(MEDIUM)
-  createdBy     AdminUser      @relation(fields: [createdById], references: [id])
-  createdById   String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  proposalCode String?          @unique
+  profileA     Profile          @relation("ProposalProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileAId   String
+  profileB     Profile          @relation("ProposalProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
+  profileBId   String
+  match        Match?           @relation(fields: [matchId], references: [id])
+  matchId      String?
+  matchScore   Int? // snapshot of Match.score at proposal-creation time
+  status       ProposalStatus   @default(DRAFT)
+  priority     ProposalPriority @default(MEDIUM)
+  createdBy    AdminUser        @relation(fields: [createdById], references: [id])
+  createdById  String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   // Staff assignment (spec §24) — STAFF admins may only edit proposals
   // assigned to them, enforced in src/lib/proposal-access.ts.
-  assignedTo    AdminUser?     @relation("AssignedProposals", fields: [assignedToId], references: [id])
-  assignedToId  String?
+  assignedTo   AdminUser? @relation("AssignedProposals", fields: [assignedToId], references: [id])
+  assignedToId String?
 
   finalizedAt   DateTime?
   finalizedById String?
@@ -1689,28 +1753,28 @@ model Proposal {
   // rejectionReason is a short admin-chosen category; internalRejectionNote
   // is free text that must never be serialized to any applicant-facing API
   // response (spec §17 — "never expose sensitive rejection reasons").
-  rejectedAt             DateTime?
-  rejectedById           String?
-  rejectionReason        String?
-  internalRejectionNote  String?
+  rejectedAt            DateTime?
+  rejectedById          String?
+  rejectionReason       String?
+  internalRejectionNote String?
 
-  closedAt      DateTime?
-  archivedAt    DateTime?
+  closedAt   DateTime?
+  archivedAt DateTime?
 
   // Anti-spam cooldown guard for the "still pending a response" reminder
   // (spec §23) — see src/app/api/cron/notifications/route.ts.
   lastPendingReminderAt DateTime?
 
-  events                ProposalEvent[]
-  notes                 ProfileNote[]
-  communications        Communication[]
-  followUps             FollowUp[]
-  responses             ProposalResponse[]
-  contactPermissions    ContactPermission[]
-  meetings              Meeting[]
-  familyCommunications  FamilyCommunication[]
-  notifications         Notification[]
-  communicationLogs     CommunicationLog[]
+  events               ProposalEvent[]
+  notes                ProfileNote[]
+  communications       Communication[]
+  followUps            FollowUp[]
+  responses            ProposalResponse[]
+  contactPermissions   ContactPermission[]
+  meetings             Meeting[]
+  familyCommunications FamilyCommunication[]
+  notifications        Notification[]
+  communicationLogs    CommunicationLog[]
 
   @@index([profileAId])
   @@index([profileBId])
@@ -1721,12 +1785,12 @@ model Proposal {
 }
 
 model ProposalEvent {
-  id            String    @id @default(cuid())
-  proposal      Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  proposalId    String
-  status        ProposalStatus
-  note          String?
-  createdAt     DateTime  @default(now())
+  id         String         @id @default(cuid())
+  proposal   Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId String
+  status     ProposalStatus
+  note       String?
+  createdAt  DateTime       @default(now())
 
   // Exactly one of these is set — an admin action vs. an applicant's own
   // self-service response (spec §12 "Performed by").
@@ -1742,15 +1806,15 @@ model ProposalEvent {
 // Upserted — one row per profile per proposal, respondedAt tracks the
 // latest response if a profile changes their mind.
 model ProposalResponse {
-  id           String                  @id @default(cuid())
-  proposal     Proposal                @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  proposalId   String
-  profile      Profile                 @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId    String
-  response     ProposalResponseType
-  reason       ProposalDeclineReason?
-  reasonNote   String?
-  respondedAt  DateTime                @default(now())
+  id          String                 @id @default(cuid())
+  proposal    Proposal               @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId  String
+  profile     Profile                @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId   String
+  response    ProposalResponseType
+  reason      ProposalDeclineReason?
+  reasonNote  String?
+  respondedAt DateTime               @default(now())
 
   @@unique([proposalId, profileId])
   @@index([proposalId])
@@ -1776,20 +1840,20 @@ model ContactPermission {
 }
 
 model Meeting {
-  id            String        @id @default(cuid())
-  proposal      Proposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  proposalId    String
-  meetingType   MeetingType
-  scheduledAt   DateTime
-  locationInfo  String?
-  participants  String?
-  status        MeetingStatus @default(REQUESTED)
-  notes         String?
-  followUpDate  DateTime?
-  createdBy     AdminUser     @relation(fields: [createdById], references: [id])
-  createdById   String
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id           String        @id @default(cuid())
+  proposal     Proposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId   String
+  meetingType  MeetingType
+  scheduledAt  DateTime
+  locationInfo String?
+  participants String?
+  status       MeetingStatus @default(REQUESTED)
+  notes        String?
+  followUpDate DateTime?
+  createdBy    AdminUser     @relation(fields: [createdById], references: [id])
+  createdById  String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   // Scheduled-reminder dedup guards (spec §23) — see
   // src/app/api/cron/notifications/route.ts.
@@ -1832,40 +1896,40 @@ model ProposalCodeCounter {
 }
 
 model Communication {
-  id            String            @id @default(cuid())
-  profile       Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId     String
-  proposal      Proposal?         @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  proposalId    String?
-  admin         AdminUser         @relation(fields: [adminId], references: [id])
-  adminId       String
-  type          CommunicationType
-  notes         String?
-  occurredAt    DateTime          @default(now())
-  followUpDate  DateTime?
-  createdAt     DateTime          @default(now())
+  id           String            @id @default(cuid())
+  profile      Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId    String
+  proposal     Proposal?         @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  proposalId   String?
+  admin        AdminUser         @relation(fields: [adminId], references: [id])
+  adminId      String
+  type         CommunicationType
+  notes        String?
+  occurredAt   DateTime          @default(now())
+  followUpDate DateTime?
+  createdAt    DateTime          @default(now())
 
   @@index([profileId])
   @@index([proposalId])
 }
 
 model FollowUp {
-  id            String           @id @default(cuid())
-  profile       Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId     String
-  proposal      Proposal?        @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  proposalId    String?
-  admin         AdminUser?       @relation(fields: [adminId], references: [id])
-  adminId       String?
-  title         String?
-  note          String?
-  purpose       String? // e.g. "Check on family discussion" — spec §11
-  outcome       String? // recorded once the follow-up is completed
-  dueDate       DateTime
-  priority      FollowUpPriority @default(MEDIUM)
-  status        FollowUpStatus   @default(PENDING)
-  completedAt   DateTime?
-  createdAt     DateTime         @default(now())
+  id          String           @id @default(cuid())
+  profile     Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId   String
+  proposal    Proposal?        @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  proposalId  String?
+  admin       AdminUser?       @relation(fields: [adminId], references: [id])
+  adminId     String?
+  title       String?
+  note        String?
+  purpose     String? // e.g. "Check on family discussion" — spec §11
+  outcome     String? // recorded once the follow-up is completed
+  dueDate     DateTime
+  priority    FollowUpPriority @default(MEDIUM)
+  status      FollowUpStatus   @default(PENDING)
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
 
   // Scheduled-reminder dedup guard (spec §23).
   reminderSentAt DateTime?
@@ -1878,17 +1942,17 @@ model FollowUp {
 // ---------- Contact sharing ----------
 
 model ContactShareLog {
-  id              String    @id @default(cuid())
-  profileA        Profile   @relation("ShareProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
-  profileAId      String
-  profileB        Profile   @relation("ShareProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
-  profileBId      String
-  phoneShared     Boolean   @default(false)
-  whatsappShared  Boolean   @default(false)
-  emailShared     Boolean   @default(false)
-  approvedBy      AdminUser @relation(fields: [approvedById], references: [id])
-  approvedById    String
-  sharedAt        DateTime  @default(now())
+  id             String    @id @default(cuid())
+  profileA       Profile   @relation("ShareProfileA", fields: [profileAId], references: [id], onDelete: Cascade)
+  profileAId     String
+  profileB       Profile   @relation("ShareProfileB", fields: [profileBId], references: [id], onDelete: Cascade)
+  profileBId     String
+  phoneShared    Boolean   @default(false)
+  whatsappShared Boolean   @default(false)
+  emailShared    Boolean   @default(false)
+  approvedBy     AdminUser @relation(fields: [approvedById], references: [id])
+  approvedById   String
+  sharedAt       DateTime  @default(now())
 
   @@index([profileAId])
   @@index([profileBId])
@@ -1902,20 +1966,20 @@ model ContactShareLog {
 // existing `profile.verified` read across matching/proposals/badges keeps
 // working unchanged.
 model ProfileVerification {
-  id            String              @id @default(cuid())
-  profile       Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId     String              @unique
-  status        VerificationStatus  @default(NOT_VERIFIED)
+  id        String             @id @default(cuid())
+  profile   Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId String             @unique
+  status    VerificationStatus @default(NOT_VERIFIED)
 
-  assignedTo    AdminUser?          @relation("VerificationAssignee", fields: [assignedToId], references: [id])
-  assignedToId  String?
+  assignedTo   AdminUser? @relation("VerificationAssignee", fields: [assignedToId], references: [id])
+  assignedToId String?
 
-  phoneVerifiedAt     DateTime?
-  emailVerifiedAt     DateTime?
-  whatsappVerifiedAt  DateTime? // stub — stays null until a real WhatsApp provider exists
+  phoneVerifiedAt    DateTime?
+  emailVerifiedAt    DateTime?
+  whatsappVerifiedAt DateTime? // stub — stays null until a real WhatsApp provider exists
 
   // User-facing — shown verbatim on /my-verification (spec §15).
-  requestedInfoItems  String? // JSON array of checklist itemKeys
+  requestedInfoItems String? // JSON array of checklist itemKeys
 
   // Internal only — never serialized to any applicant-facing route (spec §16).
   rejectionReasonCategory String?
@@ -1933,22 +1997,22 @@ model ProfileVerification {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items     VerificationItem[]
+  items VerificationItem[]
 
   @@index([status])
   @@index([assignedToId])
 }
 
 model VerificationItem {
-  id                    String                  @id @default(cuid())
-  profileVerification   ProfileVerification     @relation(fields: [profileVerificationId], references: [id], onDelete: Cascade)
+  id                    String                 @id @default(cuid())
+  profileVerification   ProfileVerification    @relation(fields: [profileVerificationId], references: [id], onDelete: Cascade)
   profileVerificationId String
   itemKey               String // matches a key in src/lib/verification/checklist-catalog.ts
-  status                VerificationItemStatus  @default(PENDING)
-  document              VerificationDocument?   @relation(fields: [documentId], references: [id])
-  documentId            String?                 @unique
+  status                VerificationItemStatus @default(PENDING)
+  document              VerificationDocument?  @relation(fields: [documentId], references: [id])
+  documentId            String?                @unique
   note                  String?
-  completedBy           AdminUser?              @relation(fields: [completedById], references: [id])
+  completedBy           AdminUser?             @relation(fields: [completedById], references: [id])
   completedById         String?
   completedAt           DateTime?
 
@@ -1975,8 +2039,8 @@ model OtpVerification {
 }
 
 model VerificationDocument {
-  id                     String                @id @default(cuid())
-  profile                Profile               @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id                     String               @id @default(cuid())
+  profile                Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId              String
   documentType           DocumentType
   secureStorageReference String // Vercel Blob key — never sent to the client, see document-storage.ts
@@ -1984,38 +2048,38 @@ model VerificationDocument {
   authTagBase64          String
   mimeType               String
   sizeBytes              Int
-  uploadedAt             DateTime              @default(now())
-  reviewStatus           DocumentReviewStatus  @default(PENDING)
-  reviewedBy             AdminUser?            @relation(fields: [reviewedById], references: [id])
+  uploadedAt             DateTime             @default(now())
+  reviewStatus           DocumentReviewStatus @default(PENDING)
+  reviewedBy             AdminUser?           @relation(fields: [reviewedById], references: [id])
   reviewedById           String?
   reviewedAt             DateTime?
   reviewNote             String?
   expiresAt              DateTime?
 
-  item                   VerificationItem?
+  item VerificationItem?
 
   @@index([profileId])
 }
 
 model SecurityFlag {
-  id              String                @id @default(cuid())
-  profile         Profile               @relation("SecurityFlagProfile", fields: [profileId], references: [id], onDelete: Cascade)
-  profileId       String
-  flagType        SecurityFlagType
-  severity        SecurityFlagSeverity  @default(MEDIUM)
-  status          SecurityFlagStatus    @default(OPEN)
-  assignedTo      AdminUser?            @relation("SecurityFlagAssignee", fields: [assignedToId], references: [id])
-  assignedToId    String?
+  id               String               @id @default(cuid())
+  profile          Profile              @relation("SecurityFlagProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  profileId        String
+  flagType         SecurityFlagType
+  severity         SecurityFlagSeverity @default(MEDIUM)
+  status           SecurityFlagStatus   @default(OPEN)
+  assignedTo       AdminUser?           @relation("SecurityFlagAssignee", fields: [assignedToId], references: [id])
+  assignedToId     String?
   // The other profile in a suspected duplicate pair (spec §12 — no separate
   // duplicate-detection table, a duplicate is just this flag type).
-  relatedProfile  Profile?              @relation("SecurityFlagRelatedProfile", fields: [relatedProfileId], references: [id])
+  relatedProfile   Profile?             @relation("SecurityFlagRelatedProfile", fields: [relatedProfileId], references: [id])
   relatedProfileId String?
-  description     String
-  resolution      String?
-  resolvedBy      AdminUser?            @relation("SecurityFlagResolver", fields: [resolvedById], references: [id])
-  resolvedById    String?
-  resolvedAt      DateTime?
-  createdAt       DateTime              @default(now())
+  description      String
+  resolution       String?
+  resolvedBy       AdminUser?           @relation("SecurityFlagResolver", fields: [resolvedById], references: [id])
+  resolvedById     String?
+  resolvedAt       DateTime?
+  createdAt        DateTime             @default(now())
 
   @@index([profileId])
   @@index([status])
@@ -2024,18 +2088,18 @@ model SecurityFlag {
 // ---------- Audit ----------
 
 model AuditLog {
-  id            String      @id @default(cuid())
-  admin         AdminUser?  @relation(fields: [adminId], references: [id])
-  adminId       String?
-  action        AuditAction
-  targetProfile Profile?    @relation(fields: [targetProfileId], references: [id])
+  id              String      @id @default(cuid())
+  admin           AdminUser?  @relation(fields: [adminId], references: [id])
+  adminId         String?
+  action          AuditAction
+  targetProfile   Profile?    @relation(fields: [targetProfileId], references: [id])
   targetProfileId String?
-  meta          String?     // JSON blob of extra context
-  createdAt     DateTime    @default(now())
+  meta            String? // JSON blob of extra context
+  createdAt       DateTime    @default(now())
   // STEP 15 — populated automatically by writeAudit() for admin actions only
-  ipAddress     String?
-  userAgent     String?
-  correlationId String?
+  ipAddress       String?
+  userAgent       String?
+  correlationId   String?
 
   @@index([targetProfileId])
   @@index([adminId])
@@ -2046,28 +2110,28 @@ model AuditLog {
 // ---------- App-wide settings (single row) ----------
 
 model AppSettings {
-  id                    Int      @id @default(1)
-  appName               String   @default("Life Partner Pro")
-  contactEmail          String?
-  contactWhatsapp       String?
-  contactAddress        String?
-  weightAge             Int      @default(15)
-  weightLocation        Int      @default(15)
-  weightEducation       Int      @default(10)
-  weightProfession      Int      @default(10)
-  weightIncome          Int      @default(10)
-  weightMaritalStatus   Int      @default(10)
-  weightHeight          Int      @default(5)
-  weightFamily          Int      @default(10)
-  weightReligious       Int      @default(10)
-  weightLifestyle       Int      @default(5)
-  weightLanguages       Int      @default(5)
+  id                  Int     @id @default(1)
+  appName             String  @default("Life Partner Pro")
+  contactEmail        String?
+  contactWhatsapp     String?
+  contactAddress      String?
+  weightAge           Int     @default(15)
+  weightLocation      Int     @default(15)
+  weightEducation     Int     @default(10)
+  weightProfession    Int     @default(10)
+  weightIncome        Int     @default(10)
+  weightMaritalStatus Int     @default(10)
+  weightHeight        Int     @default(5)
+  weightFamily        Int     @default(10)
+  weightReligious     Int     @default(10)
+  weightLifestyle     Int     @default(5)
+  weightLanguages     Int     @default(5)
 
   // Match tier cutoffs (spec §30) — admin-configurable, must stay descending.
-  thresholdExcellent    Int      @default(90)
-  thresholdVeryGood     Int      @default(80)
-  thresholdGood         Int      @default(65)
-  thresholdPossible     Int      @default(50)
+  thresholdExcellent Int @default(90)
+  thresholdVeryGood  Int @default(80)
+  thresholdGood      Int @default(65)
+  thresholdPossible  Int @default(50)
 
   // Hard requirement vs soft preference per category (spec §27). When true,
   // a candidate failing that category is excluded from results rather than
@@ -2140,10 +2204,10 @@ model AppSettings {
   // construction time (src/lib/auth.config.ts) and can't do a DB read there
   // without breaking the Edge/Node split that keeps middleware under
   // Vercel's bundle limit; the 30-day default stays hardcoded.
-  loginMaxAttempts       Int     @default(5)
-  loginLockoutMinutes    Int     @default(15)
+  loginMaxAttempts       Int   @default(5)
+  loginLockoutMinutes    Int   @default(15)
   twoFactorRequiredRoles Json? // array of AdminRole strings
-  passwordMinLength      Int     @default(8)
+  passwordMinLength      Int   @default(8)
 
   // Support, Complaints, Safety & Case Management (STEP 12) — SLA is elapsed
   // wall-clock hours, not a business-hours/holiday calendar (no such
@@ -2160,35 +2224,35 @@ model AppSettings {
   // Payments & Billing (STEP 14). paidFeatureKeys is the Super-Admin
   // "which features currently require an entitlement" switch (spec §1) —
   // empty by default, so nothing is gated unless explicitly turned on.
-  activePaymentProvider                  PaymentProviderName @default(MANUAL)
-  defaultCurrencyCode                    String              @default("PKR")
-  subscriptionGracePeriodDays            Int                 @default(7)
-  paymentRetryLimit                      Int                 @default(3)
-  refundApprovalRequiredAboveMinorUnits  Int?
-  paidFeatureKeys                        Json?
+  activePaymentProvider                 PaymentProviderName @default(MANUAL)
+  defaultCurrencyCode                   String              @default("PKR")
+  subscriptionGracePeriodDays           Int                 @default(7)
+  paymentRetryLimit                     Int                 @default(3)
+  refundApprovalRequiredAboveMinorUnits Int?
+  paidFeatureKeys                       Json?
 
   // Payment Rollout Phases (STEP 14 add-on). Stage gates new checkout
   // sessions only — never touches existing subscriptions/invoices/refunds.
   // Defaults reflect the honest current state: nothing has been through
   // sandbox testing yet, so payments start fully DISABLED.
-  paymentRolloutStage             PaymentRolloutStage @default(DISABLED)
-  paymentsEnabled                 Boolean             @default(false)
-  checkoutEnabled                 Boolean             @default(false)
-  subscriptionsEnabled            Boolean             @default(false)
-  refundsEnabled                  Boolean             @default(true)
-  manualPaymentEnabled            Boolean             @default(true)
-  betaEnabled                     Boolean             @default(false)
-  publicCheckoutEnabled           Boolean             @default(false)
-  providerWebhooksEnabled         Boolean             @default(true)
-  paymentBetaPercentage           Int                 @default(0)
-  paymentBetaAllowedProfileIds    Json?
-  paymentBetaAllowedCountries     Json?
-  paymentBetaAllowedPackageIds    Json?
+  paymentRolloutStage              PaymentRolloutStage @default(DISABLED)
+  paymentsEnabled                  Boolean             @default(false)
+  checkoutEnabled                  Boolean             @default(false)
+  subscriptionsEnabled             Boolean             @default(false)
+  refundsEnabled                   Boolean             @default(true)
+  manualPaymentEnabled             Boolean             @default(true)
+  betaEnabled                      Boolean             @default(false)
+  publicCheckoutEnabled            Boolean             @default(false)
+  providerWebhooksEnabled          Boolean             @default(true)
+  paymentBetaPercentage            Int                 @default(0)
+  paymentBetaAllowedProfileIds     Json?
+  paymentBetaAllowedCountries      Json?
+  paymentBetaAllowedPackageIds     Json?
   paymentInternalAllowedProfileIds Json?
-  reconciliationFrequency         String              @default("DAILY")
-  lastScheduledReconciliationAt   DateTime?
+  reconciliationFrequency          String              @default("DAILY")
+  lastScheduledReconciliationAt    DateTime?
 
-  updatedAt             DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 enum PaymentRolloutStage {
@@ -2203,13 +2267,13 @@ enum PaymentRolloutStage {
 // distinct from the generic AuditLog entry written alongside it — this one
 // captures the state-machine history specifically.
 model PaymentRolloutEvent {
-  id        String              @id @default(cuid())
+  id        String               @id @default(cuid())
   fromStage PaymentRolloutStage?
   toStage   PaymentRolloutStage
   reason    String?
   actorId   String
-  actor     AdminUser           @relation(fields: [actorId], references: [id])
-  createdAt DateTime            @default(now())
+  actor     AdminUser            @relation(fields: [actorId], references: [id])
+  createdAt DateTime             @default(now())
 
   @@index([createdAt])
 }
@@ -2227,7 +2291,7 @@ model ProfileCodeCounter {
 // ProposalEvent's performedByAdmin/performedByProfile pattern. Never created
 // directly — always via src/lib/notifications/notification-service.ts.
 model Notification {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   recipientProfileId String?
   recipientAdminId   String?
   type               NotificationType
@@ -2237,7 +2301,7 @@ model Notification {
   relatedProfileId   String?
   actionUrl          String?
   readAt             DateTime?
-  createdAt          DateTime          @default(now())
+  createdAt          DateTime         @default(now())
 
   recipientProfile Profile?   @relation("NotificationRecipientProfile", fields: [recipientProfileId], references: [id], onDelete: Cascade)
   recipientAdmin   AdminUser? @relation("NotificationRecipientAdmin", fields: [recipientAdminId], references: [id])
@@ -2288,23 +2352,23 @@ model CommunicationLog {
 // channel x category. Essential Account/Verification/Security types bypass
 // this entirely (see src/lib/notifications/classification.ts).
 model NotificationPreference {
-  id        String   @id @default(cuid())
-  profileId String   @unique
+  id        String @id @default(cuid())
+  profileId String @unique
 
-  inAppProposalUpdates      Boolean @default(true)
-  inAppMeetingUpdates       Boolean @default(true)
-  inAppFollowUpReminders    Boolean @default(true)
-  inAppMarketing            Boolean @default(false)
+  inAppProposalUpdates   Boolean @default(true)
+  inAppMeetingUpdates    Boolean @default(true)
+  inAppFollowUpReminders Boolean @default(true)
+  inAppMarketing         Boolean @default(false)
 
-  emailProposalUpdates      Boolean @default(true)
-  emailMeetingUpdates       Boolean @default(true)
-  emailFollowUpReminders    Boolean @default(true)
-  emailMarketing            Boolean @default(false)
+  emailProposalUpdates   Boolean @default(true)
+  emailMeetingUpdates    Boolean @default(true)
+  emailFollowUpReminders Boolean @default(true)
+  emailMarketing         Boolean @default(false)
 
-  smsProposalUpdates        Boolean @default(true)
-  smsMeetingUpdates         Boolean @default(true)
-  smsFollowUpReminders      Boolean @default(true)
-  smsMarketing              Boolean @default(false)
+  smsProposalUpdates   Boolean @default(true)
+  smsMeetingUpdates    Boolean @default(true)
+  smsFollowUpReminders Boolean @default(true)
+  smsMarketing         Boolean @default(false)
 
   whatsappProposalUpdates   Boolean @default(true)
   whatsappMeetingUpdates    Boolean @default(true)
@@ -2438,7 +2502,7 @@ model ScheduledReport {
 // the authorization source of truth (that's the `Permission` TS union in
 // src/lib/permissions.ts). Keys must match those strings exactly.
 model PermissionDef {
-  key         String @id
+  key         String  @id
   module      String
   action      String
   description String?
@@ -2486,8 +2550,9 @@ model Department {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  admins AdminUser[]
-  tasks  AdminTask[]
+  admins           AdminUser[]
+  tasks            AdminTask[]
+  approvalRequests ApprovalRequest[]
 }
 
 // Tracks a live JWT session for revocation (spec §13) — the JWT itself
@@ -2619,14 +2684,15 @@ model AdminTask {
 
   comments         TaskComment[]
   checklistItems   TaskChecklistItem[]
-  dependsOn        TaskDependency[]         @relation("TaskDependent")
-  dependedOnBy     TaskDependency[]         @relation("TaskDependsOn")
+  dependsOn        TaskDependency[]    @relation("TaskDependent")
+  dependedOnBy     TaskDependency[]    @relation("TaskDependsOn")
   escalations      TaskEscalation[]
   statusHistory    TaskStatusHistory[]
   attachments      TaskAttachment[]
   accessLogs       TaskAccessLog[]
   workflowEvents   WorkflowEvent[]
   workflowFailures WorkflowFailure[]
+  approvalRequest  ApprovalRequest? // STEP 19 — the approval this review task was created for, if any
 
   @@index([assignedToId, status])
   @@index([resourceType, resourceId])
@@ -2676,15 +2742,15 @@ enum WorkflowEventStatus {
 // Internal task discussion — never exposed through any user/applicant-facing
 // API (spec §17). Mirrors CaseComment's visibility-tiering convention.
 model TaskComment {
-  id                String                 @id @default(cuid())
-  task              AdminTask              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id                String                @id @default(cuid())
+  task              AdminTask             @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskId            String
-  author            AdminUser              @relation(fields: [authorId], references: [id])
+  author            AdminUser             @relation(fields: [authorId], references: [id])
   authorId          String
   body              String
-  visibility        TaskCommentVisibility  @default(INTERNAL)
-  mentionedAdminIds String[]               @default([])
-  createdAt         DateTime               @default(now())
+  visibility        TaskCommentVisibility @default(INTERNAL)
+  mentionedAdminIds String[]              @default([])
+  createdAt         DateTime              @default(now())
   editedAt          DateTime?
   deletedAt         DateTime?
 
@@ -2710,45 +2776,45 @@ model TaskChecklistItem {
 // BLOCKED_BY / DEPENDS_ON (spec §18) — cycle detection enforced in
 // src/lib/workflow/dependencies.ts, not at the DB level.
 model TaskDependency {
-  id            String             @id @default(cuid())
-  task          AdminTask          @relation("TaskDependent", fields: [taskId], references: [id], onDelete: Cascade)
-  taskId        String
-  dependsOnTask AdminTask          @relation("TaskDependsOn", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  id              String             @id @default(cuid())
+  task            AdminTask          @relation("TaskDependent", fields: [taskId], references: [id], onDelete: Cascade)
+  taskId          String
+  dependsOnTask   AdminTask          @relation("TaskDependsOn", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
   dependsOnTaskId String
-  type          TaskDependencyType @default(DEPENDS_ON)
-  createdAt     DateTime           @default(now())
-  createdBy     AdminUser          @relation(fields: [createdById], references: [id])
-  createdById   String
+  type            TaskDependencyType @default(DEPENDS_ON)
+  createdAt       DateTime           @default(now())
+  createdBy       AdminUser          @relation(fields: [createdById], references: [id])
+  createdById     String
 
   @@unique([taskId, dependsOnTaskId])
 }
 
 // Mirrors CaseEscalation's shape exactly (spec §22/§46).
 model TaskEscalation {
-  id            String    @id @default(cuid())
-  task          AdminTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id            String     @id @default(cuid())
+  task          AdminTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskId        String
   previousLevel Int
   newLevel      Int
   reason        String
   escalatedBy   AdminUser? @relation(fields: [escalatedById], references: [id])
   escalatedById String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime   @default(now())
 
   @@index([taskId])
 }
 
 // Mirrors CaseStatusHistory's shape exactly (spec §10/§46 timeline).
 model TaskStatusHistory {
-  id              String          @id @default(cuid())
-  task            AdminTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  taskId          String
-  previousStatus  AdminTaskStatus
-  newStatus       AdminTaskStatus
-  changedBy       AdminUser?      @relation(fields: [changedById], references: [id])
-  changedById     String?
-  reason          String?
-  createdAt       DateTime        @default(now())
+  id             String          @id @default(cuid())
+  task           AdminTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId         String
+  previousStatus AdminTaskStatus
+  newStatus      AdminTaskStatus
+  changedBy      AdminUser?      @relation(fields: [changedById], references: [id])
+  changedById    String?
+  reason         String?
+  createdAt      DateTime        @default(now())
 
   @@index([taskId])
 }
@@ -2808,12 +2874,12 @@ model TaskTemplate {
 // real table, not flat AppSettings columns (unlike Case's 5-priority scheme,
 // ~25 task types would mean 50+ flat columns).
 model TaskSlaConfig {
-  id                     String        @id @default(cuid())
-  taskType               AdminTaskType @unique
-  targetResponseHours    Int?
-  targetResolutionHours  Int?
-  warningThresholdHours  Int?
-  active                 Boolean       @default(true)
+  id                    String        @id @default(cuid())
+  taskType              AdminTaskType @unique
+  targetResponseHours   Int?
+  targetResolutionHours Int?
+  warningThresholdHours Int?
+  active                Boolean       @default(true)
 }
 
 // Admin-configurable event→task-type automation table (spec §19), seeded
@@ -2834,20 +2900,20 @@ model WorkflowRule {
 // is derived from sourceType+sourceId+eventName so re-delivering the same
 // event never creates a duplicate task.
 model WorkflowEvent {
-  id         String              @id @default(cuid())
-  eventName  String
-  dedupKey   String              @unique
-  sourceType AssignmentResourceType
-  sourceId   String
-  payload    Json?
-  status     WorkflowEventStatus @default(PENDING)
-  task       AdminTask?          @relation(fields: [taskId], references: [id])
-  taskId     String?
-  attempts   Int                 @default(0)
-  lastError  String?
-  createdAt  DateTime            @default(now())
+  id          String                 @id @default(cuid())
+  eventName   String
+  dedupKey    String                 @unique
+  sourceType  AssignmentResourceType
+  sourceId    String
+  payload     Json?
+  status      WorkflowEventStatus    @default(PENDING)
+  task        AdminTask?             @relation(fields: [taskId], references: [id])
+  taskId      String?
+  attempts    Int                    @default(0)
+  lastError   String?
+  createdAt   DateTime               @default(now())
   processedAt DateTime?
-  failures   WorkflowFailure[]
+  failures    WorkflowFailure[]
 
   @@index([status])
   @@index([sourceType, sourceId])
@@ -2855,19 +2921,19 @@ model WorkflowEvent {
 
 // Dead-letter queue (spec §65/§66) — Admin → Workflow Failures.
 model WorkflowFailure {
-  id                String                @id @default(cuid())
-  workflowEvent      WorkflowEvent?        @relation(fields: [workflowEventId], references: [id])
-  workflowEventId    String?
-  task              AdminTask?            @relation(fields: [taskId], references: [id])
-  taskId            String?
-  stage             WorkflowFailureStage
-  errorMessage      String
-  resolvedAt        DateTime?
-  resolvedBy        AdminUser?            @relation(fields: [resolvedById], references: [id])
-  resolvedById      String?
-  resolution        String?
-  resolutionReason  String?
-  createdAt         DateTime              @default(now())
+  id               String               @id @default(cuid())
+  workflowEvent    WorkflowEvent?       @relation(fields: [workflowEventId], references: [id])
+  workflowEventId  String?
+  task             AdminTask?           @relation(fields: [taskId], references: [id])
+  taskId           String?
+  stage            WorkflowFailureStage
+  errorMessage     String
+  resolvedAt       DateTime?
+  resolvedBy       AdminUser?           @relation(fields: [resolvedById], references: [id])
+  resolvedById     String?
+  resolution       String?
+  resolutionReason String?
+  createdAt        DateTime             @default(now())
 
   @@index([resolvedAt])
 }
@@ -2953,18 +3019,18 @@ model Case {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   closedAt         DateTime?
-  softDeletedAt     DateTime?
+  softDeletedAt    DateTime?
 
-  accessGrants    CaseAccessGrant[]
-  comments        CaseComment[]
-  internalNotes   CaseInternalNote[]
-  evidence        CaseEvidence[]
-  statusHistory   CaseStatusHistory[]
-  escalations     CaseEscalation[]
-  resolution      CaseResolution?
-  accessLogs      CaseAccessLog[]
-  linksFrom       CaseLink[]          @relation("CaseLinkSource")
-  linksTo         CaseLink[]          @relation("CaseLinkTarget")
+  accessGrants  CaseAccessGrant[]
+  comments      CaseComment[]
+  internalNotes CaseInternalNote[]
+  evidence      CaseEvidence[]
+  statusHistory CaseStatusHistory[]
+  escalations   CaseEscalation[]
+  resolution    CaseResolution?
+  accessLogs    CaseAccessLog[]
+  linksFrom     CaseLink[]          @relation("CaseLinkSource")
+  linksTo       CaseLink[]          @relation("CaseLinkTarget")
 
   @@index([type, status])
   @@index([category])
@@ -2993,16 +3059,16 @@ model CaseAccessGrant {
 // among staff (false) — never confused with CaseInternalNote, which is
 // staff-only investigation material, not conversational.
 model CaseComment {
-  id             String     @id @default(cuid())
-  case           Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseId         String
-  authorAdmin    AdminUser? @relation(fields: [authorAdminId], references: [id])
-  authorAdminId  String?
-  authorProfile  Profile?   @relation(fields: [authorProfileId], references: [id])
+  id              String     @id @default(cuid())
+  case            Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId          String
+  authorAdmin     AdminUser? @relation(fields: [authorAdminId], references: [id])
+  authorAdminId   String?
+  authorProfile   Profile?   @relation(fields: [authorProfileId], references: [id])
   authorProfileId String?
-  body           String
-  visibleToUser  Boolean    @default(true)
-  createdAt      DateTime   @default(now())
+  body            String
+  visibleToUser   Boolean    @default(true)
+  createdAt       DateTime   @default(now())
 
   @@index([caseId])
 }
@@ -3025,20 +3091,20 @@ model CaseInternalNote {
 // Mirrors VerificationDocument's encrypt-then-blob shape exactly (spec §12) —
 // see src/lib/case-evidence-storage.ts.
 model CaseEvidence {
-  id                   String     @id @default(cuid())
-  case                 Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseId               String
-  uploadedByAdmin      AdminUser? @relation(fields: [uploadedByAdminId], references: [id])
-  uploadedByAdminId    String?
-  uploadedByProfile    Profile?   @relation(fields: [uploadedByProfileId], references: [id])
-  uploadedByProfileId  String?
+  id                     String     @id @default(cuid())
+  case                   Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId                 String
+  uploadedByAdmin        AdminUser? @relation(fields: [uploadedByAdminId], references: [id])
+  uploadedByAdminId      String?
+  uploadedByProfile      Profile?   @relation(fields: [uploadedByProfileId], references: [id])
+  uploadedByProfileId    String?
   secureStorageReference String
-  ivBase64             String
-  authTagBase64        String
-  mimeType             String
-  sizeBytes            Int
-  originalFilename     String?
-  createdAt            DateTime   @default(now())
+  ivBase64               String
+  authTagBase64          String
+  mimeType               String
+  sizeBytes              Int
+  originalFilename       String?
+  createdAt              DateTime   @default(now())
 
   @@index([caseId])
 }
@@ -3061,43 +3127,43 @@ model CaseStatusHistory {
 }
 
 model CaseEscalation {
-  id             String    @id @default(cuid())
-  case           Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseId         String
-  previousLevel  Int
-  newLevel       Int
-  reason         String
-  escalatedBy    AdminUser @relation(fields: [escalatedById], references: [id])
-  escalatedById  String
-  createdAt      DateTime  @default(now())
+  id            String    @id @default(cuid())
+  case          Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId        String
+  previousLevel Int
+  newLevel      Int
+  reason        String
+  escalatedBy   AdminUser @relation(fields: [escalatedById], references: [id])
+  escalatedById String
+  createdAt     DateTime  @default(now())
 
   @@index([caseId])
 }
 
 model CaseResolution {
-  id                String              @id @default(cuid())
-  case              Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseId            String              @unique
-  category          ResolutionCategory
-  summary           String
-  actionTaken       String?
-  followUpRequired  Boolean             @default(false)
-  followUpDate      DateTime?
-  resolvedBy        AdminUser           @relation(fields: [resolvedById], references: [id])
-  resolvedById      String
-  createdAt         DateTime            @default(now())
+  id               String             @id @default(cuid())
+  case             Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId           String             @unique
+  category         ResolutionCategory
+  summary          String
+  actionTaken      String?
+  followUpRequired Boolean            @default(false)
+  followUpDate     DateTime?
+  resolvedBy       AdminUser          @relation(fields: [resolvedById], references: [id])
+  resolvedById     String
+  createdAt        DateTime           @default(now())
 }
 
 model CaseLink {
-  id          String       @id @default(cuid())
-  case        Case         @relation("CaseLinkSource", fields: [caseId], references: [id], onDelete: Cascade)
-  caseId      String
-  linkedCase  Case         @relation("CaseLinkTarget", fields: [linkedCaseId], references: [id])
+  id           String       @id @default(cuid())
+  case         Case         @relation("CaseLinkSource", fields: [caseId], references: [id], onDelete: Cascade)
+  caseId       String
+  linkedCase   Case         @relation("CaseLinkTarget", fields: [linkedCaseId], references: [id])
   linkedCaseId String
-  linkType    CaseLinkType
-  createdBy   AdminUser    @relation(fields: [createdById], references: [id])
-  createdById String
-  createdAt   DateTime     @default(now())
+  linkType     CaseLinkType
+  createdBy    AdminUser    @relation(fields: [createdById], references: [id])
+  createdById  String
+  createdAt    DateTime     @default(now())
 
   @@unique([caseId, linkedCaseId, linkType])
 }
@@ -3120,13 +3186,13 @@ model CaseMerge {
 // whole audit table — every entry here is also mirrored into AuditLog via
 // writeAudit() for the platform-wide trail (spec §12/§33).
 model CaseAccessLog {
-  id        String   @id @default(cuid())
-  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  case      Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   caseId    String
   admin     AdminUser @relation(fields: [adminId], references: [id])
   adminId   String
   action    String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([caseId])
 }
@@ -3260,18 +3326,18 @@ model RetentionPolicy {
 // at a specific record type+id. Lazy-checked by the retention job, no cron
 // sweep of its own, mirroring ProfileRestriction's lazy-expiry precedent.
 model DataHold {
-  id         String    @id @default(cuid())
+  id         String     @id @default(cuid())
   profileId  String?
   recordType String?
   recordId   String?
   reason     String
-  placedBy   AdminUser @relation("DataHoldPlacedBy", fields: [placedById], references: [id])
+  placedBy   AdminUser  @relation("DataHoldPlacedBy", fields: [placedById], references: [id])
   placedById String
-  placedAt   DateTime  @default(now())
+  placedAt   DateTime   @default(now())
   liftedBy   AdminUser? @relation("DataHoldLiftedBy", fields: [liftedById], references: [id])
   liftedById String?
   liftedAt   DateTime?
-  active     Boolean   @default(true)
+  active     Boolean    @default(true)
 
   @@index([profileId, active])
   @@index([recordType, recordId, active])
@@ -3397,36 +3463,36 @@ model Currency {
 // Multiple active rows are all shown so a payer can choose whichever bank
 // they can transfer from.
 model BankAccount {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   accountTitle  String
   accountNumber String
   bankName      String
   branchName    String?
   iban          String?
-  active        Boolean  @default(true)
-  displayOrder  Int      @default(0)
+  active        Boolean    @default(true)
+  displayOrder  Int        @default(0)
   createdBy     AdminUser? @relation(fields: [createdById], references: [id])
   createdById   String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime   @default(now())
 
   @@index([active, displayOrder])
 }
 
 model Package {
-  id          String      @id @default(cuid())
-  packageCode String      @unique // LPP-PKG-######
-  name        String
-  description String
-  billingType BillingType
-  durationDays Int? // null for ONE_TIME
-  active      Boolean     @default(true)
-  displayOrder Int        @default(0)
-  trialDays   Int         @default(0)
+  id               String      @id @default(cuid())
+  packageCode      String      @unique // LPP-PKG-######
+  name             String
+  description      String
+  billingType      BillingType
+  durationDays     Int? // null for ONE_TIME
+  active           Boolean     @default(true)
+  displayOrder     Int         @default(0)
+  trialDays        Int         @default(0)
   refundPolicyNote String?
-  createdBy   AdminUser?  @relation(fields: [createdById], references: [id])
-  createdById String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdBy        AdminUser?  @relation(fields: [createdById], references: [id])
+  createdById      String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   prices        PackagePrice[]
   entitlements  PackageEntitlement[]
@@ -3471,24 +3537,24 @@ model PackageEntitlement {
 }
 
 model Subscription {
-  id                   String              @id @default(cuid())
-  subscriptionCode     String              @unique // LPP-SUB-######
-  profile              Profile             @relation(fields: [profileId], references: [id], onDelete: Restrict)
-  profileId            String
-  package              Package             @relation(fields: [packageId], references: [id])
-  packageId            String
-  provider             PaymentProviderName
+  id                     String              @id @default(cuid())
+  subscriptionCode       String              @unique // LPP-SUB-######
+  profile                Profile             @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  profileId              String
+  package                Package             @relation(fields: [packageId], references: [id])
+  packageId              String
+  provider               PaymentProviderName
   providerSubscriptionId String?
-  status               SubscriptionStatus  @default(PENDING)
-  startDate            DateTime?
-  endDate              DateTime?
-  renewalDate          DateTime?
-  autoRenew            Boolean             @default(true)
-  trialEndsAt          DateTime?
-  cancelledAt          DateTime?
-  cancellationReason   String?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  status                 SubscriptionStatus  @default(PENDING)
+  startDate              DateTime?
+  endDate                DateTime?
+  renewalDate            DateTime?
+  autoRenew              Boolean             @default(true)
+  trialEndsAt            DateTime?
+  cancelledAt            DateTime?
+  cancellationReason     String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   events SubscriptionEvent[]
   orders Order[]
@@ -3499,13 +3565,13 @@ model Subscription {
 
 // Mirrors STEP 12's CaseStatusHistory precedent exactly.
 model SubscriptionEvent {
-  id             String        @id @default(cuid())
-  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  id             String              @id @default(cuid())
+  subscription   Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   subscriptionId String
   fromStatus     SubscriptionStatus?
   toStatus       SubscriptionStatus
   reason         String?
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime            @default(now())
 
   @@index([subscriptionId])
 }
@@ -3536,17 +3602,17 @@ model Order {
 }
 
 model OrderItem {
-  id             String   @id @default(cuid())
-  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id             String  @id @default(cuid())
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId        String
-  package        Package  @relation(fields: [packageId], references: [id])
+  package        Package @relation(fields: [packageId], references: [id])
   packageId      String
   packagePriceId String? // snapshot reference only, not a live FK dependency for amounts
   description    String
-  quantity       Int      @default(1)
+  quantity       Int     @default(1)
   unitPriceMinor Int
-  discountMinor  Int      @default(0)
-  taxMinor       Int      @default(0)
+  discountMinor  Int     @default(0)
+  taxMinor       Int     @default(0)
   totalMinor     Int
 
   @@index([orderId])
@@ -3570,10 +3636,10 @@ model Payment {
   failedAt              DateTime?
   refundedAt            DateTime?
 
-  attempts      PaymentAttempt[]
-  manualDetail  ManualPaymentDetail?
-  invoice       Invoice?
-  refunds       Refund[]
+  attempts     PaymentAttempt[]
+  manualDetail ManualPaymentDetail?
+  invoice      Invoice?
+  refunds      Refund[]
 
   @@unique([provider, providerTransactionId])
   @@index([profileId, status])
@@ -3585,14 +3651,14 @@ model Payment {
 // Provider-side retry tracking (spec §27) — never stores raw gateway
 // error details, only a safe/sanitized message.
 model PaymentAttempt {
-  id                      String        @id @default(cuid())
-  payment                 Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  paymentId               String
-  attemptNumber           Int
-  status                  PaymentStatus
-  providerErrorCode       String?
+  id                       String        @id @default(cuid())
+  payment                  Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId                String
+  attemptNumber            Int
+  status                   PaymentStatus
+  providerErrorCode        String?
   providerErrorMessageSafe String?
-  createdAt               DateTime      @default(now())
+  createdAt                DateTime      @default(now())
 
   @@index([paymentId])
 }
@@ -3601,22 +3667,22 @@ model PaymentAttempt {
 // CaseEvidence extension-table pattern rather than a fully parallel
 // manual_payments table (spec §43/§44).
 model ManualPaymentDetail {
-  id                  String              @id @default(cuid())
-  payment             Payment             @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  paymentId           String              @unique
-  referenceNumber     String
-  evidenceDescription String?
+  id                   String              @id @default(cuid())
+  payment              Payment             @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId            String              @unique
+  referenceNumber      String
+  evidenceDescription  String?
   // Either the applicant self-submitted (submittedByProfileId) or an admin
   // recorded it on the customer's behalf (enteredById) — never both.
   submittedByProfileId String?
-  enteredBy           AdminUser?          @relation("ManualPaymentEnteredBy", fields: [enteredById], references: [id])
-  enteredById         String?
-  enteredAt           DateTime            @default(now())
-  status              ManualPaymentStatus @default(PENDING_VERIFICATION)
-  verifiedBy          AdminUser?          @relation("ManualPaymentVerifiedBy", fields: [verifiedById], references: [id])
-  verifiedById        String?
-  verifiedAt          DateTime?
-  rejectionReason     String?
+  enteredBy            AdminUser?          @relation("ManualPaymentEnteredBy", fields: [enteredById], references: [id])
+  enteredById          String?
+  enteredAt            DateTime            @default(now())
+  status               ManualPaymentStatus @default(PENDING_VERIFICATION)
+  verifiedBy           AdminUser?          @relation("ManualPaymentVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedById         String?
+  verifiedAt           DateTime?
+  rejectionReason      String?
 }
 
 // @@unique([provider, providerEventId]) IS the idempotency/replay-prevention
@@ -3643,25 +3709,25 @@ model PaymentWebhookEvent {
 // Immutable once finalized (spec §47) — a correction is a new adjustment/
 // credit record, never a silent edit to amount/currency/customer/tax here.
 model Invoice {
-  id              String        @id @default(cuid())
-  invoiceCode     String        @unique // LPP-INV-######
-  order           Order         @relation(fields: [orderId], references: [id])
-  orderId         String        @unique
-  profile         Profile       @relation(fields: [profileId], references: [id], onDelete: Restrict)
-  profileId       String
-  payment         Payment?      @relation(fields: [paymentId], references: [id])
-  paymentId       String?       @unique
-  subtotalMinor   Int
-  discountMinor   Int
-  taxMinor        Int
-  totalMinor      Int
-  currencyCode    String
-  paymentStatus   PaymentStatus
-  invoiceDate     DateTime      @default(now())
-  dueDate         DateTime?
-  paidDate        DateTime?
+  id               String        @id @default(cuid())
+  invoiceCode      String        @unique // LPP-INV-######
+  order            Order         @relation(fields: [orderId], references: [id])
+  orderId          String        @unique
+  profile          Profile       @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  profileId        String
+  payment          Payment?      @relation(fields: [paymentId], references: [id])
+  paymentId        String?       @unique
+  subtotalMinor    Int
+  discountMinor    Int
+  taxMinor         Int
+  totalMinor       Int
+  currencyCode     String
+  paymentStatus    PaymentStatus
+  invoiceDate      DateTime      @default(now())
+  dueDate          DateTime?
+  paidDate         DateTime?
   paymentReference String?
-  createdAt       DateTime      @default(now())
+  createdAt        DateTime      @default(now())
 
   items InvoiceItem[]
 
@@ -3748,18 +3814,18 @@ model CouponRedemption {
 // Rate stored in basis points (1/100 of a percent, e.g. 1700 = 17.00%) to
 // avoid float precision issues (spec §19).
 model TaxRule {
-  id                  String    @id @default(cuid())
-  name                String
+  id                     String     @id @default(cuid())
+  name                   String
   ratePercentBasisPoints Int
-  country             String
-  region              String?
-  applicableService   String? // null = all services
-  effectiveDate       DateTime  @default(now())
-  expiryDate          DateTime?
-  active              Boolean   @default(true)
-  createdBy           AdminUser? @relation(fields: [createdById], references: [id])
-  createdById         String?
-  createdAt           DateTime  @default(now())
+  country                String
+  region                 String?
+  applicableService      String? // null = all services
+  effectiveDate          DateTime   @default(now())
+  expiryDate             DateTime?
+  active                 Boolean    @default(true)
+  createdBy              AdminUser? @relation(fields: [createdById], references: [id])
+  createdById            String?
+  createdAt              DateTime   @default(now())
 
   @@index([country, active])
 }
@@ -3782,32 +3848,31 @@ model FeatureUsage {
 }
 
 model ReconciliationRun {
-  id             String     @id @default(cuid())
+  id               String     @id @default(cuid())
   // Null for a scheduled/cron-triggered run (STEP 14 rollout-phases add-on
   // §77) — every admin-initiated run still has a real actor.
-  startedBy      AdminUser? @relation(fields: [startedById], references: [id])
-  startedById    String?
-  startedAt      DateTime   @default(now())
-  completedAt    DateTime?
-  totalChecked   Int        @default(0)
-  matchedCount   Int        @default(0)
-  discrepancyCount Int      @default(0)
+  startedBy        AdminUser? @relation(fields: [startedById], references: [id])
+  startedById      String?
+  startedAt        DateTime   @default(now())
+  completedAt      DateTime?
+  totalChecked     Int        @default(0)
+  matchedCount     Int        @default(0)
+  discrepancyCount Int        @default(0)
 
   items ReconciliationItem[]
 }
 
 model ReconciliationItem {
-  id        String                    @id @default(cuid())
-  run       ReconciliationRun         @relation(fields: [runId], references: [id], onDelete: Cascade)
+  id        String                   @id @default(cuid())
+  run       ReconciliationRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
   runId     String
   paymentId String?
   status    ReconciliationItemStatus
   detail    String?
-  createdAt DateTime                  @default(now())
+  createdAt DateTime                 @default(now())
 
   @@index([runId, status])
 }
-
 
 // =====================================================================
 // STEP 15 — Production Deployment, DevOps, Monitoring, Backup & Recovery
@@ -4020,17 +4085,17 @@ model ErrorEvent {
 
 // Aggregated slow-query stats (spec §18). Never stores SQL text or params.
 model SlowQueryStat {
-  id         String   @id @default(cuid())
-  key        String   @unique // `${operation}:${table}:${route|-}`
-  operation  String
-  tableName  String
-  route      String?
-  count      Int      @default(1)
-  totalMs    Int
-  maxMs      Int
-  lastMs     Int
+  id          String   @id @default(cuid())
+  key         String   @unique // `${operation}:${table}:${route|-}`
+  operation   String
+  tableName   String
+  route       String?
+  count       Int      @default(1)
+  totalMs     Int
+  maxMs       Int
+  lastMs      Int
   firstSeenAt DateTime @default(now())
-  lastSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
 
   @@index([lastSeenAt])
 }
@@ -4237,26 +4302,26 @@ model IntegrityCheckRun {
 }
 
 model Release {
-  id                  String        @id @default(cuid())
-  releaseCode         String        @unique // LPP-REL-######
-  version             String
-  commitSha           String
-  environment         String
-  status              ReleaseStatus @default(DEPLOYING)
-  deployedBy          String?
-  deployedAt          DateTime      @default(now())
-  notes               String?
-  migrations          Json? // applied migration names at deploy time
-  featureFlags        Json?
-  paymentEnvironment  String?
-  testResults         Json?
-  smokeResult         String?
-  rollbackTargetId    String? // previous stable Release id
-  monitoringUntil     DateTime?
-  approvedById        String?
-  approvedAt          DateTime?
-  verifiedAt          DateTime?
-  verificationResult  Json?
+  id                 String        @id @default(cuid())
+  releaseCode        String        @unique // LPP-REL-######
+  version            String
+  commitSha          String
+  environment        String
+  status             ReleaseStatus @default(DEPLOYING)
+  deployedBy         String?
+  deployedAt         DateTime      @default(now())
+  notes              String?
+  migrations         Json? // applied migration names at deploy time
+  featureFlags       Json?
+  paymentEnvironment String?
+  testResults        Json?
+  smokeResult        String?
+  rollbackTargetId   String? // previous stable Release id
+  monitoringUntil    DateTime?
+  approvedById       String?
+  approvedAt         DateTime?
+  verifiedAt         DateTime?
+  verificationResult Json?
 
   @@unique([commitSha, environment])
   @@index([environment, deployedAt])
@@ -4334,10 +4399,10 @@ enum AiStorageMode {
 model AiConfig {
   id Int @id @default(1)
 
-  phase             AiRolloutPhase @default(DISABLED)
-  killSwitchActive  Boolean        @default(false)
-  killSwitchReason  String?
-  killSwitchAt      DateTime?
+  phase            AiRolloutPhase @default(DISABLED)
+  killSwitchActive Boolean        @default(false)
+  killSwitchReason String?
+  killSwitchAt     DateTime?
 
   provider                AiProviderKind @default(RULES)
   externalProviderAllowed Boolean        @default(false)
@@ -4347,15 +4412,15 @@ model AiConfig {
   timeoutMs               Int            @default(15000)
   retryCount              Int            @default(1)
 
-  dailyRequestCap   Int @default(500)
-  monthlyRequestCap Int @default(10000)
+  dailyRequestCap   Int   @default(500)
+  monthlyRequestCap Int   @default(10000)
   rateLimits        Json? // { "<feature>": { "limit": n, "windowSec": n }, roles: { "STAFF": { ... } } }
 
-  storageModes     Json? // { "<feature>": AiStorageMode }
-  retentionDays    Int   @default(30)
-  cacheTtlMinutes  Int   @default(60)
+  storageModes    Json? // { "<feature>": AiStorageMode }
+  retentionDays   Int   @default(30)
+  cacheTtlMinutes Int   @default(60)
 
-  pilotAdminIds        String[] // STAFF_PILOT / LIMITED_PRODUCTION allowlist
+  pilotAdminIds         String[] // STAFF_PILOT / LIMITED_PRODUCTION allowlist
   priceInputPerMTokUsd  Float? // only used to ESTIMATE cost when the provider reports token usage
   priceOutputPerMTokUsd Float?
 
@@ -4367,15 +4432,15 @@ model AiConfig {
 // Templates live in src/lib/ai/prompts; this records which version was
 // activated, when, by whom, and the passing test run that allowed it.
 model AiPromptVersion {
-  id           String   @id @default(cuid())
-  promptId     String // e.g. LPP-AI-PROFILE-SUMMARY
-  version      String // e.g. v1.0
-  feature      AiFeature
-  checksum     String
-  active       Boolean  @default(false)
-  testRunId    String?
+  id            String    @id @default(cuid())
+  promptId      String // e.g. LPP-AI-PROFILE-SUMMARY
+  version       String // e.g. v1.0
+  feature       AiFeature
+  checksum      String
+  active        Boolean   @default(false)
+  testRunId     String?
   activatedById String?
-  createdAt    DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@unique([promptId, version])
   @@index([feature, active])
@@ -4433,13 +4498,13 @@ model AiResult {
 // Metadata only: which rule fired and what was done. The offending text is
 // never stored.
 model AiSafetyEvent {
-  id           String    @id @default(cuid())
+  id           String     @id @default(cuid())
   requestId    String?
   actorAdminId String?
   feature      AiFeature?
   rule         String
   action       String // BLOCKED | REWRITTEN | DENIED
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
 
   @@index([createdAt])
   @@index([rule, createdAt])
@@ -4458,19 +4523,331 @@ model AiConfigHistory {
 }
 
 model AiTestRun {
-  id            String   @id @default(cuid())
-  suite         String // safety | privacy | security | reliability | analysis | all
-  testVersion   String
-  provider      AiProviderKind
-  model         String
+  id             String         @id @default(cuid())
+  suite          String // safety | privacy | security | reliability | analysis | all
+  testVersion    String
+  provider       AiProviderKind
+  model          String
   promptVersions Json?
-  passed        Int
-  failed        Int
-  status        String // PASS | FAIL
-  failures      Json?
-  triggeredById String?
-  commitSha     String?
-  createdAt     DateTime @default(now())
+  passed         Int
+  failed         Int
+  status         String // PASS | FAIL
+  failures       Json?
+  triggeredById  String?
+  commitSha      String?
+  createdAt      DateTime       @default(now())
 
   @@index([suite, createdAt])
+}
+
+// ---------- Approval Governance (STEP 19) ----------
+// Maker-checker / four-eyes / multi-level approval for high-risk admin
+// actions. See src/lib/approvals/ (catalog, policy-engine, conflict, engine,
+// gate, events) for the logic consuming these. actionType is a validated
+// string (not a hard Postgres enum) so Super Admin governance configuration
+// (spec §9) can enable/disable and reconfigure per action type without a
+// schema migration — see src/lib/approvals/catalog.ts for the known-action
+// registry. No existing STEP 1-18 model, enum, or function is modified by
+// this section; a small number of existing routes call into
+// src/lib/approvals/gate.ts as an additive pre-execution check (see those
+// files' own STEP 19 comments).
+
+enum ApprovalStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_REVIEW
+  PENDING_APPROVAL
+  PARTIALLY_APPROVED
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  EXPIRED
+  CANCELLED
+  EXECUTION_PENDING
+  EXECUTING
+  EXECUTED
+  EXECUTION_FAILED
+  REOPENED
+  ARCHIVED
+}
+
+enum ApprovalRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// LEVEL_0 = no approval required; LEVEL_5 = multi-party/quorum (see
+// ApprovalPolicy.minimumApprovers/quorum for the actual "N of M").
+enum ApprovalLevel {
+  LEVEL_0
+  LEVEL_1
+  LEVEL_2
+  LEVEL_3
+  LEVEL_4
+  LEVEL_5
+}
+
+enum ApprovalReviewerDecision {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  RECUSED
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  IN_PROGRESS
+  SATISFIED
+  FAILED
+  SKIPPED
+}
+
+enum ApprovalExecutionStatus {
+  NOT_STARTED
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// spec §29 — detected by src/lib/approvals/conflict.ts before any decision
+// is recorded; SELF_APPROVAL is the unconditional, always-checked-first case.
+enum ApprovalConflictType {
+  SELF_APPROVAL
+  ASSIGNED_STAFF_CONFLICT
+  FINANCIAL_REQUESTER_CONFLICT
+  VERIFICATION_MAKER_CONFLICT
+  ROLE_POLICY_CONFLICT
+  OTHER
+}
+
+enum ApprovalDelegationStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+model ApprovalRequest {
+  id           String @id @default(cuid())
+  approvalCode String @unique // LPP-APR-###### via src/lib/privacy/codes.ts
+
+  actionType String // validated against src/lib/approvals/catalog.ts, not a DB enum (spec §9)
+  sourceType AssignmentResourceType
+  sourceId   String
+
+  maker   AdminUser @relation("ApprovalMaker", fields: [makerId], references: [id])
+  makerId String
+
+  status    ApprovalStatus     @default(DRAFT)
+  riskLevel ApprovalRiskLevel
+  priority  AssignmentPriority @default(NORMAL)
+  reason    String
+
+  // Before/after snapshot for the Approval Detail page (spec §20) — never
+  // the sole authorization source; execution always re-derives from the
+  // live source record via src/lib/approvals/gate.ts.
+  currentStatePayload Json?
+  requestedPayload    Json?
+
+  requiredLevel ApprovalLevel
+  currentLevel  ApprovalLevel @default(LEVEL_0)
+
+  assignedChecker      AdminUser?  @relation("ApprovalAssignedChecker", fields: [assignedCheckerId], references: [id])
+  assignedCheckerId    String?
+  assignedDepartment   Department? @relation(fields: [assignedDepartmentId], references: [id])
+  assignedDepartmentId String?
+
+  requestedAt DateTime  @default(now())
+  expiresAt   DateTime?
+  completedAt DateTime?
+  rejectedAt  DateTime?
+  cancelledAt DateTime?
+
+  createdTask   AdminTask? @relation(fields: [createdTaskId], references: [id])
+  createdTaskId String?    @unique
+
+  executionStatus ApprovalExecutionStatus @default(NOT_STARTED)
+  // Dedup key for submit-twice / execute-twice protection (spec §36) —
+  // e.g. `${actionType}:${sourceType}:${sourceId}:${makerId}` for most
+  // actions; emergency overrides use a fresh uuid per use instead.
+  idempotencyKey  String                  @unique
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  steps         ApprovalStep[]
+  reviewers     ApprovalReviewer[]
+  events        ApprovalEvent[]
+  executionLogs ApprovalExecutionLog[]
+  conflicts     ApprovalConflict[]
+
+  @@index([status])
+  @@index([actionType])
+  @@index([sourceType, sourceId])
+  @@index([makerId])
+  @@index([expiresAt])
+  @@index([assignedDepartmentId])
+}
+
+model ApprovalStep {
+  id                String             @id @default(cuid())
+  approvalRequest   ApprovalRequest    @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  approvalRequestId String
+  level             ApprovalLevel
+  sequence          Int // execution order for sequential multi-level chains (e.g. Manager then Super Admin)
+  requiredRoles     AdminRole[] // eligible reviewer roles for this step (empty = any policy-allowed role)
+  requiredCount     Int                @default(1) // "M" — how many distinct eligible reviewers may decide
+  quorumCount       Int                @default(1) // "N" — how many APPROVED decisions satisfy this step
+  status            ApprovalStepStatus @default(PENDING)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  reviewers ApprovalReviewer[]
+
+  @@unique([approvalRequestId, sequence])
+}
+
+// Reviewers are recorded lazily as eligible admins actually decide (see
+// plan architecture decision 3 — Level 2+ pools are eligibility-based, not a
+// pre-assigned roster). @@unique([stepId, reviewerId]) makes a duplicate
+// decision by the same reviewer an update, never a second counted vote.
+model ApprovalReviewer {
+  id                String                   @id @default(cuid())
+  approvalRequest   ApprovalRequest          @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  approvalRequestId String
+  step              ApprovalStep             @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  stepId            String
+  reviewer          AdminUser                @relation(fields: [reviewerId], references: [id])
+  reviewerId        String
+  roleAtDecision    AdminRole?
+  decision          ApprovalReviewerDecision @default(PENDING)
+  decisionReason    String?
+  decidedAt         DateTime?
+  createdAt         DateTime                 @default(now())
+
+  @@unique([stepId, reviewerId])
+  @@index([approvalRequestId])
+}
+
+// Super Admin-configurable governance rule per action type (spec §9) — the
+// row read by src/lib/approvals/policy-engine.ts's getApprovalPolicy().
+model ApprovalPolicy {
+  id         String @id @default(cuid())
+  actionType String @unique
+
+  enabled       Boolean           @default(true)
+  riskLevel     ApprovalRiskLevel
+  requiredLevel ApprovalLevel
+
+  minimumApprovers Int @default(1)
+  quorum           Int @default(1)
+
+  allowedRoles         AdminRole[]
+  allowedDepartmentIds String[]    @default([])
+
+  makerCheckerRequired Boolean @default(true)
+  reauthRequired       Boolean @default(false)
+  twoFactorRequired    Boolean @default(false)
+  expirationMinutes    Int     @default(4320) // 3 days
+
+  emergencyOverrideAllowed Boolean @default(false)
+
+  createdBy   AdminUser? @relation("ApprovalPolicyCreator", fields: [createdById], references: [id])
+  createdById String?
+  updatedBy   AdminUser? @relation("ApprovalPolicyUpdater", fields: [updatedById], references: [id])
+  updatedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Currency-aware, admin-configurable financial approval tiers (spec §10) —
+// never hardcoded; amounts are integer minor units matching
+// src/lib/finance/money.ts's convention (no floating-point money).
+model ApprovalAmountThreshold {
+  id               String        @id @default(cuid())
+  actionType       String
+  currencyCode     String
+  minAmountMinor   Int
+  maxAmountMinor   Int? // null = no upper bound
+  requiredLevel    ApprovalLevel
+  minimumApprovers Int           @default(1)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([actionType, currencyCode])
+}
+
+// Time-limited decision-making delegation (spec §27) — scoped to eligibility
+// only; never grants the delegate new Permission strings or a role (see
+// plan architecture decision 10).
+model ApprovalDelegation {
+  id                 String                   @id @default(cuid())
+  delegator          AdminUser                @relation("ApprovalDelegator", fields: [delegatorId], references: [id])
+  delegatorId        String
+  delegate           AdminUser                @relation("ApprovalDelegate", fields: [delegateId], references: [id])
+  delegateId         String
+  allowedActionTypes String[]                 @default([]) // empty = all action types the delegator could decide on
+  startAt            DateTime
+  endAt              DateTime
+  reason             String
+  status             ApprovalDelegationStatus @default(ACTIVE)
+  createdBy          AdminUser                @relation("ApprovalDelegationCreator", fields: [createdById], references: [id])
+  createdById        String
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@index([delegatorId, status])
+  @@index([delegateId, status])
+}
+
+model ApprovalExecutionLog {
+  id                String                  @id @default(cuid())
+  approvalRequest   ApprovalRequest         @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  approvalRequestId String
+  executionStatus   ApprovalExecutionStatus
+  executedBy        AdminUser?              @relation(fields: [executedById], references: [id])
+  executedById      String?
+  startedAt         DateTime                @default(now())
+  completedAt       DateTime?
+  errorCode         String?
+  errorMessage      String?
+
+  @@index([approvalRequestId])
+}
+
+// Conflict-of-interest block (spec §29) — created whenever
+// src/lib/approvals/conflict.ts denies a decision attempt; the actor sees
+// only a neutral message, this row keeps the real reason for audit.
+model ApprovalConflict {
+  id                String               @id @default(cuid())
+  approvalRequest   ApprovalRequest      @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  approvalRequestId String
+  actor             AdminUser            @relation(fields: [actorId], references: [id])
+  actorId           String
+  conflictType      ApprovalConflictType
+  detectedAt        DateTime             @default(now())
+  resolution        String?
+
+  @@index([approvalRequestId])
+}
+
+// Fast, purpose-built per-request timeline (plan architecture decision 5) —
+// written together with the central AuditLog by
+// src/lib/approvals/events.ts's recordApprovalEvent(), never on its own.
+model ApprovalEvent {
+  id                String          @id @default(cuid())
+  approvalRequest   ApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  approvalRequestId String
+  actor             AdminUser?      @relation(fields: [actorId], references: [id])
+  actorId           String?
+  eventType         String // mirrors the AuditAction Approval Governance block
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+
+  @@index([approvalRequestId, createdAt])
 }
