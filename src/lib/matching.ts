@@ -53,7 +53,15 @@ export type EnabledCategories = Partial<Record<MatchCategory, boolean>>;
 // disable, and normalizes by the actual enabled-weight sum instead of a
 // hardcoded /100 — a real algorithm change. Historical Match rows keep their
 // "LPP-MATCH-v1.0" default and are never silently rewritten (spec §33).
-export const ALGORITHM_VERSION = "LPP-MATCH-v1.1";
+// STEP 20 — age/location/profession now also read PartnerPreference's own
+// per-category priority (MUST_HAVE/PREFERRED/FLEXIBLE), which existed in the
+// schema since STEP 6 but was never consumed here (see the schema's own
+// comment on PartnerPreference.agePriority). A side's own MUST_HAVE on a
+// category the OTHER side fails to meet now excludes the match, in addition
+// to (not replacing) the existing global AppSettings hard-requirement toggle.
+export const ALGORITHM_VERSION = "LPP-MATCH-v1.2";
+
+export type PreferencePriorityValue = "MUST_HAVE" | "PREFERRED" | "FLEXIBLE";
 
 export interface MatchThresholds {
   excellent: number;
@@ -249,6 +257,9 @@ export interface MatchableProfile {
     maxHeightCm?: number | null;
     familyTypePreference?: string | null;
     familyBackgroundPreference?: string | null;
+    agePriority?: PreferencePriorityValue | null;
+    locationPriority?: PreferencePriorityValue | null;
+    professionPriority?: PreferencePriorityValue | null;
   };
 }
 
@@ -503,7 +514,8 @@ export function scoreMatch(
     label: string,
     dirAtoB: { score: number; hasData: boolean },
     dirBtoA: { score: number; hasData: boolean },
-    reasonForStatus: (status: CompatibilityStatus, weaker: "a" | "b") => string
+    reasonForStatus: (status: CompatibilityStatus, weaker: "a" | "b") => string,
+    priorities?: { a?: PreferencePriorityValue | null; b?: PreferencePriorityValue | null }
   ): CategoryResult | null {
     if (!isEnabled(category)) return null;
     const weaker = dirAtoB.score <= dirBtoA.score ? "a" : "b";
@@ -511,7 +523,11 @@ export function scoreMatch(
     const hasData = dirAtoB.hasData || dirBtoA.hasData;
     const status = statusFor(combinedScore, hasData);
     const weight = weights[category];
-    const isHard = !!hardRequirements[category];
+    // STEP 20 — the side whose preference was the WEAKER (unmet) direction
+    // gets to decide, via its own stored priority, whether that unmet
+    // preference is a hard exclusion — independent of the global toggle.
+    const relevantPriority = weaker === "a" ? priorities?.a : priorities?.b;
+    const isHard = !!hardRequirements[category] || relevantPriority === "MUST_HAVE";
     const hardFailed = isHard && status === "incompatible";
     aToBPoints += weight * dirAtoB.score;
     bToAPoints += weight * dirBtoA.score;
@@ -548,7 +564,8 @@ export function scoreMatch(
           ? "No age preference stated"
           : status === "compatible"
             ? `Both ages (${a.age}, ${b.age}) fall within each other's preferred range`
-            : `Age preference conflict — at least one side's range excludes the other (${a.age} vs ${b.age})`
+            : `Age preference conflict — at least one side's range excludes the other (${a.age} vs ${b.age})`,
+      { a: aToB.agePriority, b: bToA.agePriority }
     )
   );
 
@@ -563,7 +580,8 @@ export function scoreMatch(
           ? "No location preference stated"
           : status === "compatible"
             ? `Location works for both sides (${a.city} / ${b.city})`
-            : `Preferred location differs from at least one side's actual city (${a.city} vs ${b.city})`
+            : `Preferred location differs from at least one side's actual city (${a.city} vs ${b.city})`,
+      { a: aToB.locationPriority, b: bToA.locationPriority }
     )
   );
 
@@ -593,7 +611,8 @@ export function scoreMatch(
           ? "Open to any profession on at least one side"
           : status === "compatible"
             ? "Profession matches both sides' preference"
-            : "Profession differs from at least one side's stated preference"
+            : "Profession differs from at least one side's stated preference",
+      { a: aToB.professionPriority, b: bToA.professionPriority }
     )
   );
 

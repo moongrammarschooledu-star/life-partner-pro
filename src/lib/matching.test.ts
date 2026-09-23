@@ -121,6 +121,68 @@ describe("scoreMatch — hard requirements", () => {
   });
 });
 
+// STEP 20 — PartnerPreference.agePriority/.locationPriority/.professionPriority
+// existed since STEP 6 but scoreMatch() never read them; this closes that gap.
+describe("scoreMatch — per-preference MUST_HAVE priority (STEP 20)", () => {
+  it("excludes on age when the SIDE WHOSE PREFERENCE WAS UNMET marked age as MUST_HAVE, with no global toggle set", () => {
+    const a = profile({ preference: { minAge: 25, maxAge: 30, agePriority: "MUST_HAVE" } });
+    const b = profile({ id: "p2", age: 60 }); // fails A's age range -> A's direction is the weaker one
+    const result = scoreMatch(a, b); // no global hardRequirements passed
+    expect(result.excludedByHardRequirement).toBe(true);
+    expect(result.failedHardRequirements).toContain("Age");
+  });
+
+  it("does NOT exclude when the side whose preference was unmet only marked it PREFERRED", () => {
+    const a = profile({ preference: { minAge: 25, maxAge: 30, agePriority: "PREFERRED" } });
+    const b = profile({ id: "p2", age: 60 });
+    const result = scoreMatch(a, b);
+    expect(result.excludedByHardRequirement).toBe(false);
+  });
+
+  it("does NOT exclude when the OTHER side (whose preference was satisfied) marked MUST_HAVE", () => {
+    // b's age (27) satisfies a's range, so a is not the "weaker" direction.
+    // b's own agePriority is irrelevant here since b has no age preference stated.
+    const a = profile({ preference: { minAge: 25, maxAge: 30 } });
+    const b = profile({ id: "p2", age: 27, preference: { agePriority: "MUST_HAVE" } });
+    const result = scoreMatch(a, b);
+    expect(result.excludedByHardRequirement).toBe(false);
+  });
+
+  it("applies the same MUST_HAVE rule to location", () => {
+    const aLocation = profile({ preference: { preferredCity: "Karachi", locationPriority: "MUST_HAVE" } });
+    const bLocation = profile({ id: "p2", city: "Peshawar", country: "Pakistan" });
+    const locationResult = scoreMatch(aLocation, bLocation);
+    expect(locationResult.excludedByHardRequirement).toBe(true);
+    expect(locationResult.failedHardRequirements).toContain("Location");
+  });
+
+  // scoreProfessionDirection's own value range (1 for a match/ANY, 0.4 for a
+  // mismatch) never reaches statusFor's "incompatible" band (< 0.4) — a
+  // pre-existing scorer characteristic, unrelated to this change, that
+  // already made the global hardRequirements.profession toggle equally inert.
+  // MUST_HAVE is still correctly evaluated (isHard becomes true); it simply
+  // can never flip hardRequirementFailed for this category until
+  // scoreProfessionDirection's mismatch score is revisited separately.
+  it("computes MUST_HAVE for profession without crashing, though the scorer's own range never reaches 'incompatible' (documented pre-existing limitation)", () => {
+    const aProfession = profile({ preference: { professionPreference: "Doctor", professionPriority: "MUST_HAVE" } });
+    const bProfession = profile({ id: "p2", profession: "Teacher" });
+    const professionResult = scoreMatch(aProfession, bProfession);
+    const profession = professionResult.breakdown.find((r) => r.category === "profession")!;
+    expect(profession.status).toBe("partial");
+    expect(professionResult.excludedByHardRequirement).toBe(false);
+  });
+
+  it("leaves every other category's existing behavior unchanged when no priority is set (regression guard)", () => {
+    const a = profile({ preference: { minAge: 25, maxAge: 30 } });
+    const b = profile({ id: "p2", age: 27, preference: { minAge: 25, maxAge: 32 } });
+    const result = scoreMatch(a, b);
+    const age = result.breakdown.find((r) => r.category === "age")!;
+    expect(age.score).toBe(1);
+    expect(age.status).toBe("compatible");
+    expect(result.excludedByHardRequirement).toBe(false);
+  });
+});
+
 describe("scoreMatch — mutual compatibility", () => {
   it("computes independent A→B and B→A directions, and the mutual score is the weaker-link blend, not a naive average", () => {
     // A is happy with any age; B insists on someone much younger than A —

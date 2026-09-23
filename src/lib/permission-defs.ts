@@ -236,6 +236,19 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "ai:approval:view": "View AI governance approval requests",
   "ai:approval:approve": "Approve an AI governance approval request",
   "ai:approval:execute": "Execute an approved AI governance action",
+  "search:view": "Search and browse candidates",
+  "search:advanced": "Use the advanced smart filter builder",
+  "search:sensitive": "Filter candidate search by sensitive fields (e.g. income)",
+  "search:export": "Export candidate search results",
+  "search:saved:view": "View saved search presets",
+  "search:saved:create": "Save a new search preset",
+  "search:saved:edit": "Edit a shared search preset",
+  "search:saved:delete": "Delete a search preset",
+  "search:bulk": "Perform bulk actions on search results",
+  "candidate:view": "View candidate discovery results",
+  "candidate:compare": "Compare multiple candidates side by side",
+  "candidate:shortlist": "Create and manage candidate shortlists",
+  "candidate:recommend": "Run mutual-compatibility candidate search",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

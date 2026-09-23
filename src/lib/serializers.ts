@@ -8,6 +8,17 @@ function canViewIncome(permissions: Permission[]): boolean {
 function canViewAllNotes(permissions: Permission[]): boolean {
   return permissions.includes("sensitive:notes:view");
 }
+// STEP 20 — sensitive:family:view existed as a granted permission since
+// STEP 17 but was never actually checked by toDetailDto (family/lifestyle
+// were returned in full to anyone who could view the profile at all). This
+// closes that gap: `family` is nulled entirely, and religion/sect/
+// religiousPractice are nulled on `lifestyle` (smoking/drinking/languages/
+// hobbies/personality stay visible — spec §13 treats those as softer,
+// privacy-controlled-but-not-permission-gated lifestyle fields, distinct
+// from the family/religious background spec §12 explicitly gates).
+function canViewFamily(permissions: Permission[]): boolean {
+  return permissions.includes("sensitive:family:view");
+}
 
 // Contact info is intentionally NOT part of this include set — every list
 // and detail query in the admin app uses this shape by default. The only
@@ -58,6 +69,9 @@ export function toDetailDto(profile: ProfileDetail, viewerAdminId: string, permi
     profile.profession && !canViewIncome(permissions)
       ? { ...profile.profession, monthlyIncome: null, annualIncome: null }
       : profile.profession;
+  const canFamily = canViewFamily(permissions);
+  const family = canFamily ? profile.family : null;
+  const lifestyle = profile.lifestyle && !canFamily ? { ...profile.lifestyle, religion: null, sect: null, religiousPractice: null } : profile.lifestyle;
 
   return {
     id: profile.id,
@@ -81,8 +95,8 @@ export function toDetailDto(profile: ProfileDetail, viewerAdminId: string, permi
     updatedAt: profile.updatedAt,
     education: profile.education,
     profession,
-    family: profile.family,
-    lifestyle: profile.lifestyle,
+    family,
+    lifestyle,
     preference: profile.preference,
     photos: profile.photos.map((p) => ({ id: p.id, isPrimary: p.isPrimary })),
     notes: visibleNotes.map((n) => ({
@@ -102,3 +116,19 @@ export function toDetailDto(profile: ProfileDetail, viewerAdminId: string, permi
 
 export type ProfileListDto = ReturnType<typeof toListDto>;
 export type ProfileDetailDto = ReturnType<typeof toDetailDto>;
+
+// STEP 20 §22 — the compact Candidate Discovery card shape. Reuses toListDto
+// verbatim for redaction (never duplicates the income check) and reuses the
+// existing authenticated photo proxy route as the image source (spec §24 —
+// no new signed-URL scheme; see src/app/api/admin/profiles/[id]/photo/[photoId]/route.ts).
+export function toCandidateCardDto(profile: ProfileListItem, permissions: Permission[] = []) {
+  const base = toListDto(profile, permissions);
+  const primaryPhotoId = profile.photos[0]?.id ?? null;
+  return {
+    ...base,
+    photoUrl: primaryPhotoId ? `/api/admin/profiles/${profile.id}/photo/${primaryPhotoId}` : null,
+    profileCompletion: profile.profileCompletion,
+  };
+}
+
+export type CandidateCardDto = ReturnType<typeof toCandidateCardDto>;

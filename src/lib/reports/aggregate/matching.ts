@@ -49,3 +49,38 @@ export async function computeMatchingAnalytics(filters: ReportFilters) {
     conversionRate: safeRate(convertedCount, total),
   };
 }
+
+// STEP 20 §46 — Candidate Discovery search analytics, extending this module
+// rather than duplicating a separate aggregation file (plan decision: reuse
+// src/lib/reports/aggregate/matching.ts). Reads SearchHistory/
+// CandidateSearchAudit/Shortlist (all new STEP 20 tables) within the same
+// date-range vocabulary every other Reports section already uses.
+export async function computeSearchAnalytics(filters: ReportFilters) {
+  const dateWhere = { createdAt: { gte: filters.dateRange.from, lte: filters.dateRange.to } };
+
+  const [searches, sensitiveSearchCount, shortlistsCreated, mutualSearchCount, zeroResultCount] = await Promise.all([
+    prisma.searchHistory.findMany({ where: dateWhere, select: { searchType: true, resultCount: true, filterSummary: true } }),
+    prisma.candidateSearchAudit.count({ where: dateWhere }),
+    prisma.shortlist.count({ where: dateWhere }),
+    prisma.searchHistory.count({ where: { ...dateWhere, searchType: "mutual" } }),
+    prisma.searchHistory.count({ where: { ...dateWhere, resultCount: 0 } }),
+  ]);
+
+  const byType: Record<string, number> = {};
+  let resultSum = 0;
+  for (const s of searches) {
+    byType[s.searchType] = (byType[s.searchType] ?? 0) + 1;
+    resultSum += s.resultCount;
+  }
+
+  return {
+    totalSearches: searches.length,
+    searchesByType: Object.entries(byType).map(([label, count]) => ({ label, count })),
+    avgResultCount: searches.length > 0 ? Math.round(resultSum / searches.length) : null,
+    zeroResultSearches: zeroResultCount,
+    zeroResultRate: safeRate(zeroResultCount, searches.length),
+    sensitiveSearches: sensitiveSearchCount,
+    mutualMatchSearches: mutualSearchCount,
+    shortlistsCreated,
+  };
+}

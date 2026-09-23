@@ -273,7 +273,21 @@ export type Permission =
   | "security:approval:execute"
   | "ai:approval:view"
   | "ai:approval:approve"
-  | "ai:approval:execute";
+  | "ai:approval:execute"
+  // ---------- Candidate Discovery & Matchmaking Workspace (STEP 20) ----------
+  | "search:view"
+  | "search:advanced"
+  | "search:sensitive"
+  | "search:export"
+  | "search:saved:view"
+  | "search:saved:create"
+  | "search:saved:edit"
+  | "search:saved:delete"
+  | "search:bulk"
+  | "candidate:view"
+  | "candidate:compare"
+  | "candidate:shortlist"
+  | "candidate:recommend";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -293,6 +307,7 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "sensitive:finance:export",
   "sensitive:approval:view",
   "sensitive:approval:approve",
+  "search:sensitive",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -584,6 +599,30 @@ const MANAGER_APPROVAL_PERMISSIONS: Permission[] = [
 // (the "maker") but can never approve/reject/execute one, per spec §39.
 const STAFF_APPROVAL_PERMISSIONS: Permission[] = ["approvals:view", "approvals:create", "approvals:submit"];
 
+// STEP 20 — full Candidate Discovery permission set (SUPER_ADMIN/OPERATIONS_ADMIN).
+const SEARCH_ALL_PERMISSIONS: Permission[] = [
+  "search:view", "search:advanced", "search:sensitive", "search:export",
+  "search:saved:view", "search:saved:create", "search:saved:edit", "search:saved:delete", "search:bulk",
+  "candidate:view", "candidate:compare", "candidate:shortlist", "candidate:recommend",
+];
+
+// STEP 20 — MATCHMAKING_MANAGER's own domain: full discovery/matchmaking
+// authority, but never search:sensitive/search:export unless separately
+// granted (those stay tied to the underlying sensitive:*/export permission).
+const MATCHMAKING_SEARCH_PERMISSIONS: Permission[] = [
+  "search:view", "search:advanced", "search:saved:view", "search:saved:create", "search:saved:edit", "search:bulk",
+  "candidate:view", "candidate:compare", "candidate:shortlist", "candidate:recommend",
+];
+
+// STEP 20 — every other *_MANAGER role: can view candidates for their own
+// domain's relevance (e.g. verification/support context) but not the full
+// matchmaking-workspace authority.
+const MANAGER_SEARCH_PERMISSIONS: Permission[] = ["search:view", "search:saved:view", "candidate:view"];
+
+// STEP 20 — every *_STAFF role: assignment-scoped search + shortlisting,
+// never advanced filters, export, or saved-preset management.
+const STAFF_SEARCH_PERMISSIONS: Permission[] = ["search:view", "candidate:view", "candidate:shortlist"];
+
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // ---------------------------------------------------------------- SUPER_ADMIN (spec §4)
   SUPER_ADMIN: [
@@ -643,6 +682,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...ROLES_ALL_PERMISSIONS,
     ...TASKS_ALL_PERMISSIONS,
     ...APPROVALS_ALL_PERMISSIONS,
+    ...SEARCH_ALL_PERMISSIONS,
   ],
   // legacy — retired, kept only so a not-yet-migrated row keeps its historical permission set unchanged
   ADMIN: [
@@ -800,7 +840,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // bundled into match:run/proposal:create, which also let the holder act, not just view) —
   // disclosed gap, not silently worked around by granting an action permission to a
   // read-only role. system:view is read-only (System Health/Config pages; no system:*:manage).
-  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view"],
+  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view", "search:view"],
 
   // ---------------------------------------------------------------- OPERATIONS_ADMIN (spec §5)
   OPERATIONS_ADMIN: [
@@ -832,6 +872,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "audit:view",
     ...TASKS_ALL_PERMISSIONS,
     ...OPERATIONS_APPROVAL_PERMISSIONS,
+    ...SEARCH_ALL_PERMISSIONS,
     // deliberately lacks: admin:manage/roles:* (no role/permission management), finance:provider:manage,
     // finance:rollout:* (no unrestricted payment rollout control unless separately delegated),
     // system:restore:approve (no system recovery), releases:manage (no deployment control),
@@ -861,6 +902,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:view",
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
+    ...MATCHMAKING_SEARCH_PERMISSIONS,
     // deliberately lacks match:configure (cannot change matching algorithm weights, spec §6),
     // admin:manage / staff:view / roles:* (cannot manage staff permissions),
     // finance:* (cannot manage payment settings).
@@ -886,6 +928,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "audit:view",
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
+    ...MANAGER_SEARCH_PERMISSIONS,
     // deliberately lacks proposal:finalize/contact:reveal (spec §7: cannot finalize proposals or
     // share contacts merely because verification is complete), finance:*, roles:*.
   ],
@@ -923,6 +966,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...MANAGER_APPROVAL_PERMISSIONS,
     "security:approval:view",
     "security:approval:approve", // STEP 19 §6 SAFETY domain (SAFETY_RESTRICTION/PROFILE_SUSPENSION/SAFETY_CASE_ESCALATION) sits with Support Manager, mirroring safety_cases:* above
+    ...MANAGER_SEARCH_PERMISSIONS,
     // deliberately lacks sensitive:finance:*, proposal:finalize, roles:*, security:approval:execute
     // (execution of a security override stays with Super Admin/Operations Admin).
   ],
@@ -938,6 +982,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "ai:communication:draft",
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
+    ...MANAGER_SEARCH_PERMISSIONS,
     // deliberately lacks sensitive:contact:view/contact:reveal (cannot access private contact
     // details unless separately granted), contact:reveal:override, profile:edit, verification:*, finance:*.
     // Spec §9 also lists proposals.view/proposal_communications.view/meetings.view: same disclosed
@@ -955,6 +1000,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "finance:approval:view",
     "finance:approval:approve",
     "finance:approval:execute",
+    ...MANAGER_SEARCH_PERMISSIONS,
     // deliberately lacks sensitive:income/family/notes/documents/contact:view, verification:*,
     // match:*, proposal:finalize, roles:*.
   ],
@@ -976,6 +1022,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "ai:communication:draft",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
+    ...STAFF_SEARCH_PERMISSIONS,
+    "search:advanced",
+    "candidate:recommend", // STEP 20 — matchmaking staff specifically may run mutual-candidate search + advanced filters, unlike other *_STAFF roles
     // sensitive:contact:view intentionally NOT granted by default — spec §11: requires the
     // permission AND approved consent/workflow, granted per-admin when actually needed.
   ],
@@ -993,6 +1042,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
+    ...STAFF_SEARCH_PERMISSIONS,
     // deliberately lacks verification:approve/reject — only granted per-admin when explicitly
     // authorized (spec §12).
   ],
@@ -1008,6 +1058,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
+    ...STAFF_SEARCH_PERMISSIONS,
     // deliberately lacks sensitive:documents/income/contact/notes:view (spec §13) unless separately granted.
   ],
 
@@ -1017,6 +1068,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
+    ...STAFF_SEARCH_PERMISSIONS,
     // deliberately lacks contact:reveal/sensitive:contact:view, profile:edit, verification:*, finance:*.
   ],
 
@@ -1031,10 +1083,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "tasks:reports:view",
     "approvals:view",
     "approvals:audit:view",
+    "search:view",
     // deliberately lacks profile:edit, proposal:edit, verification:review, contact:reveal,
     // finance:payments:manage, finance:refunds:*, staff:view, roles:*, settings:edit, and every
     // task mutation permission (create/assign/complete/escalate/etc.) — read-only analytics only.
     // Same for approvals:* — no create/approve/reject/execute, read-only governance analytics (spec §39).
+    // Same for search:* — view-only, no candidate:*/advanced/sensitive/export (spec §46's analytics-only framing).
   ],
 };
 

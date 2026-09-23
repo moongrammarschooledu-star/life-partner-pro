@@ -45,6 +45,8 @@ import {
   Bot,
   ListChecks,
   Gavel,
+  SearchCheck,
+  Layers,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -62,6 +64,8 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/verification", label: "Verification Center", icon: BadgeCheck, permission: "verification:view" },
   { href: "/admin/security-flags", label: "Security Flags", icon: Flag, permission: "verification:flag:manage" },
   { href: "/admin/matching", label: "Matching Center", icon: Sparkles, permission: "match:run" },
+  { href: "/admin/candidate-discovery", label: "Candidate Discovery", icon: SearchCheck, permission: "search:view" },
+  { href: "/admin/matchmaking", label: "Matchmaking Workspace", icon: Layers, permission: "candidate:recommend" },
   { href: "/admin/matches", label: "Match History", icon: History, permission: "match:run" },
   { href: "/admin/proposals", label: "Proposals", icon: Handshake, permission: "proposal:create" },
   { href: "/admin/meetings", label: "Meetings", icon: CalendarDays, permission: "proposal:create" },

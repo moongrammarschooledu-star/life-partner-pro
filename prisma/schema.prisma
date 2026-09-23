@@ -133,6 +133,11 @@ enum AdminTaskType {
   PRIVACY_APPROVAL // PRIVACY_REQUEST — deletion/export approval review
   SECURITY_APPROVAL // CASE/PROFILE — safety/restriction approval review
   AI_APPROVAL // AI_SAFETY_EVENT — AI governance approval review
+
+  // STEP 20 — a candidate surfaced through search needs a distinct review
+  // task from MATCH_REVIEW (which is specifically "admin match-quality
+  // review before a proposal").
+  CANDIDATE_REVIEW // PROFILE — a discovered candidate needs staff review
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -857,6 +862,20 @@ enum AuditAction {
   APPROVAL_OVERRIDE_USED
   APPROVAL_CONFLICT_BLOCKED
   APPROVAL_POLICY_UPDATED
+
+  // ---------- Candidate Discovery & Matchmaking Workspace (STEP 20) ----------
+  SEARCH_PERFORMED
+  SENSITIVE_SEARCH_PERFORMED
+  SAVED_SEARCH_CREATED
+  SAVED_SEARCH_UPDATED
+  SAVED_SEARCH_DELETED
+  SHORTLIST_CREATED
+  SHORTLIST_ITEM_ADDED
+  SHORTLIST_ITEM_REMOVED
+  SHORTLIST_STATUS_CHANGED
+  CANDIDATE_COMPARED
+  MUTUAL_MATCH_SEARCH_PERFORMED
+  SEARCH_EXPORT_PERFORMED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1389,6 +1408,13 @@ model AdminUser {
   delegationsGiven           ApprovalDelegation[]   @relation("ApprovalDelegator")
   delegationsReceived        ApprovalDelegation[]   @relation("ApprovalDelegate")
   delegationsCreated         ApprovalDelegation[]   @relation("ApprovalDelegationCreator")
+
+  // ---------- Candidate Discovery & Matchmaking Workspace (STEP 20) ----------
+  savedSearches         SavedSearch[]
+  searchHistory         SearchHistory[]
+  shortlistsOwned       Shortlist[]
+  shortlistItemsAdded   ShortlistItem[]
+  candidateSearchAudits CandidateSearchAudit[]
 }
 
 // ---------- Core profile ----------
@@ -1481,6 +1507,12 @@ model Profile {
   payments          Payment[]
   invoices          Invoice[]
   couponRedemptions CouponRedemption[]
+
+  // ---------- Candidate Discovery & Matchmaking Workspace (STEP 20) ----------
+  searchHistoryAsSource         SearchHistory[]
+  shortlistsAsSource            Shortlist[]
+  shortlistAppearances          ShortlistItem[]
+  candidateSearchAuditsAsSource CandidateSearchAudit[]
 
   @@index([gender, status])
   @@index([city])
@@ -2553,6 +2585,7 @@ model Department {
   admins           AdminUser[]
   tasks            AdminTask[]
   approvalRequests ApprovalRequest[]
+  savedSearches    SavedSearch[]
 }
 
 // Tracks a live JWT session for revocation (spec §13) — the JWT itself
@@ -4850,4 +4883,123 @@ model ApprovalEvent {
   createdAt         DateTime        @default(now())
 
   @@index([approvalRequestId, createdAt])
+}
+
+// ---------- Candidate Discovery & Matchmaking Workspace (STEP 20) ----------
+// See src/lib/search/ (fields, filter-builder, candidate-search, audit) for
+// the logic consuming these. No existing STEP 1-19 model, enum, or function
+// is replaced by this section — src/lib/serializers.ts's toListDto/
+// toDetailDto and src/lib/matching.ts's scoreMatch() gain small, additive
+// enhancements (see those files' own STEP 20 comments); everything else here
+// is new.
+
+enum SavedSearchVisibility {
+  PRIVATE
+  TEAM
+  DEPARTMENT
+  ORGANIZATION
+}
+
+enum ShortlistStatus {
+  DRAFT
+  REVIEWING
+  READY_FOR_PROPOSAL
+  ARCHIVED
+}
+
+// Spec §19/§20 — a named, reusable filter configuration. filterJson stores a
+// validated FilterGroup (src/lib/search/filter-builder.ts) — never raw SQL,
+// never re-trusted without re-validation on read.
+model SavedSearch {
+  id           String                @id @default(cuid())
+  searchCode   String                @unique // LPP-SRCH-###### via src/lib/privacy/codes.ts
+  owner        AdminUser             @relation(fields: [ownerId], references: [id])
+  ownerId      String
+  name         String
+  description  String?
+  filterJson   Json
+  visibility   SavedSearchVisibility @default(PRIVATE)
+  department   Department?           @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([ownerId])
+  @@index([visibility])
+}
+
+// Spec §21 — "Recent Searches" source. filterSummary is a compact, non-
+// sensitive JSON summary (e.g. {"city":"Lahore","verifiedOnly":true}) — a
+// sensitive-flagged search additionally gets a CandidateSearchAudit row
+// (below); this table alone is never the sensitive-compliance record.
+model SearchHistory {
+  id              String    @id @default(cuid())
+  actor           AdminUser @relation(fields: [actorId], references: [id])
+  actorId         String
+  searchType      String // "criteria" | "mutual" | "nl" | "profile_id"
+  sourceProfile   Profile?  @relation(fields: [sourceProfileId], references: [id])
+  sourceProfileId String?
+  filterSummary   Json
+  resultCount     Int
+  createdAt       DateTime  @default(now())
+
+  @@index([actorId, createdAt])
+}
+
+// Spec §28 — LPP-SHORT-######. Never auto-creates a proposal (spec §28's own
+// explicit rule) — a shortlist is purely a staging area.
+model Shortlist {
+  id              String          @id @default(cuid())
+  shortlistCode   String          @unique // LPP-SHORT-###### via src/lib/privacy/codes.ts
+  owner           AdminUser       @relation(fields: [ownerId], references: [id])
+  ownerId         String
+  sourceProfile   Profile?        @relation(fields: [sourceProfileId], references: [id])
+  sourceProfileId String?
+  name            String
+  description     String?
+  status          ShortlistStatus @default(DRAFT)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  items ShortlistItem[]
+
+  @@index([ownerId])
+  @@index([sourceProfileId])
+}
+
+// @@unique([shortlistId, profileId]) is the spec §45 duplicate-add
+// protection — adding an already-present candidate is a no-op, not a second row.
+model ShortlistItem {
+  id          String    @id @default(cuid())
+  shortlist   Shortlist @relation(fields: [shortlistId], references: [id], onDelete: Cascade)
+  shortlistId String
+  profile     Profile   @relation(fields: [profileId], references: [id])
+  profileId   String
+  position    Int       @default(0)
+  adminNote   String?
+  addedBy     AdminUser @relation(fields: [addedById], references: [id])
+  addedById   String
+  createdAt   DateTime  @default(now())
+
+  @@unique([shortlistId, profileId])
+  @@index([shortlistId])
+}
+
+// Spec §39 — a dedicated compliance trail for sensitive-filter usage, kept
+// separate from SearchHistory's general UX purpose. sensitiveFiltersUsed
+// records WHICH sensitive categories were filtered on (e.g. ["income"]),
+// never the raw threshold value (spec §38's explicit example).
+model CandidateSearchAudit {
+  id                   String    @id @default(cuid())
+  actor                AdminUser @relation(fields: [actorId], references: [id])
+  actorId              String
+  searchType           String
+  sourceProfile        Profile?  @relation(fields: [sourceProfileId], references: [id])
+  sourceProfileId      String?
+  sensitiveFiltersUsed String[]  @default([])
+  resultCount          Int
+  reason               String?
+  createdAt            DateTime  @default(now())
+
+  @@index([actorId, createdAt])
 }

@@ -48,6 +48,11 @@ export function toMatchable(profile: MatchableRecord): MatchableProfile {
       maxHeightCm: profile.preference?.maxHeightCm,
       familyTypePreference: profile.preference?.familyTypePreference,
       familyBackgroundPreference: profile.preference?.familyBackgroundPreference,
+      // STEP 20 — previously fetched (implicitly, via `preference: true`) but
+      // never mapped through; scoreMatch() now actually reads these.
+      agePriority: profile.preference?.agePriority,
+      locationPriority: profile.preference?.locationPriority,
+      professionPriority: profile.preference?.professionPriority,
     },
   };
 }

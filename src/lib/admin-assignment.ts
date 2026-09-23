@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
+import { hasBroadRecordAccess, type AdminRole } from "@/lib/permissions";
 import type { AssignmentResourceType, AssignmentPriority } from "@prisma/client";
 
 // Unified assignment-tracking table (spec §7/§8/§20) — additive alongside
@@ -98,4 +99,21 @@ export async function getCurrentAssigneeId(resourceType: AssignmentResourceType,
     orderBy: { assignedAt: "desc" },
   });
   return latest?.adminId ?? null;
+}
+
+// STEP 20 §32 — the bulk, list-shaped counterpart to getCurrentAssigneeId():
+// generalizes the assignment-scoping shape already used privately inside
+// src/lib/ai/copilot/tools.ts's assignedProfileIds() so
+// src/lib/search/candidate-search.ts can apply identical "No Assignment =
+// No Record Access" scoping to a WHERE clause (id: { in: [...] }) instead of
+// checking one record at a time. Returns null for a broad-access role
+// (meaning: do not scope at all), or the list of resource ids currently
+// assigned to this admin (possibly empty) for an assignment-scoped role.
+export async function getAssignedResourceIds(admin: { id: string; role: AdminRole }, resourceType: AssignmentResourceType): Promise<string[] | null> {
+  if (hasBroadRecordAccess(admin.role)) return null;
+  const rows = await prisma.adminAssignment.findMany({
+    where: { resourceType, adminId: admin.id, status: { not: "REASSIGNED" }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+    select: { resourceId: true },
+  });
+  return rows.map((r) => r.resourceId);
 }
