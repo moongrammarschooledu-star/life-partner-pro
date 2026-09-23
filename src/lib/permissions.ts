@@ -212,7 +212,35 @@ export type Permission =
   | "roles:edit"
   | "roles:disable"
   | "roles:assign"
-  | "roles:delete";
+  | "roles:delete"
+  // ---------- Workflow & Task Management (STEP 18) ----------
+  | "tasks:view"
+  | "tasks:view:own"
+  | "tasks:view:team"
+  | "tasks:view:all"
+  | "tasks:create"
+  | "tasks:create:manual"
+  | "tasks:assign"
+  | "tasks:assign:any"
+  | "tasks:reassign"
+  | "tasks:accept"
+  | "tasks:complete"
+  | "tasks:reopen"
+  | "tasks:cancel"
+  | "tasks:escalate"
+  | "tasks:escalate:senior"
+  | "tasks:comment"
+  | "tasks:comment:internal"
+  | "tasks:attachments:upload"
+  | "tasks:attachments:view"
+  | "tasks:bulk-actions"
+  | "tasks:templates:manage"
+  | "tasks:sla:manage"
+  | "tasks:automation:manage"
+  | "tasks:workflow-failures:view"
+  | "tasks:workflow-failures:resolve"
+  | "tasks:reports:view"
+  | "staff:availability:manage";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -389,6 +417,67 @@ const AI_ALL_PERMISSIONS: Permission[] = [
 
 const ROLES_ALL_PERMISSIONS: Permission[] = ["roles:view", "roles:create", "roles:edit", "roles:disable", "roles:assign", "roles:delete"];
 
+// STEP 18 — the full task-management permission set; SUPER_ADMIN and
+// OPERATIONS_ADMIN hold all of it, every other role gets a scoped subset
+// (see each role's array below).
+const TASKS_ALL_PERMISSIONS: Permission[] = [
+  "tasks:view",
+  "tasks:view:own",
+  "tasks:view:team",
+  "tasks:view:all",
+  "tasks:create",
+  "tasks:create:manual",
+  "tasks:assign",
+  "tasks:assign:any",
+  "tasks:reassign",
+  "tasks:accept",
+  "tasks:complete",
+  "tasks:reopen",
+  "tasks:cancel",
+  "tasks:escalate",
+  "tasks:escalate:senior",
+  "tasks:comment",
+  "tasks:comment:internal",
+  "tasks:attachments:upload",
+  "tasks:attachments:view",
+  "tasks:bulk-actions",
+  "tasks:templates:manage",
+  "tasks:sla:manage",
+  "tasks:automation:manage",
+  "tasks:workflow-failures:view",
+  "tasks:workflow-failures:resolve",
+  "tasks:reports:view",
+  "staff:availability:manage",
+];
+
+// STEP 18 — each *_MANAGER role's task permissions: can view/manage their
+// domain's team queue and escalate, but not the sensitive-tier escalation,
+// system-config (templates/SLA/automation/workflow-failures), or cross-domain
+// tasks:view:all/tasks:assign:any that only SUPER_ADMIN/OPERATIONS_ADMIN hold.
+const MANAGER_TASK_PERMISSIONS: Permission[] = [
+  "tasks:view",
+  "tasks:view:own",
+  "tasks:view:team",
+  "tasks:create",
+  "tasks:assign",
+  "tasks:reassign",
+  "tasks:accept",
+  "tasks:complete",
+  "tasks:reopen",
+  "tasks:cancel",
+  "tasks:escalate",
+  "tasks:comment",
+  "tasks:comment:internal",
+  "tasks:attachments:upload",
+  "tasks:attachments:view",
+  "tasks:bulk-actions",
+  "tasks:reports:view",
+];
+
+// STEP 18 — each *_STAFF role's task permissions: their own assigned work
+// queue only — no create/assign/reassign/escalate/bulk-actions.
+const STAFF_TASK_PERMISSIONS: Permission[] = ["tasks:view", "tasks:view:own", "tasks:accept", "tasks:complete", "tasks:comment", "tasks:attachments:upload", "tasks:attachments:view"];
+
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // ---------------------------------------------------------------- SUPER_ADMIN (spec §4)
   SUPER_ADMIN: [
@@ -446,6 +535,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...SYSTEM_ALL_PERMISSIONS,
     ...AI_ALL_PERMISSIONS,
     ...ROLES_ALL_PERMISSIONS,
+    ...TASKS_ALL_PERMISSIONS,
   ],
   // legacy — retired, kept only so a not-yet-migrated row keeps its historical permission set unchanged
   ADMIN: [
@@ -603,7 +693,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // bundled into match:run/proposal:create, which also let the holder act, not just view) —
   // disclosed gap, not silently worked around by granting an action permission to a
   // read-only role. system:view is read-only (System Health/Config pages; no system:*:manage).
-  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view", "system:view"],
+  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view", "system:view", "tasks:view", "tasks:view:own"],
 
   // ---------------------------------------------------------------- OPERATIONS_ADMIN (spec §5)
   OPERATIONS_ADMIN: [
@@ -633,6 +723,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "system:view",
     "settings:edit",
     "audit:view",
+    ...TASKS_ALL_PERMISSIONS,
     // deliberately lacks: admin:manage/roles:* (no role/permission management), finance:provider:manage,
     // finance:rollout:* (no unrestricted payment rollout control unless separately delegated),
     // system:restore:approve (no system recovery), releases:manage (no deployment control),
@@ -658,6 +749,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:view",
     "communication:send",
     "reports:view",
+    ...MANAGER_TASK_PERMISSIONS,
     // deliberately lacks match:configure (cannot change matching algorithm weights, spec §6),
     // admin:manage / staff:view / roles:* (cannot manage staff permissions),
     // finance:* (cannot manage payment settings).
@@ -681,6 +773,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:escalate",
     "reports:view",
     "audit:view",
+    ...MANAGER_TASK_PERMISSIONS,
     // deliberately lacks proposal:finalize/contact:reveal (spec §7: cannot finalize proposals or
     // share contacts merely because verification is complete), finance:*, roles:*.
   ],
@@ -713,6 +806,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     "reports:view",
     "audit:view",
+    ...MANAGER_TASK_PERMISSIONS,
+    "tasks:escalate:senior", // spec's "senior" case-escalation tier already lives here (cases:escalate:senior above) — mirrors it for tasks
     // deliberately lacks sensitive:finance:*, proposal:finalize, roles:*.
   ],
 
@@ -725,6 +820,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:view",
     "ai:use",
     "ai:communication:draft",
+    ...MANAGER_TASK_PERMISSIONS,
     // deliberately lacks sensitive:contact:view/contact:reveal (cannot access private contact
     // details unless separately granted), contact:reveal:override, profile:edit, verification:*, finance:*.
     // Spec §9 also lists proposals.view/proposal_communications.view/meetings.view: same disclosed
@@ -737,6 +833,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:view",
     "reports:export",
     "audit:view",
+    ...MANAGER_TASK_PERMISSIONS,
     // deliberately lacks sensitive:income/family/notes/documents/contact:view, verification:*,
     // match:*, proposal:finalize, roles:*.
   ],
@@ -756,6 +853,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "ai:use",
     "ai:copilot",
     "ai:communication:draft",
+    ...STAFF_TASK_PERMISSIONS,
     // sensitive:contact:view intentionally NOT granted by default — spec §11: requires the
     // permission AND approved consent/workflow, granted per-admin when actually needed.
   ],
@@ -771,6 +869,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:view",
     "communication:view",
     "communication:send",
+    ...STAFF_TASK_PERMISSIONS,
     // deliberately lacks verification:approve/reject — only granted per-admin when explicitly
     // authorized (spec §12).
   ],
@@ -784,6 +883,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:escalate",
     "communication:view",
     "communication:send",
+    ...STAFF_TASK_PERMISSIONS,
     // deliberately lacks sensitive:documents/income/contact/notes:view (spec §13) unless separately granted.
   ],
 
@@ -791,6 +891,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   COMMUNICATION_STAFF: [
     "communication:view",
     "communication:send",
+    ...STAFF_TASK_PERMISSIONS,
     // deliberately lacks contact:reveal/sensitive:contact:view, profile:edit, verification:*, finance:*.
   ],
 
@@ -800,8 +901,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "reports:view",
     "reports:export",
     "profiles:export",
+    "tasks:view",
+    "tasks:view:all",
+    "tasks:reports:view",
     // deliberately lacks profile:edit, proposal:edit, verification:review, contact:reveal,
-    // finance:payments:manage, finance:refunds:*, staff:view, roles:*, settings:edit.
+    // finance:payments:manage, finance:refunds:*, staff:view, roles:*, settings:edit, and every
+    // task mutation permission (create/assign/complete/escalate/etc.) — read-only analytics only.
   ],
 };
 

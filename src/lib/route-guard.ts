@@ -5,14 +5,9 @@ import { writeAudit } from "@/lib/audit";
 import { getActiveViewAs } from "@/lib/view-as";
 import type { Permission, AdminRole } from "@/lib/permissions";
 import { ServiceUnavailableError } from "@/lib/ops/system-control";
+import { HttpError } from "@/lib/http-error";
 
-export class ApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+export class ApiError extends HttpError {}
 
 export interface RequireAdminOptions {
   // Opt-in only (secure by default) — see src/lib/view-as.ts. Only a small,
@@ -84,7 +79,7 @@ export async function requireAdmin(permission?: Permission, options?: RequireAdm
 }
 
 export function handleApiError(error: unknown) {
-  if (error instanceof ApiError) {
+  if (error instanceof HttpError) {
     // 401/403 are counted (deduped) so auth-attack / permission-violation
     // spikes can raise alerts; other 4xx are ordinary validation outcomes.
     if (error.status === 401 || error.status === 403) {

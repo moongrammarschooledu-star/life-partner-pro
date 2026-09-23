@@ -333,4 +333,38 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Payment Under Review", body: "A manual payment submission is awaiting admin review." },
     UR: { title: "ادائیگی زیر جائزہ", body: "ایک دستی ادائیگی کی جمع کرائی گئی درخواست انتظامی جائزے کی منتظر ہے۔" },
   },
+
+  // ---------- Workflow & Task Management (STEP 18) ----------
+  TASK_ASSIGNED: {
+    EN: { title: "Task Assigned", body: "A task has been assigned to you." },
+    UR: { title: "ٹاسک تفویض ہوا", body: "ایک ٹاسک آپ کو تفویض کیا گیا ہے۔" },
+  },
+  TASK_REASSIGNED: {
+    EN: { title: "Task Reassigned", body: "A task has been reassigned." },
+    UR: { title: "ٹاسک دوبارہ تفویض ہوا", body: "ایک ٹاسک دوبارہ تفویض کیا گیا ہے۔" },
+  },
+  TASK_DUE_SOON: {
+    EN: { title: "Task Due Soon", body: "A task assigned to you is due soon." },
+    UR: { title: "ٹاسک جلد واجب الادا ہے", body: "آپ کو تفویض کردہ ایک ٹاسک جلد واجب الادا ہے۔" },
+  },
+  TASK_OVERDUE: {
+    EN: { title: "Task Overdue", body: "A task assigned to you is overdue." },
+    UR: { title: "ٹاسک زائد المیعاد ہے", body: "آپ کو تفویض کردہ ایک ٹاسک کی میعاد ختم ہو چکی ہے۔" },
+  },
+  TASK_ESCALATED: {
+    EN: { title: "Task Escalated", body: "A task has been escalated and needs higher-level review." },
+    UR: { title: "ٹاسک بڑھایا گیا", body: "ایک ٹاسک کو بڑھایا گیا ہے اور اعلیٰ سطحی جائزے کی ضرورت ہے۔" },
+  },
+  TASK_COMMENT_MENTION: {
+    EN: { title: "Mentioned in a Task", body: "You were mentioned in a task comment." },
+    UR: { title: "ٹاسک میں ذکر", body: "ایک ٹاسک کے تبصرے میں آپ کا ذکر کیا گیا ہے۔" },
+  },
+  TASK_DEPENDENCY_COMPLETED: {
+    EN: { title: "Dependency Completed", body: "A task your work depends on has been completed." },
+    UR: { title: "انحصار مکمل ہوا", body: "ایک ٹاسک جس پر آپ کا کام منحصر تھا مکمل ہو گیا ہے۔" },
+  },
+  TASK_REOPENED: {
+    EN: { title: "Task Reopened", body: "A completed task has been reopened." },
+    UR: { title: "ٹاسک دوبارہ کھولا گیا", body: "ایک مکمل شدہ ٹاسک دوبارہ کھولا گیا ہے۔" },
+  },
 };

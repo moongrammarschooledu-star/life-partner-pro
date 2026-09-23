@@ -127,6 +127,19 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   SUBSCRIPTION_CANCELLED: ESSENTIAL,
   INVOICE_CREATED: ESSENTIAL,
   MANUAL_PAYMENT_REQUIRES_REVIEW: ESSENTIAL,
+
+  // Workflow & Task Management (STEP 18) — essential. Internal-only,
+  // admin-facing (notifyAdmins() sends in-app only, no external dispatch, no
+  // preference/consent check either way — see notification-service.ts), but
+  // classified essential for consistency with every other admin-only type above.
+  TASK_ASSIGNED: ESSENTIAL,
+  TASK_REASSIGNED: ESSENTIAL,
+  TASK_DUE_SOON: ESSENTIAL,
+  TASK_OVERDUE: ESSENTIAL,
+  TASK_ESCALATED: ESSENTIAL,
+  TASK_COMMENT_MENTION: ESSENTIAL,
+  TASK_DEPENDENCY_COMPLETED: ESSENTIAL,
+  TASK_REOPENED: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

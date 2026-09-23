@@ -5,6 +5,7 @@ import { revokeConsent } from "@/lib/privacy/consent";
 import { submitDeletionRequest } from "@/lib/privacy/deletion-request";
 import { createDataExport } from "@/lib/privacy/data-export";
 import { nextCaseNumber } from "@/lib/case-code";
+import { createFromEvent } from "@/lib/workflow/engine";
 import type { PrivacyRequestType, ConsentCategory } from "@prisma/client";
 
 // Spec §22 — a thin router (LPP-PRIV-######), not 8 separate systems. Types
@@ -66,6 +67,20 @@ export async function submitPrivacyRequest(params: {
   });
 
   await writeAudit({ action: "PRIVACY_REQUEST_CREATED", targetProfileId: params.profileId, meta: { requestId: request.id, requestCode, type: params.type } });
+
+  // STEP 18 §35 — privacy requests previously just sat in a list with no
+  // task/notification loop pushing an admin to act. A REPORT_ISSUE request
+  // already becomes a Case above — wrap that (reusing its real per-record
+  // ACL) rather than the weaker permission-only PRIVACY_REQUEST gate;
+  // every other type gets a task pointed at the PrivacyRequest itself.
+  await createFromEvent({
+    eventName: "PRIVACY_REQUEST_CREATED",
+    dedupKey: `PRIVACY_REQUEST_CREATED:${request.id}`,
+    resourceType: linkedRecordType === "Case" ? "CASE" : "PRIVACY_REQUEST",
+    resourceId: linkedRecordType === "Case" && linkedRecordId ? linkedRecordId : request.id,
+    taskType: params.type === "DELETION" ? "DELETION_REQUEST_TASK" : "PRIVACY_REQUEST_TASK",
+    title: `Privacy request ${requestCode} (${params.type})`,
+  });
 
   return request;
 }

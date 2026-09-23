@@ -15,3 +15,10 @@ const RANK: Record<AccessLevel, number> = { VIEW: 1, COMMENT: 2, EDIT: 3, MANAGE
 export function meetsAccessLevel(granted: AccessLevel, required: AccessLevel): boolean {
   return RANK[granted] >= RANK[required];
 }
+
+// STEP 18 — a task's own accessLevel caps whatever the underlying source
+// record would otherwise grant (src/lib/workflow/access.ts): an admin never
+// gets MORE access through a task than the task itself was scoped to.
+export function minAccessLevel(a: AccessLevel, b: AccessLevel): AccessLevel {
+  return RANK[a] <= RANK[b] ? a : b;
+}

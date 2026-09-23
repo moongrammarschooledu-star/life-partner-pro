@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { subDays } from "date-fns";
+import { ACTIVE_TASK_STATUSES } from "@/lib/workflow/status";
 
 // Spec §9 — Team Workload Dashboard, open to ADMIN+SUPER_ADMIN (gated by
 // "staff:view", distinct from STEP 10's SUPER_ADMIN-only
@@ -32,7 +33,7 @@ export async function computeTeamWorkload() {
         prisma.meeting.count({
           where: { proposal: { assignedToId: admin.id }, status: { in: ["REQUESTED", "SCHEDULED", "CONFIRMED"] }, scheduledAt: { gte: now } },
         }),
-        prisma.adminTask.count({ where: { assignedToId: admin.id, status: { in: ["PENDING", "IN_PROGRESS"] }, dueAt: { lt: now } } }),
+        prisma.adminTask.count({ where: { assignedToId: admin.id, status: { in: ACTIVE_TASK_STATUSES }, dueAt: { lt: now } } }),
         prisma.adminTask.count({ where: { assignedToId: admin.id, status: "COMPLETED", completedAt: { gte: subDays(now, 30) } } }),
       ]);
 

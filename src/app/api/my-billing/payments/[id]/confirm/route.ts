@@ -4,6 +4,7 @@ import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { recordManualPayment } from "@/lib/finance/manual-payment";
 import { notifyManualPaymentRequiresReview } from "@/lib/notifications/events";
 import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
+import { createFromEvent } from "@/lib/workflow/engine";
 
 // Applicant confirms they've made a bank transfer and submits the
 // reference/evidence for admin review (spec §43/§44) — this never itself
@@ -29,6 +30,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await recordManualPayment({ paymentId: id, referenceNumber: referenceNumber.trim(), evidenceDescription, submittedByProfileId: profileId });
   await prisma.payment.update({ where: { id }, data: { status: "PROCESSING" } });
   await notifyManualPaymentRequiresReview();
+  await createFromEvent({
+    eventName: "MANUAL_PAYMENT_REQUIRES_REVIEW",
+    dedupKey: `MANUAL_PAYMENT_REQUIRES_REVIEW:${id}`,
+    resourceType: "PAYMENT",
+    resourceId: id,
+    taskType: "PAYMENT_ISSUE_REVIEW",
+    title: "Manual payment awaiting verification",
+  });
 
   return NextResponse.json({ ok: true });
 }

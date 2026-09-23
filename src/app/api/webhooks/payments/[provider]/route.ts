@@ -7,6 +7,7 @@ import { generateInvoice } from "@/lib/finance/invoice";
 import { activateSubscription } from "@/lib/finance/subscription";
 import { notifyPaymentSuccess, notifyPaymentFailed } from "@/lib/notifications/events";
 import { getPaymentFeatureFlags } from "@/lib/finance/rollout";
+import { createFromEvent } from "@/lib/workflow/engine";
 import type { PaymentProviderName } from "@prisma/client";
 import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 import { captureError } from "@/lib/observability/error-capture";
@@ -93,6 +94,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
         } else if (event.status === "FAILED" && payment.status !== "FAILED") {
           await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failedAt: new Date() } });
           await notifyPaymentFailed(payment.profileId);
+          // STEP 18 §34 — a payment failure previously only reached the
+          // member as a notification; no admin ever got a proactive task.
+          await createFromEvent({
+            eventName: "PAYMENT_FAILED",
+            dedupKey: `PAYMENT_FAILED:${payment.id}`,
+            resourceType: "PAYMENT",
+            resourceId: payment.id,
+            taskType: "PAYMENT_ISSUE_REVIEW",
+            title: "Payment failed",
+          });
         }
       }
     }

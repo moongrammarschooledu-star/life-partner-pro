@@ -336,3 +336,39 @@ export async function notifyInvoiceCreated(profileId: string) {
 export async function notifyManualPaymentRequiresReview(assignedAdminId?: string | null) {
   await notifyAdmins({ type: "MANUAL_PAYMENT_REQUIRES_REVIEW", data: {}, assignedAdminId: assignedAdminId ?? undefined });
 }
+
+// ---------- Workflow & Task Management (STEP 18) ----------
+// All internal-only, admin-facing (notifyAdmins() never dispatches
+// externally to a profile) — see src/lib/workflow/engine.ts's callers.
+
+export async function notifyTaskAssigned(assignedAdminId: string, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_ASSIGNED", data: { templateVars: { taskCode, title } }, assignedAdminId });
+}
+
+export async function notifyTaskReassigned(assignedAdminId: string, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_REASSIGNED", data: { templateVars: { taskCode, title } }, assignedAdminId });
+}
+
+export async function notifyTaskDueSoon(assignedAdminId: string, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_DUE_SOON", data: { templateVars: { taskCode, title } }, assignedAdminId });
+}
+
+export async function notifyTaskOverdue(assignedAdminId: string, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_OVERDUE", data: { templateVars: { taskCode, title } }, assignedAdminId });
+}
+
+export async function notifyTaskEscalated(assignedAdminId: string | null, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_ESCALATED", data: { templateVars: { taskCode, title } }, assignedAdminId: assignedAdminId ?? undefined });
+}
+
+export async function notifyTaskCommentMention(mentionedAdminId: string, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_COMMENT_MENTION", data: { templateVars: { taskCode, title } }, assignedAdminId: mentionedAdminId });
+}
+
+export async function notifyTaskDependencyCompleted(assignedAdminId: string, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_DEPENDENCY_COMPLETED", data: { templateVars: { taskCode, title } }, assignedAdminId });
+}
+
+export async function notifyTaskReopened(assignedAdminId: string | null, taskCode: string, title: string) {
+  await notifyAdmins({ type: "TASK_REOPENED", data: { templateVars: { taskCode, title } }, assignedAdminId: assignedAdminId ?? undefined });
+}

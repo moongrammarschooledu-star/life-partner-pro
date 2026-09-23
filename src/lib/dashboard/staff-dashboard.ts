@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { subDays } from "date-fns";
+import { ACTIVE_TASK_STATUSES, NOT_STARTED_TASK_STATUSES } from "@/lib/workflow/status";
 
 // Spec §10 — STAFF sees only their own assigned workload, not the org-wide
 // KPI set SUPER_ADMIN/ADMIN get from computeFullDashboard(). Enforced here
@@ -25,8 +26,8 @@ export async function computeStaffDashboard(adminId: string) {
     prisma.meeting.count({
       where: { proposal: { assignedToId: adminId }, status: { in: ["REQUESTED", "SCHEDULED", "CONFIRMED"] }, scheduledAt: { gte: now } },
     }),
-    prisma.adminTask.count({ where: { assignedToId: adminId, status: { in: ["PENDING", "IN_PROGRESS"] }, dueAt: { lt: now } } }),
-    prisma.adminTask.count({ where: { assignedToId: adminId, status: "PENDING" } }),
+    prisma.adminTask.count({ where: { assignedToId: adminId, status: { in: ACTIVE_TASK_STATUSES }, dueAt: { lt: now } } }),
+    prisma.adminTask.count({ where: { assignedToId: adminId, status: { in: NOT_STARTED_TASK_STATUSES } } }),
     prisma.adminTask.count({ where: { assignedToId: adminId, status: "COMPLETED", completedAt: { gte: subDays(now, 30) } } }),
   ]);
 

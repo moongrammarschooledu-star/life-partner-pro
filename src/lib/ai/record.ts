@@ -2,6 +2,7 @@ import type { AiFeature, AiProviderKind, AiRequestStatus, AuditAction } from "@p
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
+import { createFromEvent } from "@/lib/workflow/engine";
 import type { SafetyEvent } from "@/lib/ai/safety";
 import type { AiPayload } from "@/lib/ai/types";
 
@@ -80,6 +81,23 @@ export async function recordSafetyEvents(params: { requestId?: string; actorAdmi
       action: e.action === "BLOCKED" ? "BLOCKED" : "REWRITTEN",
     })),
   });
+
+  // STEP 18 §36 — AiSafetyEvent was previously append-only with no review
+  // workflow at all. Only a fully BLOCKED output (not an auto-REWRITTEN one,
+  // which already self-corrected) warrants a human review task; needs a real
+  // requestId to dedupe/point the task at, which every genuine AI call has.
+  const blocked = [...unique.values()].some((e) => e.action === "BLOCKED");
+  if (blocked && params.requestId) {
+    await createFromEvent({
+      eventName: "AI_REVIEW_REQUIRED",
+      dedupKey: `AI_REVIEW_REQUIRED:${params.requestId}`,
+      resourceType: "AI_SAFETY_EVENT",
+      resourceId: params.requestId,
+      taskType: "AI_SAFETY_REVIEW",
+      title: `AI output blocked (${params.feature})`,
+      description: "One or more safety rules blocked this AI request's output. AI recommendations remain advisory — a human reviewer decides how to proceed.",
+    });
+  }
 }
 
 export async function auditAi(action: AuditAction, adminId: string, meta: Record<string, unknown>, targetProfileId?: string | null): Promise<void> {

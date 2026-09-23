@@ -1,0 +1,33 @@
+// Client-safe list mirroring the AdminTaskType enum (prisma/schema.prisma) —
+// kept as plain strings (no @prisma/client import) so admin UI pages can use
+// it without pulling server-only code into a client bundle.
+export const TASK_TYPES = [
+  "NEW_PROFILE_REVIEW",
+  "VERIFICATION_REQUEST",
+  "PROPOSAL_FOLLOWUP",
+  "MEETING_TASK",
+  "CONTACT_REQUEST_TASK",
+  "FOLLOW_UP_DUE",
+  "CASE_REVIEW",
+  "PROFILE_UPDATE_REVIEW",
+  "VERIFICATION_REVIEW",
+  "VERIFICATION_REVERIFICATION",
+  "MATCH_REVIEW",
+  "PROPOSAL_REVIEW",
+  "PROPOSAL_DECISION_REVIEW",
+  "CONTACT_PERMISSION_REVIEW",
+  "MEETING_REQUEST_REVIEW",
+  "MEETING_FOLLOWUP",
+  "COMMUNICATION_REVIEW",
+  "SUPPORT_CASE_TASK",
+  "SAFETY_REVIEW",
+  "PAYMENT_ISSUE_REVIEW",
+  "REFUND_REVIEW",
+  "RECONCILIATION_REVIEW",
+  "PRIVACY_REQUEST_TASK",
+  "DELETION_REQUEST_TASK",
+  "AI_SAFETY_REVIEW",
+  "GENERAL_ADMIN_TASK",
+] as const;
+
+export const TASK_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT", "CRITICAL"] as const;

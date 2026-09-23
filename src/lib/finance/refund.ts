@@ -5,6 +5,7 @@ import { isValidRefundStatusTransition, isValidPaymentStatusTransition } from "@
 import { getProvider } from "@/lib/finance/providers/registry";
 import { notifyRefundRequested, notifyRefundCompleted } from "@/lib/notifications/events";
 import { ApiError } from "@/lib/route-guard";
+import { createFromEvent } from "@/lib/workflow/engine";
 import type { RefundType, RefundStatus } from "@prisma/client";
 
 // Spec §23 — RBAC tiers enforced by the caller (route checks the
@@ -34,6 +35,20 @@ export async function requestRefund(params: { paymentId: string; amountMinor: nu
   });
   await writeAudit({ action: "REFUND_REQUESTED", adminId: params.requestedById, targetProfileId: payment.profileId, meta: { refundId: refund.id, paymentId: params.paymentId, amountMinor: params.amountMinor } });
   await notifyRefundRequested(payment.profileId);
+
+  // STEP 18 §34 — a refund request never had a proactive review task before;
+  // it just sat in the Finance Center's Refunds list. PAYMENT has no
+  // per-record ACL (finance:refunds:view/approve gate it instead — see
+  // src/lib/workflow/access.ts's decision 15).
+  await createFromEvent({
+    eventName: "REFUND_REQUESTED",
+    dedupKey: `REFUND_REQUESTED:${refund.id}`,
+    resourceType: "PAYMENT",
+    resourceId: refund.id,
+    taskType: "REFUND_REVIEW",
+    title: `Refund requested — ${refundCode}`,
+  });
+
   return refund;
 }
 

@@ -175,3 +175,76 @@ describe("STEP 17 — role tables match the spec's stated exclusions", () => {
     }
   });
 });
+
+describe("STEP 18 — Workflow & Task Management permission wiring", () => {
+  const MANAGER_ROLES = ["MATCHMAKING_MANAGER", "VERIFICATION_MANAGER", "SUPPORT_MANAGER", "COMMUNICATION_MANAGER", "FINANCE_MANAGER"] as const;
+  const STAFF_ROLES = ["STAFF_MATCHMAKER", "VERIFICATION_STAFF", "SUPPORT_STAFF", "COMMUNICATION_STAFF"] as const;
+
+  it("every assignable role that can see tasks at all holds the base tasks:view permission", () => {
+    for (const role of ADMIN_ROLES) {
+      const canSeeAnyTaskScope = ["tasks:view:own", "tasks:view:team", "tasks:view:all"].some((p) => hasPermission(role, p as never));
+      if (canSeeAnyTaskScope) expect(hasPermission(role, "tasks:view"), role).toBe(true);
+    }
+  });
+
+  it("SUPER_ADMIN and OPERATIONS_ADMIN hold every task permission, including workflow-failures and automation config", () => {
+    for (const role of ["SUPER_ADMIN", "OPERATIONS_ADMIN"] as const) {
+      for (const p of ["tasks:view:all", "tasks:assign:any", "tasks:templates:manage", "tasks:sla:manage", "tasks:automation:manage", "tasks:workflow-failures:resolve", "staff:availability:manage"] as const) {
+        expect(hasPermission(role, p), `${role} / ${p}`).toBe(true);
+      }
+    }
+  });
+
+  it("every *_MANAGER role can view its team queue, assign, reassign and escalate, but not workflow-failures or automation config", () => {
+    for (const role of MANAGER_ROLES) {
+      for (const p of ["tasks:view:team", "tasks:assign", "tasks:reassign", "tasks:escalate", "tasks:bulk-actions"] as const) {
+        expect(hasPermission(role, p), `${role} / ${p}`).toBe(true);
+      }
+      for (const p of ["tasks:view:all", "tasks:automation:manage", "tasks:sla:manage", "tasks:workflow-failures:view"] as const) {
+        expect(hasPermission(role, p), `${role} / ${p}`).toBe(false);
+      }
+      // tasks:escalate:senior is SUPPORT_MANAGER-only — covered by the dedicated test below.
+      if (role !== "SUPPORT_MANAGER") expect(hasPermission(role, "tasks:escalate:senior"), role).toBe(false);
+    }
+  });
+
+  it("SUPPORT_MANAGER alone among managers holds tasks:escalate:senior (mirrors its cases:escalate:senior grant)", () => {
+    expect(hasPermission("SUPPORT_MANAGER", "tasks:escalate:senior")).toBe(true);
+    for (const role of MANAGER_ROLES.filter((r) => r !== "SUPPORT_MANAGER")) {
+      expect(hasPermission(role, "tasks:escalate:senior"), role).toBe(false);
+    }
+  });
+
+  it("every *_STAFF role sees only its own tasks — no create/assign/reassign/escalate/bulk-actions", () => {
+    for (const role of STAFF_ROLES) {
+      expect(hasPermission(role, "tasks:view:own"), role).toBe(true);
+      expect(hasPermission(role, "tasks:accept"), role).toBe(true);
+      expect(hasPermission(role, "tasks:complete"), role).toBe(true);
+      for (const p of ["tasks:view:team", "tasks:view:all", "tasks:create", "tasks:assign", "tasks:reassign", "tasks:escalate", "tasks:bulk-actions"] as const) {
+        expect(hasPermission(role, p), `${role} / ${p}`).toBe(false);
+      }
+    }
+  });
+
+  it("REPORTING_ANALYST gets read-only, org-wide task visibility with zero mutation permissions", () => {
+    expect(hasPermission("REPORTING_ANALYST", "tasks:view:all")).toBe(true);
+    expect(hasPermission("REPORTING_ANALYST", "tasks:reports:view")).toBe(true);
+    for (const p of ["tasks:create", "tasks:assign", "tasks:complete", "tasks:escalate", "tasks:reopen", "tasks:cancel", "tasks:bulk-actions"] as const) {
+      expect(hasPermission("REPORTING_ANALYST", p)).toBe(false);
+    }
+  });
+
+  it("VIEWER is scoped to its own tasks, read-only", () => {
+    expect(hasPermission("VIEWER", "tasks:view:own")).toBe(true);
+    for (const p of ["tasks:view:all", "tasks:create", "tasks:complete", "tasks:escalate"] as const) {
+      expect(hasPermission("VIEWER", p)).toBe(false);
+    }
+  });
+
+  it("tasks:workflow-failures:*/tasks:automation:manage/tasks:sla:manage/staff:availability:manage are SUPER_ADMIN/OPERATIONS_ADMIN only", () => {
+    const systemOnly = ["tasks:workflow-failures:view", "tasks:workflow-failures:resolve", "tasks:automation:manage", "tasks:sla:manage", "staff:availability:manage"] as const;
+    for (const role of ADMIN_ROLES.filter((r) => r !== "SUPER_ADMIN" && r !== "OPERATIONS_ADMIN")) {
+      for (const p of systemOnly) expect(hasPermission(role, p), `${role} / ${p}`).toBe(false);
+    }
+  });
+});

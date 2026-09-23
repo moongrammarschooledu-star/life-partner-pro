@@ -52,6 +52,9 @@ enum AccessLevel {
 
 // ---------- Staff Management & Permissions (STEP 11) ----------
 
+// STEP 18 — PAYMENT/PRIVACY_REQUEST/AI_SAFETY_EVENT let those domains'
+// system-detected issues become real tasks; ADMIN_TASK lets AdminAssignment
+// itself track task assignment history (src/lib/workflow/engine.ts).
 enum AssignmentResourceType {
   PROPOSAL
   VERIFICATION
@@ -59,13 +62,19 @@ enum AssignmentResourceType {
   FOLLOW_UP
   PROFILE
   CASE
+  PAYMENT
+  PRIVACY_REQUEST
+  AI_SAFETY_EVENT
+  ADMIN_TASK
 }
 
+// STEP 18 — CRITICAL added to match CasePriority's 5-value scale exactly.
 enum AssignmentPriority {
   LOW
   NORMAL
   HIGH
   URGENT
+  CRITICAL
 }
 
 enum AssignmentStatus {
@@ -76,21 +85,59 @@ enum AssignmentStatus {
   REASSIGNED
 }
 
+// STEP 18 — the original 7 keep their exact meaning and resourceType pairing
+// (see src/lib/notifications/events.ts's 8 existing createTask() call sites,
+// unchanged); the 18 new values are additional source-domain checkpoints the
+// STEP 18 spec asks for, created via WorkflowEngine.createFromEvent().
 enum AdminTaskType {
-  NEW_PROFILE_REVIEW
-  VERIFICATION_REQUEST
-  PROPOSAL_FOLLOWUP
-  MEETING_TASK
-  CONTACT_REQUEST_TASK
-  FOLLOW_UP_DUE
-  CASE_REVIEW
+  NEW_PROFILE_REVIEW // PROFILE — profile update pending review
+  VERIFICATION_REQUEST // SECURITY_FLAG — a raised flag needs review
+  PROPOSAL_FOLLOWUP // PROPOSAL — mutual interest reached
+  MEETING_TASK // PROPOSAL — a meeting was confirmed
+  CONTACT_REQUEST_TASK // PROPOSAL — contact permission requested
+  FOLLOW_UP_DUE // FOLLOW_UP — a follow-up is overdue
+  CASE_REVIEW // CASE — a case needs review
+  PROFILE_UPDATE_REVIEW // PROFILE — an existing profile's edited fields need review
+  VERIFICATION_REVIEW // PROFILE — initial verification submission review
+  VERIFICATION_REVERIFICATION // PROFILE — re-verification required
+  MATCH_REVIEW // PROFILE — admin match-quality review before a proposal
+  PROPOSAL_REVIEW // PROPOSAL — new proposal needs initial review
+  PROPOSAL_DECISION_REVIEW // PROPOSAL — a response/decision needs review
+  CONTACT_PERMISSION_REVIEW // PROPOSAL — contact-sharing decision needs review
+  MEETING_REQUEST_REVIEW // PROPOSAL — a meeting request needs review
+  MEETING_FOLLOWUP // PROPOSAL — post-meeting follow-up
+  COMMUNICATION_REVIEW // PROPOSAL — a communication needs review
+  SUPPORT_CASE_TASK // CASE — a support case needs action
+  SAFETY_REVIEW // CASE — a safety report needs review
+  PAYMENT_ISSUE_REVIEW // PAYMENT — a payment issue needs review
+  REFUND_REVIEW // PAYMENT — a refund request needs review
+  RECONCILIATION_REVIEW // PAYMENT — a reconciliation mismatch needs review
+  PRIVACY_REQUEST_TASK // PRIVACY_REQUEST — a privacy request needs action
+  DELETION_REQUEST_TASK // PRIVACY_REQUEST — a deletion request needs review
+  AI_SAFETY_REVIEW // AI_SAFETY_EVENT — a blocked/denied AI output needs human review
+  GENERAL_ADMIN_TASK // any resourceType — manual "Create Task" catch-all
 }
 
+// STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
+// rows (new tasks default to NEW, never PENDING — see
+// src/lib/admin-tasks.ts's compatibility shim). IN_PROGRESS/COMPLETED/
+// CANCELLED keep their exact prior meaning; the other 11 are additive.
 enum AdminTaskStatus {
-  PENDING
+  PENDING // legacy — retired, see comment above
+  NEW
+  ASSIGNED
+  ACCEPTED
   IN_PROGRESS
+  WAITING_FOR_USER
+  WAITING_FOR_STAFF
+  WAITING_FOR_APPROVAL
+  BLOCKED
+  ESCALATED
   COMPLETED
   CANCELLED
+  EXPIRED
+  REOPENED
+  ARCHIVED
 }
 
 enum LoginHistoryEvent {
@@ -746,6 +793,34 @@ enum AuditAction {
   ASSIGNMENT_REVOKED
   ASSIGNMENT_EXPIRED
   ASSIGNMENT_ACCESS_LEVEL_CHANGED
+
+  // ---------- Workflow & Task Management (STEP 18) ----------
+  // TASK_REASSIGNED / TASK_COMPLETED were pre-reserved in the STEP 11 block
+  // above and are reused as-is, not duplicated here.
+  TASK_CREATED
+  TASK_ASSIGNED
+  TASK_ACCEPTED
+  TASK_STARTED
+  TASK_STATUS_CHANGED
+  TASK_PRIORITY_CHANGED
+  TASK_DUE_DATE_CHANGED
+  TASK_COMMENT_ADDED
+  TASK_ESCALATED
+  TASK_CANCELLED
+  TASK_REOPENED
+  TASK_ARCHIVED
+  TASK_DEPENDENCY_ADDED
+  TASK_CHECKLIST_ITEM_COMPLETED
+  TASK_ATTACHMENT_UPLOADED
+  TASK_TEMPLATE_CREATED
+  TASK_TEMPLATE_UPDATED
+  TASK_SLA_CONFIG_UPDATED
+  WORKFLOW_RULE_CREATED
+  WORKFLOW_RULE_UPDATED
+  WORKFLOW_FAILURE_RETRIED
+  WORKFLOW_FAILURE_RESOLVED
+  STAFF_AVAILABILITY_CREATED
+  STAFF_AVAILABILITY_UPDATED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -887,6 +962,18 @@ enum NotificationType {
   SUBSCRIPTION_CANCELLED
   INVOICE_CREATED
   MANUAL_PAYMENT_REQUIRES_REVIEW
+
+  // ---------- Workflow & Task Management (STEP 18) ----------
+  // Internal-only, admin-facing (see notifyAdmins() in
+  // src/lib/notifications/notification-service.ts) — never sent to a profile.
+  TASK_ASSIGNED
+  TASK_REASSIGNED
+  TASK_DUE_SOON
+  TASK_OVERDUE
+  TASK_ESCALATED
+  TASK_COMMENT_MENTION
+  TASK_DEPENDENCY_COMPLETED
+  TASK_REOPENED
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -960,6 +1047,7 @@ enum DataCategory {
   AUDIT_LOGS
   SECURITY_LOGS
   FINANCIAL_RECORDS // stored but inapplicable — no payment/financial system exists in this app
+  WORKFLOW_TASK_DATA
 }
 
 enum RetentionAction {
@@ -1180,7 +1268,7 @@ model AdminUser {
   otpChallenges       AdminOtpChallenge[]
   assignmentsReceived AdminAssignment[]    @relation("AdminAssignmentAssignee")
   assignmentsCreated  AdminAssignment[]    @relation("AdminAssignmentCreator")
-  tasksAssigned       AdminTask[]
+  tasksAssigned       AdminTask[]          @relation("AdminTaskAssignee")
   viewAsInitiated     ViewAsSession[]      @relation("ViewAsInitiator")
   viewAsTargeted      ViewAsSession[]      @relation("ViewAsTarget")
 
@@ -1222,6 +1310,21 @@ model AdminUser {
   reconciliationRunsStarted ReconciliationRun[]
   bankAccountsCreated       BankAccount[]
   paymentRolloutEvents      PaymentRolloutEvent[]
+
+  // ---------- Workflow & Task Management (STEP 18) ----------
+  tasksCreated              AdminTask[]           @relation("AdminTaskCreator")
+  taskComments              TaskComment[]
+  taskChecklistItemsCompleted TaskChecklistItem[]
+  taskDependenciesCreated   TaskDependency[]
+  taskEscalationsRaised     TaskEscalation[]
+  taskStatusChanges         TaskStatusHistory[]
+  taskAttachmentsUploaded   TaskAttachment[]
+  taskAccessLogs            TaskAccessLog[]
+  taskTemplatesCreated      TaskTemplate[]
+  workflowFailuresResolved  WorkflowFailure[]
+  staffAvailability         StaffAvailability[]   @relation("StaffAvailabilityAdmin")
+  staffAvailabilityBackupFor StaffAvailability[]  @relation("StaffAvailabilityBackup")
+  staffAvailabilityCreated  StaffAvailability[]   @relation("StaffAvailabilityCreator")
 }
 
 // ---------- Core profile ----------
@@ -2384,6 +2487,7 @@ model Department {
   createdAt   DateTime @default(now())
 
   admins AdminUser[]
+  tasks  AdminTask[]
 }
 
 // Tracks a live JWT session for revocation (spec §13) — the JWT itself
@@ -2473,10 +2577,14 @@ model AdminAssignment {
 }
 
 // Discrete staff work items (spec §23/§24), auto-created at existing STEP 9
-// notification trigger points — see src/lib/admin-tasks.ts.
+// notification trigger points — see src/lib/admin-tasks.ts. STEP 18 extends
+// this table additively into the full Workflow & Task Management system
+// (src/lib/workflow/engine.ts) rather than replacing it — every column below
+// this line is nullable/defaulted so pre-STEP-18 rows keep their exact
+// current behavior.
 model AdminTask {
   id           String                 @id @default(cuid())
-  assignedTo   AdminUser?             @relation(fields: [assignedToId], references: [id])
+  assignedTo   AdminUser?             @relation("AdminTaskAssignee", fields: [assignedToId], references: [id])
   assignedToId String?
   taskType     AdminTaskType
   resourceType AssignmentResourceType
@@ -2488,9 +2596,298 @@ model AdminTask {
   notes        String?
   createdAt    DateTime               @default(now())
 
+  // ---------- STEP 18 additions (all nullable/defaulted) ----------
+  taskCode             String?              @unique // LPP-TASK-###### via src/lib/privacy/codes.ts
+  title                String?
+  description          String?
+  startedAt            DateTime?
+  completionNotes      String?
+  escalationLevel      Int                  @default(1)
+  escalationStatus     TaskEscalationStatus @default(NONE)
+  parentTask           AdminTask?           @relation("TaskParent", fields: [parentTaskId], references: [id])
+  parentTaskId         String?
+  childTasks           AdminTask[]          @relation("TaskParent")
+  accessLevel          AccessLevel          @default(MANAGE)
+  visibility           TaskVisibility       @default(STANDARD)
+  version              Int                  @default(1)
+  createdBy            AdminUser?           @relation("AdminTaskCreator", fields: [createdById], references: [id])
+  createdById          String?
+  assignedDepartment   Department?          @relation(fields: [assignedDepartmentId], references: [id])
+  assignedDepartmentId String?
+  outcome              String?
+  updatedAt            DateTime             @updatedAt
+
+  comments         TaskComment[]
+  checklistItems   TaskChecklistItem[]
+  dependsOn        TaskDependency[]         @relation("TaskDependent")
+  dependedOnBy     TaskDependency[]         @relation("TaskDependsOn")
+  escalations      TaskEscalation[]
+  statusHistory    TaskStatusHistory[]
+  attachments      TaskAttachment[]
+  accessLogs       TaskAccessLog[]
+  workflowEvents   WorkflowEvent[]
+  workflowFailures WorkflowFailure[]
+
   @@index([assignedToId, status])
   @@index([resourceType, resourceId])
   @@index([status, dueAt])
+  @@index([escalationLevel, escalationStatus])
+  @@index([parentTaskId])
+  @@index([assignedDepartmentId])
+}
+
+enum TaskEscalationStatus {
+  NONE
+  ESCALATED
+  RESOLVED
+}
+
+enum TaskVisibility {
+  STANDARD
+  RESTRICTED
+}
+
+enum TaskCommentVisibility {
+  INTERNAL
+  TEAM
+  MANAGER_ONLY
+  SYSTEM
+}
+
+enum TaskDependencyType {
+  BLOCKS
+  DEPENDS_ON
+}
+
+enum WorkflowFailureStage {
+  EVENT_RECEIVED
+  TASK_CREATION
+  ASSIGNMENT
+  NOTIFICATION
+  TRANSITION
+}
+
+enum WorkflowEventStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+// Internal task discussion — never exposed through any user/applicant-facing
+// API (spec §17). Mirrors CaseComment's visibility-tiering convention.
+model TaskComment {
+  id                String                 @id @default(cuid())
+  task              AdminTask              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId            String
+  author            AdminUser              @relation(fields: [authorId], references: [id])
+  authorId          String
+  body              String
+  visibility        TaskCommentVisibility  @default(INTERNAL)
+  mentionedAdminIds String[]               @default([])
+  createdAt         DateTime               @default(now())
+  editedAt          DateTime?
+  deletedAt         DateTime?
+
+  @@index([taskId])
+}
+
+// Flat checklist rows (spec §27) — no separate "checklist" grouping row;
+// TaskTemplate.defaultChecklist seeds these at task-creation time.
+model TaskChecklistItem {
+  id            String     @id @default(cuid())
+  task          AdminTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId        String
+  label         String
+  required      Boolean    @default(false)
+  order         Int        @default(0)
+  completedAt   DateTime?
+  completedBy   AdminUser? @relation(fields: [completedById], references: [id])
+  completedById String?
+
+  @@index([taskId])
+}
+
+// BLOCKED_BY / DEPENDS_ON (spec §18) — cycle detection enforced in
+// src/lib/workflow/dependencies.ts, not at the DB level.
+model TaskDependency {
+  id            String             @id @default(cuid())
+  task          AdminTask          @relation("TaskDependent", fields: [taskId], references: [id], onDelete: Cascade)
+  taskId        String
+  dependsOnTask AdminTask          @relation("TaskDependsOn", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  dependsOnTaskId String
+  type          TaskDependencyType @default(DEPENDS_ON)
+  createdAt     DateTime           @default(now())
+  createdBy     AdminUser          @relation(fields: [createdById], references: [id])
+  createdById   String
+
+  @@unique([taskId, dependsOnTaskId])
+}
+
+// Mirrors CaseEscalation's shape exactly (spec §22/§46).
+model TaskEscalation {
+  id            String    @id @default(cuid())
+  task          AdminTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId        String
+  previousLevel Int
+  newLevel      Int
+  reason        String
+  escalatedBy   AdminUser? @relation(fields: [escalatedById], references: [id])
+  escalatedById String?
+  createdAt     DateTime  @default(now())
+
+  @@index([taskId])
+}
+
+// Mirrors CaseStatusHistory's shape exactly (spec §10/§46 timeline).
+model TaskStatusHistory {
+  id              String          @id @default(cuid())
+  task            AdminTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId          String
+  previousStatus  AdminTaskStatus
+  newStatus       AdminTaskStatus
+  changedBy       AdminUser?      @relation(fields: [changedById], references: [id])
+  changedById     String?
+  reason          String?
+  createdAt       DateTime        @default(now())
+
+  @@index([taskId])
+}
+
+// Mirrors case-evidence-storage.ts's shape exactly (spec §49) — encrypted
+// Blob storage, opaque storageKey, never a public URL.
+model TaskAttachment {
+  id            String    @id @default(cuid())
+  task          AdminTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId        String
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  storageKey    String
+  ivBase64      String
+  authTagBase64 String
+  uploadedBy    AdminUser @relation(fields: [uploadedById], references: [id])
+  uploadedById  String
+  createdAt     DateTime  @default(now())
+
+  @@index([taskId])
+}
+
+// Mirrors CaseAccessLog — written on every task-access-chain evaluation,
+// allow or deny (spec §14), independent of the global AuditLog.
+model TaskAccessLog {
+  id         String    @id @default(cuid())
+  task       AdminTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId     String
+  admin      AdminUser @relation(fields: [adminId], references: [id])
+  adminId    String
+  action     String
+  allowed    Boolean
+  denyReason String?
+  createdAt  DateTime  @default(now())
+
+  @@index([taskId])
+  @@index([adminId])
+}
+
+// Admin-configurable task templates (spec §26/§27).
+model TaskTemplate {
+  id                  String             @id @default(cuid())
+  name                String
+  taskType            AdminTaskType
+  titleTemplate       String
+  descriptionTemplate String?
+  defaultPriority     AssignmentPriority @default(NORMAL)
+  defaultChecklist    Json?
+  active              Boolean            @default(true)
+  createdBy           AdminUser?         @relation(fields: [createdById], references: [id])
+  createdById         String?
+  createdAt           DateTime           @default(now())
+}
+
+// Admin-configurable SLA targets per task type (spec §20) — deliberately a
+// real table, not flat AppSettings columns (unlike Case's 5-priority scheme,
+// ~25 task types would mean 50+ flat columns).
+model TaskSlaConfig {
+  id                     String        @id @default(cuid())
+  taskType               AdminTaskType @unique
+  targetResponseHours    Int?
+  targetResolutionHours  Int?
+  warningThresholdHours  Int?
+  active                 Boolean       @default(true)
+}
+
+// Admin-configurable event→task-type automation table (spec §19), seeded
+// with the spec's default rules and editable afterward.
+model WorkflowRule {
+  id                          String             @id @default(cuid())
+  eventName                   String             @unique
+  taskType                    AdminTaskType
+  defaultPriority             AssignmentPriority @default(NORMAL)
+  defaultAssignedRole         AdminRole?
+  defaultAssignedDepartmentId String?
+  active                      Boolean            @default(true)
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+}
+
+// Idempotency ledger for automatic task creation (spec §53/§54) — dedupKey
+// is derived from sourceType+sourceId+eventName so re-delivering the same
+// event never creates a duplicate task.
+model WorkflowEvent {
+  id         String              @id @default(cuid())
+  eventName  String
+  dedupKey   String              @unique
+  sourceType AssignmentResourceType
+  sourceId   String
+  payload    Json?
+  status     WorkflowEventStatus @default(PENDING)
+  task       AdminTask?          @relation(fields: [taskId], references: [id])
+  taskId     String?
+  attempts   Int                 @default(0)
+  lastError  String?
+  createdAt  DateTime            @default(now())
+  processedAt DateTime?
+  failures   WorkflowFailure[]
+
+  @@index([status])
+  @@index([sourceType, sourceId])
+}
+
+// Dead-letter queue (spec §65/§66) — Admin → Workflow Failures.
+model WorkflowFailure {
+  id                String                @id @default(cuid())
+  workflowEvent      WorkflowEvent?        @relation(fields: [workflowEventId], references: [id])
+  workflowEventId    String?
+  task              AdminTask?            @relation(fields: [taskId], references: [id])
+  taskId            String?
+  stage             WorkflowFailureStage
+  errorMessage      String
+  resolvedAt        DateTime?
+  resolvedBy        AdminUser?            @relation(fields: [resolvedById], references: [id])
+  resolvedById      String?
+  resolution        String?
+  resolutionReason  String?
+  createdAt         DateTime              @default(now())
+
+  @@index([resolvedAt])
+}
+
+// Temporary unavailability + backup routing (spec §44).
+model StaffAvailability {
+  id            String     @id @default(cuid())
+  admin         AdminUser  @relation("StaffAvailabilityAdmin", fields: [adminId], references: [id])
+  adminId       String
+  startAt       DateTime
+  endAt         DateTime
+  reason        String?
+  backupAdmin   AdminUser? @relation("StaffAvailabilityBackup", fields: [backupAdminId], references: [id])
+  backupAdminId String?
+  active        Boolean    @default(true)
+  createdBy     AdminUser  @relation("StaffAvailabilityCreator", fields: [createdById], references: [id])
+  createdById   String
+  createdAt     DateTime   @default(now())
+
+  @@index([adminId, active])
 }
 
 // Controlled, time-limited, read-only support-impersonation grant (spec

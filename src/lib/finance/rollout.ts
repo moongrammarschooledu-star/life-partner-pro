@@ -6,6 +6,7 @@ import { computeSlaDueDates } from "@/lib/case-sla";
 import { isValidRolloutTransition } from "@/lib/finance/status-transitions";
 import { getProvider } from "@/lib/finance/providers/registry";
 import { isEmergencyDisabled } from "@/lib/ops/system-control";
+import { createFromEvent } from "@/lib/workflow/engine";
 import type { PaymentRolloutStage, CaseCategory } from "@prisma/client";
 
 // Payment Rollout Phases (STEP 14 add-on §63-86). A single global stage on
@@ -273,7 +274,7 @@ export async function getProviderHealth() {
 export async function reportPaymentIncident(params: { category: CaseCategory; subject: string; description: string }) {
   const caseNumber = await nextCaseNumber("INTERNAL");
   const { firstResponseDueAt, resolutionDueAt } = await computeSlaDueDates("HIGH");
-  return prisma.case.create({
+  const created = await prisma.case.create({
     data: {
       caseNumber,
       type: "INTERNAL",
@@ -285,4 +286,19 @@ export async function reportPaymentIncident(params: { category: CaseCategory; su
       resolutionDueAt,
     },
   });
+
+  // STEP 18 §34 — wraps the Case just created (reusing its real per-record
+  // ACL via resourceType CASE) rather than a weaker permission-only PAYMENT
+  // task, since the Case is already the actual system of record here.
+  await createFromEvent({
+    eventName: "RECONCILIATION_MISMATCH",
+    dedupKey: `RECONCILIATION_MISMATCH:${created.id}`,
+    resourceType: "CASE",
+    resourceId: created.id,
+    taskType: "RECONCILIATION_REVIEW",
+    title: params.subject,
+    priority: "HIGH",
+  });
+
+  return created;
 }

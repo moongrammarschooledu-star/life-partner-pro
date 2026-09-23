@@ -3,6 +3,7 @@ import { writeAudit } from "@/lib/audit";
 import { hasActiveHold } from "@/lib/privacy/data-hold";
 import { deletePhoto } from "@/lib/storage";
 import { deleteVerificationDocument } from "@/lib/verification/document-storage";
+import { runTaskRetentionActions } from "@/lib/workflow/retention";
 import type { DataCategory, RetentionAction } from "@prisma/client";
 
 export async function getRetentionPolicy(category: DataCategory) {
@@ -176,6 +177,7 @@ export async function runDueRetentionActions() {
   await sweepFinancialWebhookEvents().catch(() => {});
   await expireDataExports().catch(() => {});
   await (await import("@/lib/ai/retention")).safeSweepAiData(); // STEP 16 §67 — expired AI results
+  await runTaskRetentionActions().catch(() => {}); // STEP 18 §60 — archive stale completed/cancelled/expired tasks
   await flagUnautomatedCategories().catch(() => {});
   return { deletionsProcessed: dueDeletions.length };
 }
