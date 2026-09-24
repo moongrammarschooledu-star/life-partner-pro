@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
-import { writeAudit } from "@/lib/audit";
 import { assertProposalAccess } from "@/lib/proposal-access";
-import { notifyContactPermissionAction, notifyAdminContactPermissionRequest, notifyContactApproved } from "@/lib/notifications/events";
+import { applyContactPermissionAction, ProposalPermissionError } from "@/lib/proposal-permissions";
 
 // Per-profile consent state for a proposal (spec §8) — distinct from
 // ContactShareLog, which records the actual reveal once both sides here are
@@ -11,6 +10,8 @@ import { notifyContactPermissionAction, notifyAdminContactPermissionRequest, not
 // server-side (see /api/admin/profiles/[id]/contact) so Step 1-6 behavior
 // stays unchanged; the Proposal Detail UI shows a warning banner instead
 // when reveal is attempted before both permissions are approved.
+// State-machine logic lives in src/lib/proposal-permissions.ts (STEP 21) —
+// extracted so the applicant self-service route reuses it unchanged.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin("proposal:edit");
@@ -20,49 +21,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const proposal = await prisma.proposal.findUnique({ where: { id } });
     if (!proposal) throw new ApiError(404, "Proposal not found");
     assertProposalAccess(admin, proposal);
-    if (profileId !== proposal.profileAId && profileId !== proposal.profileBId) {
-      throw new ApiError(400, "Profile is not part of this proposal");
-    }
 
-    if (action === "request") {
-      await prisma.contactPermission.upsert({
-        where: { proposalId_profileId: { proposalId: id, profileId } },
-        update: { requestedAt: new Date(), revokedAt: null },
-        create: { proposalId: id, profileId },
-      });
-      await writeAudit({ action: "CONTACT_PERMISSION_REQUESTED", adminId: admin.id, targetProfileId: profileId, meta: { proposalId: id } });
-      await notifyContactPermissionAction(profileId, id, "request");
-      await notifyAdminContactPermissionRequest(id, proposal.assignedToId);
-    } else if (action === "approve") {
-      await prisma.contactPermission.upsert({
-        where: { proposalId_profileId: { proposalId: id, profileId } },
-        update: { approvedAt: new Date(), approvedById: admin.id, revokedAt: null },
-        create: { proposalId: id, profileId, approvedAt: new Date(), approvedById: admin.id },
-      });
-      await writeAudit({ action: "CONTACT_PERMISSION_APPROVED", adminId: admin.id, targetProfileId: profileId, meta: { proposalId: id } });
-      await notifyContactPermissionAction(profileId, id, "approve");
-    } else if (action === "revoke") {
-      await prisma.contactPermission.updateMany({ where: { proposalId: id, profileId }, data: { revokedAt: new Date() } });
-      await writeAudit({ action: "CONTACT_SHARE_REVOKED", adminId: admin.id, targetProfileId: profileId, meta: { proposalId: id } });
-      await notifyContactPermissionAction(profileId, id, "revoke");
-    } else {
-      throw new ApiError(400, "Invalid action");
-    }
-
-    const permissions = await prisma.contactPermission.findMany({ where: { proposalId: id } });
-    const isApproved = (pid: string) => permissions.some((p) => p.profileId === pid && p.approvedAt && !p.revokedAt);
-    const bothApproved = isApproved(proposal.profileAId) && isApproved(proposal.profileBId);
-
-    if (bothApproved && proposal.status !== "CONTACT_APPROVED") {
-      await prisma.proposal.update({
-        where: { id },
-        data: { status: "CONTACT_APPROVED", events: { create: { status: "CONTACT_APPROVED", performedByAdminId: admin.id } } },
-      });
-      await notifyContactApproved(proposal.profileAId, proposal.profileBId, id);
-    }
-
-    return NextResponse.json({ permissions, bothApproved });
+    const result = await applyContactPermissionAction({ proposalId: id, profileId, action, actor: { type: "admin", adminId: admin.id } });
+    return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof ProposalPermissionError) return NextResponse.json({ error: error.message }, { status: error.status });
     return handleApiError(error);
   }
 }

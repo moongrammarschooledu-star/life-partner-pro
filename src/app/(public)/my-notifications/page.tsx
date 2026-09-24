@@ -2,13 +2,30 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Search, Bell, CheckCheck } from "lucide-react";
+import { Loader2, Search, Bell, CheckCheck, ArrowLeft } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/utils";
+
+// STEP 21 — a coarse, client-side category derived from the notification
+// type's first segment (e.g. "PROPOSAL_RECEIVED" -> "Proposal"). The API
+// already returns `type` for every item; no server-side change needed for
+// this filter.
+function categoryOf(type: string): string {
+  const first = type.split("_")[0];
+  const labels: Record<string, string> = {
+    ACCOUNT: "Account", PROFILE: "Profile", MOBILE: "Account", EMAIL: "Account",
+    VERIFICATION: "Verification", RE: "Verification",
+    MATCH: "Matching",
+    PROPOSAL: "Proposal",
+    CONTACT: "Contact",
+    MEETING: "Meeting",
+  };
+  return labels[first] ?? "Other";
+}
 
 interface NotificationItem {
   id: string;
@@ -23,6 +40,7 @@ interface NotificationItem {
 export default function MyNotificationsPage() {
   const { show } = useToast();
   const [items, setItems] = useState<NotificationItem[] | null>(null);
+  const [category, setCategory] = useState("ALL");
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [profileCode, setProfileCode] = useState("");
   const [email, setEmail] = useState("");
@@ -113,10 +131,13 @@ export default function MyNotificationsPage() {
   }
 
   const unreadCount = items.filter((i) => !i.readAt).length;
+  const categories = ["ALL", ...Array.from(new Set(items.map((i) => categoryOf(i.type)))).sort()];
+  const visible = category === "ALL" ? items : items.filter((i) => categoryOf(i.type) === category);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
-      <div className="flex items-center justify-between">
+      <Link href="/dashboard" className="flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
+      <div className="mt-2 flex items-center justify-between">
         <h1 className="font-heading text-2xl font-semibold">My Notifications</h1>
         <Link href="/my-notifications/preferences" className="text-sm text-primary hover:underline">
           Notification Settings
@@ -124,19 +145,28 @@ export default function MyNotificationsPage() {
       </div>
       <p className="mt-2 text-sm text-muted">Updates about your proposals, meetings, and account — never revealing another profile&apos;s details.</p>
 
-      {unreadCount > 0 && (
-        <Button size="sm" variant="outline" className="mt-4" onClick={markAllRead}>
-          <CheckCheck className="h-4 w-4" /> Mark all as read
-        </Button>
-      )}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        {unreadCount > 0 && (
+          <Button size="sm" variant="outline" onClick={markAllRead}>
+            <CheckCheck className="h-4 w-4" /> Mark all as read
+          </Button>
+        )}
+        {categories.length > 2 && (
+          <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-48">
+            {categories.map((c) => (
+              <option key={c} value={c}>{c === "ALL" ? "All Categories" : c}</option>
+            ))}
+          </Select>
+        )}
+      </div>
 
       <Card className="mt-4">
         <CardContent>
-          {items.length === 0 ? (
+          {visible.length === 0 ? (
             <EmptyState icon={Bell} title="No notifications yet" />
           ) : (
             <div className="divide-y divide-border">
-              {items.map((item) => {
+              {visible.map((item) => {
                 const content = (
                   <>
                     <p className="font-medium">{item.title}</p>

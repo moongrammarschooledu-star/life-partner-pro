@@ -29,10 +29,11 @@ function NewCaseForm() {
   const [lookingUp, setLookingUp] = useState(false);
 
   const [type, setType] = useState<CaseType>((searchParams.get("type") as CaseType) || "SUPPORT");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState(searchParams.get("category") || "");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [reportedProfileCode, setReportedProfileCode] = useState("");
+  const relatedProposalId = searchParams.get("relatedProposalId") || undefined;
   const [submitting, setSubmitting] = useState(false);
   const [possibleDuplicates, setPossibleDuplicates] = useState<{ id: string; caseNumber: string; subject: string }[] | null>(null);
 
@@ -71,7 +72,7 @@ function NewCaseForm() {
       const res = await fetch("/api/my-cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, category, subject, description, reportedProfileCode: reportedProfileCode || undefined }),
+        body: JSON.stringify({ type, category, subject, description, reportedProfileCode: reportedProfileCode || undefined, relatedProposalId }),
       });
       const json = await res.json();
       if (!res.ok) {

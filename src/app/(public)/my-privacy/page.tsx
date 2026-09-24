@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, ArrowLeft } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs } from "@/components/ui/tabs";
@@ -15,7 +15,10 @@ const TABS = [
   { value: "data", label: "My Data" },
   { value: "permissions", label: "My Permissions" },
   { value: "activity", label: "My Activity" },
+  { value: "requests", label: "My Requests" },
 ];
+
+const REQUEST_TYPES = ["ACCESS", "CORRECTION", "DELETION", "RESTRICT_PROCESSING", "WITHDRAW_CONSENT", "EXPORT", "REPORT_ISSUE", "OTHER"];
 
 const CONSENT_CATEGORIES = [
   "PROFILE_MATCHING", "PROPOSAL_PARTICIPATION", "CONTACT_SHARING", "PHOTO_PROCESSING",
@@ -82,6 +85,7 @@ export default function MyPrivacyPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-10 sm:px-6">
+      <Link href="/dashboard" className="flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
       <div>
         <h1 className="font-heading text-2xl font-semibold">My Privacy Dashboard</h1>
         <p className="text-sm text-muted">
@@ -93,6 +97,7 @@ export default function MyPrivacyPage() {
       {tab === "data" && <MyDataTab />}
       {tab === "permissions" && <MyPermissionsTab />}
       {tab === "activity" && <MyActivityTab />}
+      {tab === "requests" && <MyRequestsTab />}
     </div>
   );
 }
@@ -178,6 +183,103 @@ function MyPermissionsTab() {
         })}
       </CardContent>
     </Card>
+  );
+}
+
+interface PrivacyRequestRow {
+  id: string;
+  requestCode: string;
+  type: string;
+  status: string;
+  description: string | null;
+  submittedAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+}
+
+// STEP 21 — wires the already-complete GET/POST /api/my-privacy/requests
+// backend (src/lib/privacy/privacy-request.ts) into a UI tab; no new
+// backend logic here.
+function MyRequestsTab() {
+  const { show } = useToast();
+  const [items, setItems] = useState<PrivacyRequestRow[] | null>(null);
+  const [type, setType] = useState("ACCESS");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  function load() {
+    fetch("/api/my-privacy/requests")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setItems(j?.items ?? []));
+  }
+  useEffect(load, []);
+
+  async function submit() {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/my-privacy/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, description: description.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        show(json.error ?? "Could not submit your request.", "error");
+        return;
+      }
+      show(`Request submitted — ${json.requestCode}`, "success");
+      setDescription("");
+      load();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="space-y-4">
+          <p className="text-sm font-medium">Submit a New Privacy Request</p>
+          <Field label="Request Type" htmlFor="reqType">
+            <Select id="reqType" value={type} onChange={(e) => setType(e.target.value)}>
+              {REQUEST_TYPES.map((t) => (
+                <option key={t} value={t}>{formatEnumLabel(t)}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Description (optional)" htmlFor="reqDescription" hint="Deletion and export requests can also be started from Account Settings.">
+            <Textarea id="reqDescription" value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-24" />
+          </Field>
+          <Button onClick={submit} disabled={submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Submit Request
+          </Button>
+        </CardContent>
+      </Card>
+
+      {items === null ? (
+        <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted" /></div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted">No privacy requests submitted yet.</p>
+      ) : (
+        <Card>
+          <CardContent className="space-y-3">
+            {items.map((r) => (
+              <div key={r.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{formatEnumLabel(r.type)} — {r.requestCode}</span>
+                  <Badge variant={r.status === "COMPLETED" ? "success" : r.status === "REJECTED" || r.status === "CANCELLED" ? "danger" : "muted"}>
+                    {formatEnumLabel(r.status)}
+                  </Badge>
+                </div>
+                {r.description && <p className="mt-1 text-xs text-muted">{r.description}</p>}
+                <p className="mt-1 text-xs text-muted">Submitted {formatDateTime(r.submittedAt)}</p>
+                {r.resolutionNote && <p className="mt-1 text-xs text-muted">Resolution: {r.resolutionNote}</p>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 

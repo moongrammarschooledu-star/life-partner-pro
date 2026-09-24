@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, LifeBuoy, Plus, ShieldAlert, Search } from "lucide-react";
+import { Loader2, LifeBuoy, Plus, ShieldAlert, Search, ArrowLeft } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -111,6 +111,7 @@ export default function MyCasesPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+      <Link href="/dashboard" className="mb-2 flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-semibold">Help &amp; Support</h1>

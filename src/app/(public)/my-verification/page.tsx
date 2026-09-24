@@ -1,13 +1,105 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Search, ShieldCheck, ShieldQuestion, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Search, ShieldCheck, ShieldQuestion, CheckCircle2, Clock, AlertTriangle, Upload, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
-import { formatEnumLabel } from "@/lib/utils";
+import { formatEnumLabel, formatDateTime } from "@/lib/utils";
 import { CHECKLIST_CATEGORY_LABEL } from "@/lib/verification/checklist-catalog";
+
+const DOCUMENT_TYPES = ["IDENTITY", "EDUCATION", "EMPLOYMENT", "OTHER"];
+
+interface VerificationDocument {
+  id: string;
+  documentType: string;
+  reviewStatus: string;
+  uploadedAt: string;
+  reviewNote: string | null;
+}
+
+// STEP 21 — wires the already-complete GET/POST /api/my-verification/documents
+// backend into this page; no new backend logic here.
+function DocumentUploadCard() {
+  const { show } = useToast();
+  const [items, setItems] = useState<VerificationDocument[] | null>(null);
+  const [documentType, setDocumentType] = useState("IDENTITY");
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  function load() {
+    fetch("/api/my-verification/documents")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setItems(j?.items ?? []));
+  }
+  useEffect(load, []);
+
+  async function upload() {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("documentType", documentType);
+      formData.append("file", file);
+      const res = await fetch("/api/my-verification/documents", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!res.ok) {
+        show(json.error ?? "Could not upload the document.", "error");
+        return;
+      }
+      show("Document uploaded.", "success");
+      setFile(null);
+      load();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Documents</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted">Optional — upload a document to help speed up verification.</p>
+        <Field label="Document Type" htmlFor="documentType">
+          <Select id="documentType" value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
+            {DOCUMENT_TYPES.map((t) => (
+              <option key={t} value={t}>{formatEnumLabel(t)}</option>
+            ))}
+          </Select>
+        </Field>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="text-sm"
+          />
+          <Button size="sm" onClick={upload} disabled={!file || uploading}>
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload
+          </Button>
+        </div>
+
+        {items && items.length > 0 && (
+          <div className="space-y-2 border-t border-border pt-3">
+            {items.map((d) => (
+              <div key={d.id} className="flex items-center justify-between text-sm">
+                <span>{formatEnumLabel(d.documentType)} — {formatDateTime(d.uploadedAt)}</span>
+                <Badge variant={d.reviewStatus === "APPROVED" ? "success" : d.reviewStatus === "REJECTED" ? "danger" : "muted"}>
+                  {formatEnumLabel(d.reviewStatus)}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 interface CompletenessCategory {
   key: string;
@@ -199,7 +291,8 @@ export default function MyVerificationPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
-      <h1 className="font-heading text-2xl font-semibold">My Verification</h1>
+      <Link href="/dashboard" className="flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
+      <h1 className="mt-2 font-heading text-2xl font-semibold">My Verification</h1>
       <p className="mt-2 text-sm text-muted">
         Verifying your mobile, email, and profile information helps build trust with prospective matches. This never reveals internal review
         scores — only what has actually been checked.
@@ -264,6 +357,8 @@ export default function MyVerificationPage() {
             )}
           </CardContent>
         </Card>
+
+        <DocumentUploadCard />
 
         <Card>
           <CardHeader>

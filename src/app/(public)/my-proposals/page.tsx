@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Search, Heart, HeartOff, HelpCircle, Phone, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Search, Heart, HeartOff, HelpCircle, Phone, CheckCircle2, XCircle, ArrowLeft, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -76,7 +76,12 @@ function ProposalCard({ proposal, onResponded }: { proposal: ProposalItem; onRes
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">{p.fullName}</CardTitle>
-          <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium">{proposal.status}</span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium">{proposal.status}</span>
+            <Link href={`/dashboard/proposals/${proposal.proposalCode}`} className="flex items-center gap-1 text-xs text-primary hover:underline">
+              Details <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -243,7 +248,8 @@ export default function MyProposalsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
-      <h1 className="font-heading text-2xl font-semibold">My Rishta Proposals</h1>
+      <Link href="/dashboard" className="flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
+      <h1 className="mt-2 font-heading text-2xl font-semibold">My Rishta Proposals</h1>
       <p className="mt-2 text-sm text-muted">
         A potential matrimonial match has been identified for you where shown below. This is a compatibility suggestion for your review — not
         an automatic decision. Contact details are never shared without your and the other party&apos;s consent and admin approval.

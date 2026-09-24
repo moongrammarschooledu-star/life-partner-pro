@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Search, CreditCard, CheckCircle2 } from "lucide-react";
+import { Loader2, Search, CreditCard, CheckCircle2, ArrowLeft } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,7 @@ export default function MyBillingPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 px-4 py-10 sm:px-6">
+      <Link href="/dashboard" className="flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
       <div>
         <h1 className="font-heading text-2xl font-semibold">Packages &amp; Billing</h1>
         <p className="text-sm text-muted">

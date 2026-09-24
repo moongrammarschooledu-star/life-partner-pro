@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Search } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, CheckCircle2, Loader2, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
@@ -113,9 +114,12 @@ export default function UpdateRequestPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
-      <h1 className="font-heading text-2xl font-semibold">Request a Profile Update</h1>
+      <Link href="/dashboard" className="flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="h-4 w-4" /> Back to Dashboard</Link>
+      <h1 className="mt-2 font-heading text-2xl font-semibold">Request a Profile Update</h1>
       <p className="mt-2 text-sm text-muted">
-        Enter your Profile ID (e.g. LPP-000123) and the email you registered with. Changes to sensitive information
+        For a fuller editing experience covering education, career, and family details, see{" "}
+        <Link href="/dashboard/profile/edit" className="text-primary hover:underline">Edit Profile</Link> on your dashboard. Enter your
+        Profile ID (e.g. LPP-000123) and the email you registered with. Changes to sensitive information
         are reviewed by an administrator before they take effect.
       </p>
 

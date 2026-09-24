@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Moon, Sun, ShieldCheck, Lock, CreditCard } from "lucide-react";
+import { Moon, Sun, ShieldCheck, Lock, CreditCard, LayoutDashboard } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { buttonClass } from "@/components/ui/button";
 import { NotificationBell } from "@/components/public/notification-bell";
@@ -23,6 +23,9 @@ export function PublicNavbar() {
           </Link>
           <Link href="/#why-us" className="text-muted hover:text-foreground">
             Why Life Partner Pro
+          </Link>
+          <Link href="/dashboard" className="flex items-center gap-1 text-muted hover:text-foreground">
+            <LayoutDashboard className="h-4 w-4" /> Dashboard
           </Link>
           <Link href="/my-verification" className="text-muted hover:text-foreground">
             My Verification

@@ -27,9 +27,24 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export class UploadValidationError extends Error {}
 
+export interface PhotoCropRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface PhotoTransformOptions {
+  // Additional manual rotation on top of the always-applied EXIF
+  // auto-orient (STEP 21 photo management — crop/rotate).
+  rotateDegrees?: number;
+  cropRect?: PhotoCropRect;
+}
+
 export async function savePhoto(
   file: Buffer,
-  mimeType: string
+  mimeType: string,
+  transform?: PhotoTransformOptions
 ): Promise<{ storageKey: string; mimeType: string; sizeBytes: number; ivBase64: string; authTagBase64: string }> {
   if (!ALLOWED_MIME.has(mimeType)) {
     throw new UploadValidationError("Unsupported image type. Use JPEG, PNG, or WebP.");
@@ -46,8 +61,15 @@ export async function savePhoto(
 
   // Re-encode to strip metadata (incl. EXIF/GPS) and normalize size — also
   // acts as a sanity check that the bytes are actually a decodable image.
-  const processed = await sharp(file)
-    .rotate()
+  let pipeline = sharp(file).rotate(); // auto-orient from EXIF first
+  if (transform?.cropRect) {
+    const { left, top, width, height } = transform.cropRect;
+    pipeline = pipeline.extract({ left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) });
+  }
+  if (transform?.rotateDegrees) {
+    pipeline = pipeline.rotate(transform.rotateDegrees);
+  }
+  const processed = await pipeline
     .resize(800, 800, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 82 })
     .toBuffer();

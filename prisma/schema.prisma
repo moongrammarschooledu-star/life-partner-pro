@@ -196,6 +196,7 @@ enum CaseCategory {
   PRIVACY_REQUEST
   PAYMENT_BILLING
   ASSISTED_MATCHMAKING_REQUEST // STEP 14 spec §39 premium action — entitlement-gated, see src/lib/finance/entitlements.ts
+  FAMILY_INTERACTION_REQUEST // STEP 21 — applicant-initiated family-outreach request; keeps family involvement admin-mediated, no separate family account (see src/lib/case-categories.ts)
   OTHER_SUPPORT
 
   // Complaints (spec §4)
@@ -876,6 +877,22 @@ enum AuditAction {
   CANDIDATE_COMPARED
   MUTUAL_MATCH_SEARCH_PERFORMED
   SEARCH_EXPORT_PERFORMED
+
+  // ---------- Applicant Dashboard & Self-Service (STEP 21) ----------
+  PHOTO_UPLOADED
+  PHOTO_REPLACED
+  PHOTO_DELETED
+  PHOTO_SET_PRIMARY
+  PARTNER_PREFERENCE_UPDATED
+  LIFESTYLE_UPDATED
+  CONTACT_PERMISSION_GRANTED_BY_APPLICANT
+  CONTACT_PERMISSION_REVOKED_BY_APPLICANT
+  MEETING_CONFIRMED_BY_APPLICANT
+  MEETING_RESCHEDULE_REQUESTED_BY_APPLICANT
+  MEETING_CANCELLED_BY_APPLICANT
+  FAMILY_INTERACTION_REQUEST_SUBMITTED
+  DASHBOARD_PREFERENCE_UPDATED
+  AI_APPLICANT_FEATURE_USED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1448,18 +1465,19 @@ model Profile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  contact        ContactInfo?
-  education      EducationInfo?
-  profession     ProfessionInfo?
-  family         FamilyInfo?
-  lifestyle      LifestyleInfo?
-  preference     PartnerPreference?
-  photos         ProfilePhoto[]
-  notes          ProfileNote[]
-  consent        ConsentRecord?
-  communications Communication[]
-  followUps      FollowUp[]
-  pendingUpdate  PendingUpdate?
+  contact             ContactInfo?
+  education           EducationInfo?
+  profession          ProfessionInfo?
+  family              FamilyInfo?
+  lifestyle           LifestyleInfo?
+  preference          PartnerPreference?
+  photos              ProfilePhoto[]
+  notes               ProfileNote[]
+  consent             ConsentRecord?
+  communications      Communication[]
+  followUps           FollowUp[]
+  pendingUpdate       PendingUpdate?
+  dashboardPreference DashboardPreference?
 
   matchesAsA   Match[]    @relation("MatchProfileA")
   matchesAsB   Match[]    @relation("MatchProfileB")
@@ -1677,6 +1695,19 @@ model PendingUpdate {
   profileId   String   @unique
   payload     String // JSON blob of the proposed changes
   submittedAt DateTime @default(now())
+}
+
+// STEP 21 — cosmetic, per-applicant dashboard layout state (pinned widgets,
+// collapsed cards, last-visited tab). Never admin-reviewed, never affects
+// matching/eligibility — distinct from PendingUpdate above.
+model DashboardPreference {
+  id             String   @id @default(cuid())
+  profile        Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId      String   @unique
+  pinnedWidgets  String? // JSON array of widget keys
+  collapsedCards String? // JSON array of collapsed card keys
+  lastVisitedTab String?
+  updatedAt      DateTime @updatedAt
 }
 
 model ProfileNote {
