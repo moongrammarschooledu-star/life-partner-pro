@@ -155,7 +155,6 @@ export function PhotoUpload({
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        capture="user"
         className="hidden"
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
