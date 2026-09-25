@@ -5,10 +5,17 @@ import type { NotificationType } from "@prisma/client";
 // server-side — a notification link is never itself treated as proof of
 // permission (spec §22). Pure — no I/O.
 export function buildActionUrl(
-  recipientKind: "PROFILE" | "ADMIN",
+  recipientKind: "PROFILE" | "ADMIN" | "FAMILY",
   type: NotificationType,
   ids: { proposalId?: string; profileId?: string }
 ): string | undefined {
+  if (recipientKind === "FAMILY") {
+    if (type.startsWith("FAMILY_PROPOSAL") || type === "FAMILY_DECISION_REQUESTED") return "/family/proposals";
+    if (type === "FAMILY_MEETING_UPDATED") return "/family/meetings";
+    if (type.startsWith("FAMILY_ACCESS") || type.startsWith("FAMILY_PERMISSION") || type === "FAMILY_INVITATION") return "/family/dashboard";
+    return "/family/dashboard";
+  }
+
   if (recipientKind === "PROFILE") {
     if (type.startsWith("PROPOSAL_") || type.startsWith("CONTACT_") || type.startsWith("MEETING_") || type === "PROPOSAL_MUTUAL_INTEREST") {
       return "/my-proposals";

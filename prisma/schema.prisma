@@ -138,6 +138,18 @@ enum AdminTaskType {
   // task from MATCH_REVIEW (which is specifically "admin match-quality
   // review before a proposal").
   CANDIDATE_REVIEW // PROFILE — a discovered candidate needs staff review
+
+  // STEP 22 — Family/Guardian Portal. Staff work items ABOUT a family
+  // situation, assigned to an admin exactly like every other task type —
+  // never a task assigned TO a family member (the task engine has no
+  // family-assignee seam and this step doesn't add one).
+  FAMILY_INVITATION_REVIEW // PROFILE — a flagged family invitation needs review
+  FAMILY_ACCESS_REVIEW // PROFILE — a family access grant/change needs review
+  FAMILY_PERMISSION_REVIEW // PROFILE — a sensitive family permission request needs review
+  FAMILY_CONTACT_REVIEW // PROFILE — a family contact-access request needs review
+  FAMILY_PROPOSAL_REVIEW // PROPOSAL — family proposal-sharing activity needs review
+  FAMILY_DECISION_CONFIRMATION // PROPOSAL — a family decision is awaiting applicant confirmation past SLA
+  FAMILY_SECURITY_REVIEW // PROFILE — a family-account security/abuse concern needs review
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -893,6 +905,34 @@ enum AuditAction {
   FAMILY_INTERACTION_REQUEST_SUBMITTED
   DASHBOARD_PREFERENCE_UPDATED
   AI_APPLICANT_FEATURE_USED
+
+  // ---------- Family/Guardian Portal (STEP 22) ----------
+  FAMILY_INVITATION_CREATED
+  FAMILY_INVITATION_RESENT
+  FAMILY_INVITATION_ACCEPTED
+  FAMILY_INVITATION_DECLINED
+  FAMILY_INVITATION_REVOKED
+  FAMILY_MEMBER_ADDED
+  FAMILY_MEMBER_LOGIN
+  FAMILY_PERMISSION_GRANTED
+  FAMILY_PERMISSION_CHANGED
+  FAMILY_PERMISSION_REVOKED
+  FAMILY_ACCESS_REQUESTED
+  FAMILY_ACCESS_APPROVED
+  FAMILY_ACCESS_REJECTED
+  FAMILY_PROPOSAL_VIEWED
+  FAMILY_PROPOSAL_SHARED
+  FAMILY_RESPONSE_SUBMITTED
+  FAMILY_DECISION_CREATED
+  FAMILY_DECISION_CONFIRMED
+  FAMILY_CONTACT_REQUESTED
+  FAMILY_ACCESS_EXPIRED
+  FAMILY_MEMBER_REMOVED
+  FAMILY_MEMBER_SUSPENDED
+  FAMILY_COMMENT_ADDED
+  FAMILY_MEETING_ACTION
+  FAMILY_SESSION_REVOKED
+  FAMILY_LOGIN_FAILED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1060,6 +1100,18 @@ enum NotificationType {
   APPROVAL_EXECUTED
   APPROVAL_EXECUTION_FAILED
   EMERGENCY_OVERRIDE_USED
+
+  // ---------- Family/Guardian Portal (STEP 22) ----------
+  FAMILY_INVITATION
+  FAMILY_ACCESS_GRANTED
+  FAMILY_ACCESS_REVOKED
+  FAMILY_ACCESS_REQUEST
+  FAMILY_PROPOSAL_SHARED
+  FAMILY_PROPOSAL_UPDATED
+  FAMILY_DECISION_REQUESTED
+  FAMILY_MEETING_UPDATED
+  FAMILY_PERMISSION_EXPIRING
+  FAMILY_PERMISSION_EXPIRED
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1478,6 +1530,8 @@ model Profile {
   followUps           FollowUp[]
   pendingUpdate       PendingUpdate?
   dashboardPreference DashboardPreference?
+  familyAccount       FamilyAccount?
+  familyConsentsGiven FamilyConsent[]
 
   matchesAsA   Match[]    @relation("MatchProfileA")
   matchesAsB   Match[]    @relation("MatchProfileB")
@@ -1838,6 +1892,7 @@ model Proposal {
   familyCommunications FamilyCommunication[]
   notifications        Notification[]
   communicationLogs    CommunicationLog[]
+  familyDecisions      FamilyDecision[]
 
   @@index([profileAId])
   @@index([profileBId])
@@ -2151,23 +2206,30 @@ model SecurityFlag {
 // ---------- Audit ----------
 
 model AuditLog {
-  id              String      @id @default(cuid())
-  admin           AdminUser?  @relation(fields: [adminId], references: [id])
-  adminId         String?
-  action          AuditAction
-  targetProfile   Profile?    @relation(fields: [targetProfileId], references: [id])
-  targetProfileId String?
-  meta            String? // JSON blob of extra context
-  createdAt       DateTime    @default(now())
+  id                  String        @id @default(cuid())
+  admin               AdminUser?    @relation(fields: [adminId], references: [id])
+  adminId             String?
+  action              AuditAction
+  targetProfile       Profile?      @relation(fields: [targetProfileId], references: [id])
+  targetProfileId     String?
+  meta                String? // JSON blob of extra context
+  createdAt           DateTime      @default(now())
   // STEP 15 — populated automatically by writeAudit() for admin actions only
-  ipAddress       String?
-  userAgent       String?
-  correlationId   String?
+  ipAddress           String?
+  userAgent           String?
+  correlationId       String?
+  // STEP 22 — distinguishes "a family member acted on this profile's data"
+  // from "the profile owner acted on themselves" (the latter is still just
+  // adminId omitted, by the pre-existing convention). Nullable, additive —
+  // reused instead of a separate family_activity_logs table.
+  actorFamilyMember   FamilyMember? @relation(fields: [actorFamilyMemberId], references: [id])
+  actorFamilyMemberId String?
 
   @@index([targetProfileId])
   @@index([adminId])
   @@index([createdAt])
   @@index([action, createdAt])
+  @@index([actorFamilyMemberId])
 }
 
 // ---------- App-wide settings (single row) ----------
@@ -2354,25 +2416,30 @@ model ProfileCodeCounter {
 // ProposalEvent's performedByAdmin/performedByProfile pattern. Never created
 // directly — always via src/lib/notifications/notification-service.ts.
 model Notification {
-  id                 String           @id @default(cuid())
-  recipientProfileId String?
-  recipientAdminId   String?
-  type               NotificationType
-  title              String
-  body               String // privacy-safe, generic copy only — see spec §33
-  relatedProposalId  String?
-  relatedProfileId   String?
-  actionUrl          String?
-  readAt             DateTime?
-  createdAt          DateTime         @default(now())
+  id                      String           @id @default(cuid())
+  recipientProfileId      String?
+  recipientAdminId        String?
+  // STEP 22 — third recipient kind, additive nullable column (see
+  // sendNotification()'s new branch); never set together with the other two.
+  recipientFamilyMemberId String?
+  type                    NotificationType
+  title                   String
+  body                    String // privacy-safe, generic copy only — see spec §33
+  relatedProposalId       String?
+  relatedProfileId        String?
+  actionUrl               String?
+  readAt                  DateTime?
+  createdAt               DateTime         @default(now())
 
-  recipientProfile Profile?   @relation("NotificationRecipientProfile", fields: [recipientProfileId], references: [id], onDelete: Cascade)
-  recipientAdmin   AdminUser? @relation("NotificationRecipientAdmin", fields: [recipientAdminId], references: [id])
-  relatedProposal  Proposal?  @relation(fields: [relatedProposalId], references: [id], onDelete: SetNull)
-  relatedProfile   Profile?   @relation("NotificationRelatedProfile", fields: [relatedProfileId], references: [id], onDelete: SetNull)
+  recipientProfile      Profile?      @relation("NotificationRecipientProfile", fields: [recipientProfileId], references: [id], onDelete: Cascade)
+  recipientAdmin        AdminUser?    @relation("NotificationRecipientAdmin", fields: [recipientAdminId], references: [id])
+  recipientFamilyMember FamilyMember? @relation(fields: [recipientFamilyMemberId], references: [id], onDelete: Cascade)
+  relatedProposal       Proposal?     @relation(fields: [relatedProposalId], references: [id], onDelete: SetNull)
+  relatedProfile        Profile?      @relation("NotificationRelatedProfile", fields: [relatedProfileId], references: [id], onDelete: SetNull)
 
   @@index([recipientProfileId, readAt, createdAt])
   @@index([recipientAdminId, readAt, createdAt])
+  @@index([recipientFamilyMemberId, readAt, createdAt])
   @@index([type])
 }
 
@@ -5033,4 +5100,393 @@ model CandidateSearchAudit {
   createdAt            DateTime  @default(now())
 
   @@index([actorId, createdAt])
+}
+
+// ================================================================
+// Family/Guardian Portal, Delegated Access & Multi-User Family
+// Account System (STEP 22)
+// ================================================================
+// A genuinely new, third authenticated actor type — family
+// members/guardians invited by an applicant, with explicit, scoped,
+// consent-based, revocable, time-bounded access. Parallel to (never
+// sharing) the applicant's ProfileSession/lpp_session machinery — see
+// src/lib/family/family-session.ts. Additive alongside, and does not
+// replace, STEP 21's admin-mediated FamilyCommunication outreach log,
+// which stays exactly as-is.
+
+enum FamilyRole {
+  FAMILY_VIEWER
+  FAMILY_ADVISOR
+  FAMILY_COORDINATOR
+  FAMILY_GUARDIAN
+  FAMILY_APPROVER
+  FAMILY_ADMIN // manages the family's OWN members only — never a platform admin permission
+}
+
+enum FamilyMemberStatus {
+  PENDING // invited, not yet accepted
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  EXPIRED
+}
+
+enum FamilyInvitationStatus {
+  DRAFT
+  SENT
+  DELIVERED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  REVOKED
+  SUSPENDED
+}
+
+// VIEW|COMMENT|SUGGEST|RESPOND|MANAGE|APPROVE (spec §8). OWNER is
+// deliberately not a value here — reserved for the primary applicant,
+// never stored as a FamilyMember's access level.
+enum FamilyAccessLevel {
+  VIEW
+  COMMENT
+  SUGGEST
+  RESPOND
+  MANAGE
+  APPROVE
+}
+
+enum FamilyAccountStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum FamilyPermissionStatus {
+  ACTIVE
+  PENDING_APPROVAL // STEP 19 gate — a sensitive permission awaiting admin approval
+  EXPIRED
+  REVOKED
+  REJECTED
+}
+
+enum FamilyConsentType {
+  FAMILY_INVITATION
+  PROFILE_ACCESS
+  PROPOSAL_SHARING
+  CONTACT_INFORMATION
+  FAMILY_COMMENTS
+  RESPONSE_PARTICIPATION
+  MEETING_COORDINATION
+  FAMILY_COMMUNICATIONS
+}
+
+enum FamilyConsentStatus {
+  GRANTED
+  REVOKED
+  EXPIRED
+}
+
+enum FamilyAccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ESCALATED_FOR_ADMIN_APPROVAL // sensitive permission — routed to STEP 19
+  CANCELLED
+}
+
+enum FamilySharedRecordType {
+  PROPOSAL
+  MEETING
+}
+
+// SUMMARY|STANDARD|DETAILED|RESPONSE_PARTICIPATION — spec §20.
+enum ProposalSharingLevel {
+  SUMMARY
+  STANDARD
+  DETAILED
+  RESPONSE_PARTICIPATION
+}
+
+enum FamilySharedRecordStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+// A family member's SUGGESTED response — never binding until the
+// applicant confirms it (Decision 8) — kept structurally distinct
+// from the real ProposalResponse/ProposalResponseType.
+enum FamilyDecisionValue {
+  INTERESTED
+  NOT_INTERESTED
+  NEED_MORE_INFO
+}
+
+enum FamilyDecisionStatus {
+  NOT_REQUESTED
+  PENDING_FAMILY_REVIEW
+  FAMILY_INTERESTED
+  FAMILY_NOT_INTERESTED
+  MORE_INFO_REQUESTED
+  APPLICANT_CONFIRMATION_REQUIRED
+  CONFIRMED
+  CANCELLED
+}
+
+enum FamilyCommentType {
+  PROPOSAL_COMMENT
+  PROFILE_SUGGESTION
+  MEETING_COMMENT
+  GENERAL_FAMILY_NOTE
+}
+
+// Broader than FamilySharedRecordType (a comment can target the
+// profile itself, e.g. PROFILE_SUGGESTION, not just a shared record).
+enum FamilyCommentTargetType {
+  PROPOSAL
+  MEETING
+  PROFILE
+}
+
+enum FamilyCommentVisibility {
+  APPLICANT_ONLY
+  FAMILY_SHARED
+  ADMIN_SHARED
+}
+
+// One per applicant, created lazily on the first invitation — most
+// applicants never use this feature (Decision 3).
+model FamilyAccount {
+  id          String              @id @default(cuid())
+  familyCode  String              @unique // LPP-FAM-###### — see nextSequenceCode("FAM")
+  applicant   Profile             @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  applicantId String              @unique
+  status      FamilyAccountStatus @default(ACTIVE)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  groups      FamilyGroup[]
+  members     FamilyMember[]
+  invitations FamilyInvitation[]
+
+  @@index([applicantId])
+}
+
+// Optional labeling/grouping of members (spec §33). Deliberately
+// carries NO permission-inheritance logic in this pass (Decision 3) —
+// every access check resolves at the individual FamilyMember/
+// FamilyPermission level regardless of group membership.
+model FamilyGroup {
+  id              String        @id @default(cuid())
+  groupCode       String        @unique // LPP-FAMGRP-######
+  familyAccount   FamilyAccount @relation(fields: [familyAccountId], references: [id], onDelete: Cascade)
+  familyAccountId String
+  name            String
+  createdAt       DateTime      @default(now())
+
+  members FamilyMember[]
+
+  @@index([familyAccountId])
+}
+
+// The family member's own authenticated account — password-based
+// (Decision 2), entirely separate from the applicant's passwordless
+// ProfileSession. Never carries any AdminRole/Permission.
+model FamilyMember {
+  id              String             @id @default(cuid())
+  familyAccount   FamilyAccount      @relation(fields: [familyAccountId], references: [id], onDelete: Cascade)
+  familyAccountId String
+  group           FamilyGroup?       @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groupId         String?
+  fullName        String
+  relationship    String // "Parent" | "Guardian" | "Sibling" | "Relative" | "Other" — free text, not assumed from name
+  email           String?
+  mobile          String?
+  emailVerified   Boolean            @default(false)
+  mobileVerified  Boolean            @default(false)
+  passwordHash    String
+  role            FamilyRole         @default(FAMILY_VIEWER)
+  status          FamilyMemberStatus @default(PENDING)
+  invitedAt       DateTime           @default(now())
+  joinedAt        DateTime?
+  lastLoginAt     DateTime?
+  suspendedAt     DateTime?
+  suspendedReason String?
+  removedAt       DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  sessions       FamilyMemberSession[]
+  permissions    FamilyPermission[]
+  consentsGiven  FamilyConsent[]
+  accessRequests FamilyAccessRequest[]
+  sharedRecords  FamilySharedRecord[]
+  decisions      FamilyDecision[]
+  comments       FamilyComment[]
+  auditEvents    AuditLog[]
+  notifications  Notification[]
+
+  @@index([familyAccountId])
+  @@index([email])
+  @@index([status])
+}
+
+// Mirrors ProfileSession's exact shape (src/lib/profile-session.ts) —
+// a parallel, not shared, revocation/tracking row (Decision 2).
+model FamilyMemberSession {
+  id             String       @id @default(cuid())
+  familyMember   FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  familyMemberId String
+  deviceInfo     String?
+  userAgent      String?
+  ipAddress      String?
+  createdAt      DateTime     @default(now())
+  lastActiveAt   DateTime     @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+
+  @@index([familyMemberId])
+}
+
+// tokenHash follows the OTP module's exact pattern (bcrypt-hashed,
+// never stored/returned raw after issuance) — never the stateless
+// step-up-token HMAC scheme, which has no one-time-use enforcement.
+model FamilyInvitation {
+  id              String                 @id @default(cuid())
+  invitationCode  String                 @unique // LPP-FAM-######
+  familyAccount   FamilyAccount          @relation(fields: [familyAccountId], references: [id], onDelete: Cascade)
+  familyAccountId String
+  invitedName     String
+  invitedEmail    String?
+  invitedMobile   String?
+  relationship    String
+  requestedRole   FamilyRole             @default(FAMILY_VIEWER)
+  tokenHash       String
+  status          FamilyInvitationStatus @default(SENT)
+  expiresAt       DateTime
+  createdAt       DateTime               @default(now())
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  familyMemberId  String? // set once accepted — links to the resulting account
+
+  @@index([familyAccountId])
+  @@index([status])
+}
+
+// Dotted scope-strings (profile.basic.view, proposal.respond, ...) —
+// never a monolithic role-implies-everything model (Decision 4).
+model FamilyPermission {
+  id                 String                 @id @default(cuid())
+  familyMember       FamilyMember           @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  familyMemberId     String
+  permission         String // e.g. "proposal.view" — see src/lib/family/permissions.ts's catalog
+  scope              String? // e.g. a specific proposalCode, or null for "all shared records of this type"
+  status             FamilyPermissionStatus @default(ACTIVE)
+  grantedByProfileId String? // the applicant, when self-granted (soft reference, no FK — see FamilySharedRecord.recordId comment)
+  grantedByAdminId   String? // set only when a sensitive grant was STEP-19-approved
+  grantedAt          DateTime               @default(now())
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+
+  @@unique([familyMemberId, permission, scope])
+  @@index([familyMemberId])
+  @@index([status])
+}
+
+// Grantor (applicant) -> grantee (family member) consent ledger —
+// genuinely new plumbing; ConsentGrant is single-subject only ("I
+// consent to processing about myself"), with no grantor/grantee pair.
+model FamilyConsent {
+  id             String              @id @default(cuid())
+  familyMember   FamilyMember        @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  familyMemberId String
+  applicant      Profile             @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  applicantId    String
+  consentType    FamilyConsentType
+  scope          String?
+  version        String              @default("1.0")
+  status         FamilyConsentStatus @default(GRANTED)
+  grantedAt      DateTime            @default(now())
+  revokedAt      DateTime?
+  expiresAt      DateTime?
+
+  @@index([familyMemberId, consentType])
+  @@index([applicantId])
+}
+
+// Family member requests additional permission -> applicant reviews
+// -> approve/reject, escalating to STEP 19 for sensitive scopes.
+model FamilyAccessRequest {
+  id                  String                    @id @default(cuid())
+  requestCode         String                    @unique // LPP-FAMREQ-######
+  familyMember        FamilyMember              @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  familyMemberId      String
+  applicantId         String
+  requestedPermission String
+  reason              String?
+  status              FamilyAccessRequestStatus @default(PENDING)
+  reviewedAt          DateTime?
+  createdAt           DateTime                  @default(now())
+
+  @@index([familyMemberId])
+  @@index([applicantId, status])
+}
+
+// The specific-instance sharing decision (Decision 7) — a
+// FamilyPermission("proposal.view") is a capability; this is the
+// instance ("this exact proposal, at this level, until this date").
+// recordId has no enforced FK, mirroring AdminAssignment's existing
+// resourceType/resourceId polymorphic-reference convention.
+model FamilySharedRecord {
+  id                String                   @id @default(cuid())
+  familyMember      FamilyMember             @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  familyMemberId    String
+  recordType        FamilySharedRecordType
+  recordId          String
+  accessLevel       ProposalSharingLevel     @default(SUMMARY)
+  allowComments     Boolean                  @default(false)
+  allowResponse     Boolean                  @default(false)
+  sharedByProfileId String
+  sharedAt          DateTime                 @default(now())
+  expiresAt         DateTime?
+  status            FamilySharedRecordStatus @default(ACTIVE)
+
+  @@unique([familyMemberId, recordType, recordId])
+  @@index([familyMemberId, status])
+}
+
+// A family member's non-binding SUGGESTED proposal response — never
+// written to ProposalResponse directly (Decision 8).
+model FamilyDecision {
+  id             String               @id @default(cuid())
+  decisionCode   String               @unique // LPP-FAMDEC-######
+  proposal       Proposal             @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId     String
+  familyMember   FamilyMember         @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  familyMemberId String
+  decision       FamilyDecisionValue
+  comment        String?
+  status         FamilyDecisionStatus @default(PENDING_FAMILY_REVIEW)
+  createdAt      DateTime             @default(now())
+  confirmedAt    DateTime?
+  cancelledAt    DateTime?
+
+  @@index([proposalId])
+  @@index([familyMemberId])
+}
+
+// Family comments (spec §23) — polymorphic target, same
+// resourceType/resourceId convention as AdminAssignment (no enforced FK).
+model FamilyComment {
+  id             String                  @id @default(cuid())
+  familyMember   FamilyMember            @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  familyMemberId String
+  commentType    FamilyCommentType
+  targetType     FamilyCommentTargetType
+  targetId       String
+  body           String
+  visibility     FamilyCommentVisibility @default(APPLICANT_ONLY)
+  createdAt      DateTime                @default(now())
+
+  @@index([familyMemberId])
+  @@index([targetType, targetId])
 }

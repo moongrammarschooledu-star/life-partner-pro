@@ -44,6 +44,12 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   CONTACT_SHARE: { label: "Share contact information", domain: "CONTACT", sourceType: "PROPOSAL", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["MATCHMAKING_MANAGER", "SUPER_ADMIN"] },
   CONTACT_SHARE_OVERRIDE: { label: "Override contact-sharing consent gate", domain: "CONTACT", sourceType: "PROPOSAL", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_4", defaultAllowedRoles: ["SUPER_ADMIN"] },
   FAMILY_CONTACT_SHARE: { label: "Share family contact information", domain: "CONTACT", sourceType: "PROPOSAL", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["MATCHMAKING_MANAGER", "SUPER_ADMIN"] },
+  // STEP 22 — an applicant granting a family member a sensitive delegated
+  // permission (see src/lib/family/permissions.ts's FAMILY_PERMISSION_CATALOG).
+  // Distinct from FAMILY_CONTACT_SHARE above (that one is about revealing the
+  // OTHER proposal party's contact info; this one gates a family member's own
+  // access scope on the applicant's own profile).
+  FAMILY_ACCESS_GRANT: { label: "Grant a sensitive family-member permission", domain: "PRIVACY", sourceType: "PROFILE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPPORT_MANAGER", "OPERATIONS_ADMIN", "SUPER_ADMIN"] },
 
   // ---------- MATCHING ----------
   MATCH_OVERRIDE: { label: "Override a match decision", domain: "MATCHING", sourceType: "PROFILE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["MATCHMAKING_MANAGER", "SUPER_ADMIN"] },

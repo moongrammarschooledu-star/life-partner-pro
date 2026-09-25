@@ -2,13 +2,132 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Loader2, ArrowLeft, Heart, X, HelpCircle, Lock, Unlock, CalendarCheck, CalendarX, CalendarClock } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, X, HelpCircle, Lock, Unlock, CalendarCheck, CalendarX, CalendarClock, Share2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input, Textarea, Select } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime, formatEnumLabel } from "@/lib/utils";
+
+interface FamilyMemberOption { id: string; fullName: string; status: string; }
+
+interface PendingDecision { id: string; decision: string; comment: string | null; familyMember: { fullName: string; relationship: string }; proposal: { proposalCode: string } }
+
+function PendingFamilyDecisionCard({ proposalCode, onResolved }: { proposalCode: string; onResolved: () => void }) {
+  const { show } = useToast();
+  const [decisions, setDecisions] = useState<PendingDecision[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/my-family/decisions")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setDecisions((j?.items ?? []).filter((d: PendingDecision) => d.proposal.proposalCode === proposalCode)));
+  }, [proposalCode]);
+
+  async function confirm(id: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/my-family/decisions/${id}/confirm`, { method: "POST" });
+      if (res.ok) { show("Confirmed as your official response.", "success"); setDecisions((d) => d.filter((x) => x.id !== id)); onResolved(); }
+      else show((await res.json()).error ?? "Could not confirm.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancel(id: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/my-family/decisions/${id}/cancel`, { method: "POST" });
+      if (res.ok) { setDecisions((d) => d.filter((x) => x.id !== id)); }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (decisions.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Family Suggestion — Confirmation Needed</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        {decisions.map((d) => (
+          <div key={d.id} className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
+            <p>
+              <strong>{d.familyMember.fullName}</strong> ({d.familyMember.relationship}) suggests: <strong>{formatEnumLabel(d.decision)}</strong>
+            </p>
+            {d.comment && <p className="mt-1 text-muted">&quot;{d.comment}&quot;</p>}
+            <p className="mt-1 text-xs text-muted">This response was submitted by an authorized family representative — it only becomes your official response once you confirm.</p>
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" onClick={() => confirm(d.id)} disabled={busy}>Confirm as My Response</Button>
+              <Button size="sm" variant="outline" onClick={() => cancel(d.id)} disabled={busy}>Dismiss</Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ShareWithFamilyCard({ proposalCode }: { proposalCode: string }) {
+  const { show } = useToast();
+  const [members, setMembers] = useState<FamilyMemberOption[] | null>(null);
+  const [memberId, setMemberId] = useState("");
+  const [accessLevel, setAccessLevel] = useState("SUMMARY");
+  const [allowComments, setAllowComments] = useState(false);
+  const [allowResponse, setAllowResponse] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/my-family/members").then((r) => (r.ok ? r.json() : null)).then((j) => setMembers((j?.items ?? []).filter((m: FamilyMemberOption) => m.status === "ACTIVE")));
+  }, []);
+
+  async function share() {
+    if (!memberId) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/my-family/proposals/${proposalCode}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ familyMemberId: memberId, accessLevel, allowComments, allowResponse }),
+      });
+      if (res.ok) show("Shared with family member.", "success");
+      else show((await res.json()).error ?? "Could not share.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!members || members.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Share2 className="h-4 w-4" /> Share With Family</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <Field label="Family Member" htmlFor="shareMember">
+          <Select id="shareMember" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+            <option value="">Select…</option>
+            {members.map((m) => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+          </Select>
+        </Field>
+        <Field label="Sharing Level" htmlFor="shareLevel">
+          <Select id="shareLevel" value={accessLevel} onChange={(e) => setAccessLevel(e.target.value)}>
+            <option value="SUMMARY">Summary — basic info only</option>
+            <option value="STANDARD">Standard — adds education/profession</option>
+            <option value="DETAILED">Detailed — adds compatibility highlights</option>
+            <option value="RESPONSE_PARTICIPATION">Response Participation — can suggest a response</option>
+          </Select>
+        </Field>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={allowComments} onChange={(e) => setAllowComments(e.target.checked)} /> Allow comments</label>
+        {accessLevel === "RESPONSE_PARTICIPATION" && (
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={allowResponse} onChange={(e) => setAllowResponse(e.target.checked)} /> Allow suggesting a response (still requires your confirmation)</label>
+        )}
+        <Button size="sm" onClick={share} disabled={!memberId || submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Share</Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 interface ProposalDetail {
   proposalCode: string;
@@ -218,6 +337,9 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ code:
           </CardContent>
         </Card>
       )}
+
+      <PendingFamilyDecisionCard proposalCode={code} onResolved={load} />
+      <ShareWithFamilyCard proposalCode={code} />
     </div>
   );
 }

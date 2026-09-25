@@ -287,7 +287,9 @@ export type Permission =
   | "candidate:view"
   | "candidate:compare"
   | "candidate:shortlist"
-  | "candidate:recommend";
+  | "candidate:recommend"
+  // ---------- Family/Guardian Portal (STEP 22) ----------
+  | "family:manage";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -834,6 +836,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "finance:invoices:view",
     "finance:refunds:request",
     "ai:use",
+    "family:manage",
   ],
   // spec §16 also lists matches.view/proposals.view/meetings.view: this codebase has no
   // dedicated *view-only* permission for those today (matching/proposal visibility is
@@ -873,6 +876,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...TASKS_ALL_PERMISSIONS,
     ...OPERATIONS_APPROVAL_PERMISSIONS,
     ...SEARCH_ALL_PERMISSIONS,
+    "family:manage",
     // deliberately lacks: admin:manage/roles:* (no role/permission management), finance:provider:manage,
     // finance:rollout:* (no unrestricted payment rollout control unless separately delegated),
     // system:restore:approve (no system recovery), releases:manage (no deployment control),
@@ -967,6 +971,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "security:approval:view",
     "security:approval:approve", // STEP 19 §6 SAFETY domain (SAFETY_RESTRICTION/PROFILE_SUSPENSION/SAFETY_CASE_ESCALATION) sits with Support Manager, mirroring safety_cases:* above
     ...MANAGER_SEARCH_PERMISSIONS,
+    "family:manage",
     // deliberately lacks sensitive:finance:*, proposal:finalize, roles:*, security:approval:execute
     // (execution of a security override stays with Super Admin/Operations Admin).
   ],

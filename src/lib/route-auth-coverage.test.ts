@@ -44,10 +44,19 @@ const PUBLIC_ROUTES = new Set([
   "/api/cron/notifications", "/api/internal/ci-evidence",
   "/api/auth/[...nextauth]",
   "/api/my-billing/packages", // public package catalogue (no personal data)
+  // STEP 22 — the family-member pre-authentication flows (accepting an
+  // invitation and logging in cannot themselves require a family session);
+  // logout only ever acts on whatever session cookie is already present and
+  // is a safe no-op if it's missing/invalid, so it doesn't gate on one either.
+  "/api/family/register", "/api/family/login", "/api/family/logout",
 ]);
 
 const APPLICANT_AUTH = /requireApplicantProfileId\(|verifyProfileToken\(/;
 const ADMIN_AUTH = /requireAdmin\(/;
+// STEP 22 — the third authenticated actor type. Checked against /api/family/*
+// (never /api/my-family/*, which is applicant-facing and already covered by
+// APPLICANT_AUTH above).
+const FAMILY_MEMBER_AUTH = /requireFamilyMemberId\(/;
 
 describe("API route authorization coverage", () => {
   it("finds the route tree (sanity)", () => {
@@ -71,9 +80,14 @@ describe("API route authorization coverage", () => {
     expect(missing).toEqual([]);
   });
 
+  it("every family-member (/api/family/*) route verifies the family session (except register/login)", () => {
+    const missing = routes.filter((r) => /^\/api\/family\//.test(r.path) && !PUBLIC_ROUTES.has(r.path) && !FAMILY_MEMBER_AUTH.test(r.source)).map((r) => r.path);
+    expect(missing).toEqual([]);
+  });
+
   it("no other route is public unless it is on the reviewed allowlist", () => {
     const unexpected = routes
-      .filter((r) => !r.path.startsWith("/api/admin/") && !/^\/api\/my-/.test(r.path))
+      .filter((r) => !r.path.startsWith("/api/admin/") && !/^\/api\/my-/.test(r.path) && !/^\/api\/family\//.test(r.path))
       .filter((r) => !PUBLIC_ROUTES.has(r.path))
       .map((r) => r.path);
     expect(unexpected).toEqual([]);

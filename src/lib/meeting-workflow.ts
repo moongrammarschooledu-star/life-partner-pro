@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import { writeAudit } from "@/lib/audit";
-import { notifyMeetingUpdated } from "@/lib/notifications/events";
+import { notifyMeetingUpdated, notifyFamilyMeetingUpdated } from "@/lib/notifications/events";
+import { getSharedRecord, hasFamilyPermission } from "@/lib/family/access-control";
 import type { MeetingStatus } from "@prisma/client";
 
 export class MeetingWorkflowError extends HttpError {
@@ -11,7 +12,12 @@ export class MeetingWorkflowError extends HttpError {
   }
 }
 
-export type MeetingActor = { type: "admin"; adminId: string } | { type: "applicant"; profileId: string };
+// STEP 22 — the "family" variant carries profileId (the linked applicant,
+// resolved server-side via getFamilyMembership — never client-supplied) so
+// this function can check proposal membership the same way as "applicant",
+// while familyMemberId identifies whose FamilySharedRecord/FamilyPermission
+// grants to check.
+export type MeetingActor = { type: "admin"; adminId: string } | { type: "applicant"; profileId: string } | { type: "family"; familyMemberId: string; profileId: string };
 
 const VALID_STATUSES: MeetingStatus[] = ["REQUESTED", "SCHEDULED", "CONFIRMED", "COMPLETED", "RESCHEDULED", "CANCELLED"];
 
@@ -24,6 +30,18 @@ const APPLICANT_ALLOWED_TARGET: Record<MeetingStatus, MeetingStatus[]> = {
   SCHEDULED: ["CONFIRMED", "RESCHEDULED", "CANCELLED"],
   CONFIRMED: ["RESCHEDULED", "CANCELLED"],
   RESCHEDULED: ["CANCELLED"],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+// STEP 22 — narrower than the applicant's own set (spec §25: "confirm
+// meeting, request reschedule... They cannot modify meeting ownership").
+// Notably no CANCELLED — only the applicant (or admin) can cancel a meeting.
+const FAMILY_ALLOWED_TARGET: Record<MeetingStatus, MeetingStatus[]> = {
+  REQUESTED: ["CONFIRMED"],
+  SCHEDULED: ["CONFIRMED", "RESCHEDULED"],
+  CONFIRMED: ["RESCHEDULED"],
+  RESCHEDULED: [],
   COMPLETED: [],
   CANCELLED: [],
 };
@@ -70,10 +88,31 @@ export async function applyMeetingUpdate(proposalId: string, meetingId: string, 
     }
   }
 
+  if (actor.type === "family") {
+    if (proposal.profileAId !== actor.profileId && proposal.profileBId !== actor.profileId) {
+      throw new MeetingWorkflowError(404, "Meeting not found");
+    }
+    // Both the specific-instance share AND the capability permission are
+    // required (Decision 7) — a FamilyPermission alone never suffices.
+    const share = await getSharedRecord(actor.familyMemberId, "MEETING", meetingId);
+    if (!share) throw new MeetingWorkflowError(404, "Meeting not found");
+    if (changes.scheduledAt !== undefined) {
+      throw new MeetingWorkflowError(403, "Only staff can commit a new meeting time. Propose a new time via reschedule notes instead.");
+    }
+    if (changes.status && !FAMILY_ALLOWED_TARGET[meeting.status].includes(changes.status)) {
+      throw new MeetingWorkflowError(403, "This meeting status change isn't available to you.");
+    }
+    const requiredPermission = changes.status === "CONFIRMED" ? "meeting.confirm" : changes.status === "RESCHEDULED" ? "meeting.reschedule" : null;
+    if (requiredPermission && !(await hasFamilyPermission(actor.familyMemberId, requiredPermission))) {
+      throw new MeetingWorkflowError(403, "You don't have permission to make this change.");
+    }
+  }
+
   let notes = changes.notes;
   if (changes.applicantRescheduleNote) {
     const stamp = new Date().toISOString();
-    const appended = `[Applicant proposed a new time — ${stamp}]: ${changes.applicantRescheduleNote}`;
+    const who = actor.type === "family" ? "A family member" : "Applicant";
+    const appended = `[${who} proposed a new time — ${stamp}]: ${changes.applicantRescheduleNote}`;
     notes = meeting.notes ? `${meeting.notes}\n${appended}` : appended;
   }
 
@@ -97,21 +136,29 @@ export async function applyMeetingUpdate(proposalId: string, meetingId: string, 
   const auditAction =
     actor.type === "admin"
       ? "MEETING_MODIFIED"
-      : changes.status === "CONFIRMED"
-        ? "MEETING_CONFIRMED_BY_APPLICANT"
-        : changes.status === "CANCELLED"
-          ? "MEETING_CANCELLED_BY_APPLICANT"
-          : "MEETING_RESCHEDULE_REQUESTED_BY_APPLICANT";
+      : actor.type === "family"
+        ? "FAMILY_MEETING_ACTION"
+        : changes.status === "CONFIRMED"
+          ? "MEETING_CONFIRMED_BY_APPLICANT"
+          : changes.status === "CANCELLED"
+            ? "MEETING_CANCELLED_BY_APPLICANT"
+            : "MEETING_RESCHEDULE_REQUESTED_BY_APPLICANT";
 
   await writeAudit({
     action: auditAction,
     adminId: actor.type === "admin" ? actor.adminId : null,
+    actorFamilyMemberId: actor.type === "family" ? actor.familyMemberId : null,
     targetProfileId: proposal.profileAId,
     meta: { proposalId, meetingId, status: changes.status },
   });
 
   if (changes.status) {
     await notifyMeetingUpdated(proposal.profileAId, proposal.profileBId, proposalId, changes.status, proposal.assignedToId);
+
+    const familyShares = await prisma.familySharedRecord.findMany({ where: { recordType: "MEETING", recordId: meetingId, status: "ACTIVE" }, select: { familyMemberId: true } });
+    if (familyShares.length > 0) {
+      await notifyFamilyMeetingUpdated(familyShares.map((s) => s.familyMemberId), proposalId);
+    }
   }
 
   return updated;

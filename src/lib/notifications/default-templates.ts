@@ -413,4 +413,46 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Emergency Override Used", body: "An emergency override was used on a high-risk action." },
     UR: { title: "ہنگامی اختیار استعمال ہوا", body: "ایک حساس اقدام پر ہنگامی اختیار استعمال کیا گیا۔" },
   },
+
+  // ---------- Family/Guardian Portal (STEP 22) ----------
+  FAMILY_INVITATION: {
+    EN: { title: "Family Invitation", subject: "You've Been Invited on Life Partner Pro", body: "You have been invited to assist a family member's matrimonial process on Life Partner Pro." },
+    UR: { title: "خاندانی دعوت نامہ", subject: "آپ کو لائف پارٹنر پرو پر مدعو کیا گیا ہے", body: "آپ کو ایک خاندان کے فرد کے رشتہ کے عمل میں مدد کے لیے مدعو کیا گیا ہے۔" },
+  },
+  FAMILY_ACCESS_GRANTED: {
+    EN: { title: "Family Access Granted", body: "Your access to assist with the matrimonial process has been updated." },
+    UR: { title: "خاندانی رسائی منظور", body: "رشتہ کے عمل میں مدد کے لیے آپ کی رسائی کو اپڈیٹ کر دیا گیا ہے۔" },
+  },
+  FAMILY_ACCESS_REVOKED: {
+    EN: { title: "Family Access Revoked", body: "Your access has been revoked. Please contact the applicant for details." },
+    UR: { title: "خاندانی رسائی منسوخ", body: "آپ کی رسائی منسوخ کر دی گئی ہے۔ تفصیلات کے لیے درخواست دہندہ سے رابطہ کریں۔" },
+  },
+  FAMILY_ACCESS_REQUEST: {
+    EN: { title: "Family Access Request", body: "A family member has requested additional access to your profile." },
+    UR: { title: "خاندانی رسائی کی درخواست", body: "ایک خاندان کے فرد نے آپ کی پروفائل تک اضافی رسائی کی درخواست کی ہے۔" },
+  },
+  FAMILY_PROPOSAL_SHARED: {
+    EN: { title: "A Proposal Was Shared With You", body: "A matrimonial proposal has been shared with you for review." },
+    UR: { title: "آپ کے ساتھ تجویز شیئر کی گئی", body: "جائزے کے لیے آپ کے ساتھ ایک رشتہ کی تجویز شیئر کی گئی ہے۔" },
+  },
+  FAMILY_PROPOSAL_UPDATED: {
+    EN: { title: "Shared Proposal Updated", body: "A proposal shared with you has been updated." },
+    UR: { title: "شیئر شدہ تجویز اپڈیٹ", body: "آپ کے ساتھ شیئر کردہ تجویز کو اپڈیٹ کر دیا گیا ہے۔" },
+  },
+  FAMILY_DECISION_REQUESTED: {
+    EN: { title: "Confirmation Needed", subject: "A Family Suggestion Needs Your Confirmation", body: "A family member has suggested a response to a proposal. Please review and confirm." },
+    UR: { title: "تصدیق درکار ہے", subject: "ایک خاندانی تجویز کو آپ کی تصدیق درکار ہے", body: "ایک خاندان کے فرد نے تجویز پر جواب تجویز کیا ہے۔ براہ کرم جائزہ لے کر تصدیق کریں۔" },
+  },
+  FAMILY_MEETING_UPDATED: {
+    EN: { title: "Meeting Update", body: "A meeting you're coordinating on has been updated." },
+    UR: { title: "ملاقات میں تبدیلی", body: "جس ملاقات میں آپ رابطہ کار ہیں اسے اپڈیٹ کر دیا گیا ہے۔" },
+  },
+  FAMILY_PERMISSION_EXPIRING: {
+    EN: { title: "Family Access Expiring Soon", body: "A family member's access is expiring soon." },
+    UR: { title: "خاندانی رسائی جلد ختم ہو رہی ہے", body: "ایک خاندان کے فرد کی رسائی جلد ختم ہونے والی ہے۔" },
+  },
+  FAMILY_PERMISSION_EXPIRED: {
+    EN: { title: "Family Access Expired", body: "A family member's access has expired." },
+    UR: { title: "خاندانی رسائی ختم", body: "ایک خاندان کے فرد کی رسائی ختم ہو چکی ہے۔" },
+  },
 };

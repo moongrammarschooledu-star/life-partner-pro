@@ -153,6 +153,22 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   APPROVAL_EXECUTED: ESSENTIAL,
   APPROVAL_EXECUTION_FAILED: ESSENTIAL,
   EMERGENCY_OVERRIDE_USED: ESSENTIAL,
+
+  // Family/Guardian Portal (STEP 22) — essential. Invitation/access/decision
+  // notices are security- and consent-adjacent (who can see this applicant's
+  // data), matching CONTACT_PERMISSION_*'s treatment above; there is no
+  // dedicated FAMILY PreferenceCategory in this pass (disclosed — a future
+  // step could add one if a granular opt-out is ever requested).
+  FAMILY_INVITATION: ESSENTIAL,
+  FAMILY_ACCESS_GRANTED: ESSENTIAL,
+  FAMILY_ACCESS_REVOKED: ESSENTIAL,
+  FAMILY_ACCESS_REQUEST: ESSENTIAL,
+  FAMILY_PROPOSAL_SHARED: ESSENTIAL,
+  FAMILY_PROPOSAL_UPDATED: ESSENTIAL,
+  FAMILY_DECISION_REQUESTED: ESSENTIAL,
+  FAMILY_MEETING_UPDATED: ESSENTIAL,
+  FAMILY_PERMISSION_EXPIRING: ESSENTIAL,
+  FAMILY_PERMISSION_EXPIRED: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

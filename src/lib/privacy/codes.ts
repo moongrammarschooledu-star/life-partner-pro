@@ -7,7 +7,27 @@ import { prisma } from "@/lib/prisma";
 // LPP-SHORT- codes (STEP 20) — mirrors src/lib/case-code.ts's exact
 // atomic-upsert pattern with a reusable key instead of many near-identical
 // single-purpose tables.
-export type SequencePrefix = "DEL" | "PRIV" | "PAY" | "SUB" | "ORD" | "INV" | "DISC" | "PKG" | "REF" | "REL" | "BKP" | "ALT" | "TASK" | "APR" | "SRCH" | "SHORT";
+export type SequencePrefix =
+  | "DEL"
+  | "PRIV"
+  | "PAY"
+  | "SUB"
+  | "ORD"
+  | "INV"
+  | "DISC"
+  | "PKG"
+  | "REF"
+  | "REL"
+  | "BKP"
+  | "ALT"
+  | "TASK"
+  | "APR"
+  | "SRCH"
+  | "SHORT"
+  | "FAM"
+  | "FAMGRP"
+  | "FAMREQ"
+  | "FAMDEC";
 
 export async function nextSequenceCode(prefix: SequencePrefix): Promise<string> {
   const counter = await prisma.sequenceCounter.upsert({

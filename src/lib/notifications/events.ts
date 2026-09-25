@@ -422,3 +422,49 @@ export async function notifyApprovalExecutionFailed(makerId: string, approvalCod
 export async function notifyEmergencyOverrideUsed(approvalCode: string, actionType: string) {
   await notifyAdmins({ type: "EMERGENCY_OVERRIDE_USED", data: { templateVars: { approvalCode, actionType } } });
 }
+
+// ---------- Family/Guardian Portal (STEP 22) ----------
+// Family recipients stay IN_APP only (no external dispatch pipeline for
+// FamilyMember in this pass — see notification-service.ts's family branch).
+// The invitation email itself is sent directly by src/lib/family/invitation.ts
+// (it must reach an inbox before any FamilyMember/session exists at all).
+
+export async function notifyFamilyInvitationAccepted(applicantId: string, familyMemberName: string) {
+  await sendNotification({ profileId: applicantId, type: "FAMILY_ACCESS_GRANTED", data: { templateVars: { familyMemberName } } });
+}
+
+export async function notifyFamilyAccessGranted(familyMemberId: string) {
+  await sendNotification({ familyMemberId, type: "FAMILY_ACCESS_GRANTED", data: {} });
+}
+
+export async function notifyFamilyAccessRevoked(familyMemberId: string) {
+  await sendNotification({ familyMemberId, type: "FAMILY_ACCESS_REVOKED", data: {} });
+}
+
+export async function notifyFamilyAccessRequestSubmitted(applicantId: string, familyMemberName: string) {
+  await sendNotification({ profileId: applicantId, type: "FAMILY_ACCESS_REQUEST", data: { templateVars: { familyMemberName } } });
+}
+
+export async function notifyFamilyAccessRequestDecision(familyMemberId: string, approved: boolean) {
+  await sendNotification({ familyMemberId, type: approved ? "FAMILY_ACCESS_GRANTED" : "FAMILY_ACCESS_REVOKED", data: {} });
+}
+
+export async function notifyFamilyProposalShared(familyMemberId: string, proposalId: string) {
+  await sendNotification({ familyMemberId, type: "FAMILY_PROPOSAL_SHARED", data: { relatedProposalId: proposalId } });
+}
+
+export async function notifyFamilyDecisionRequested(applicantId: string, proposalId: string) {
+  await sendNotification({ profileId: applicantId, type: "FAMILY_DECISION_REQUESTED", data: { relatedProposalId: proposalId } });
+}
+
+export async function notifyFamilyMeetingUpdated(familyMemberIds: string[], proposalId: string) {
+  await Promise.all(familyMemberIds.map((familyMemberId) => sendNotification({ familyMemberId, type: "FAMILY_MEETING_UPDATED", data: { relatedProposalId: proposalId } })));
+}
+
+export async function notifyFamilyPermissionExpiring(familyMemberId: string) {
+  await sendNotification({ familyMemberId, type: "FAMILY_PERMISSION_EXPIRING", data: {} });
+}
+
+export async function notifyFamilyPermissionExpired(familyMemberId: string) {
+  await sendNotification({ familyMemberId, type: "FAMILY_PERMISSION_EXPIRED", data: {} });
+}

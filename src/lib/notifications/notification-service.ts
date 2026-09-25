@@ -38,12 +38,19 @@ function getPreferenceValue(
   return typeof value === "boolean" ? value : null;
 }
 
-async function isDuplicateRecent(recipientProfileId: string | null, recipientAdminId: string | null, type: string, relatedProposalId: string | null) {
+async function isDuplicateRecent(
+  recipientProfileId: string | null,
+  recipientAdminId: string | null,
+  type: string,
+  relatedProposalId: string | null,
+  recipientFamilyMemberId: string | null = null
+) {
   const since = new Date(Date.now() - DUPLICATE_WINDOW_MS);
   const existing = await prisma.notification.findFirst({
     where: {
       recipientProfileId,
       recipientAdminId,
+      recipientFamilyMemberId,
       type: type as never,
       relatedProposalId,
       createdAt: { gte: since },
@@ -58,17 +65,18 @@ async function isDuplicateRecent(recipientProfileId: string | null, recipientAdm
 // caller's core matrimonial-workflow write (spec §31).
 export async function sendNotification(input: SendNotificationInput): Promise<void> {
   try {
-    const { profileId, adminId, type, data } = input;
-    if (!profileId && !adminId) return;
+    const { profileId, adminId, familyMemberId, type, data } = input;
+    if (!profileId && !adminId && !familyMemberId) return;
 
-    if (await isDuplicateRecent(profileId ?? null, adminId ?? null, type, data.relatedProposalId ?? null)) return;
+    if (await isDuplicateRecent(profileId ?? null, adminId ?? null, type, data.relatedProposalId ?? null, familyMemberId ?? null)) return;
 
     const language = profileId
       ? ((await prisma.profile.findUnique({ where: { id: profileId }, select: { preferredLanguage: true } }))?.preferredLanguage ?? "EN")
       : "EN";
 
+    const recipientKind = profileId ? "PROFILE" : familyMemberId ? "FAMILY" : "ADMIN";
     const inApp = await resolveTemplate(type, "IN_APP", language, data.templateVars ?? {});
-    const actionUrl = buildActionUrl(profileId ? "PROFILE" : "ADMIN", type, {
+    const actionUrl = buildActionUrl(recipientKind, type, {
       proposalId: data.relatedProposalId,
       profileId: data.relatedProfileId,
     });
@@ -77,6 +85,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
       data: {
         recipientProfileId: profileId ?? null,
         recipientAdminId: adminId ?? null,
+        recipientFamilyMemberId: familyMemberId ?? null,
         type,
         title: inApp.title,
         body: inApp.body,
@@ -86,7 +95,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
       },
     });
 
-    if (!profileId) return; // admin recipients get in-app only — no external dispatch
+    if (!profileId) return; // admin/family recipients get in-app only — no external dispatch
 
     const now = new Date();
     await prisma.communicationLog.create({

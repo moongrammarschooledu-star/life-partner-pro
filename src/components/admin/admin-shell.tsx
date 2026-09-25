@@ -66,6 +66,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/matching", label: "Matching Center", icon: Sparkles, permission: "match:run" },
   { href: "/admin/candidate-discovery", label: "Candidate Discovery", icon: SearchCheck, permission: "search:view" },
   { href: "/admin/matchmaking", label: "Matchmaking Workspace", icon: Layers, permission: "candidate:recommend" },
+  { href: "/admin/family-accounts", label: "Family Accounts", icon: Users, permission: "family:manage" },
   { href: "/admin/matches", label: "Match History", icon: History, permission: "match:run" },
   { href: "/admin/proposals", label: "Proposals", icon: Handshake, permission: "proposal:create" },
   { href: "/admin/meetings", label: "Meetings", icon: CalendarDays, permission: "proposal:create" },

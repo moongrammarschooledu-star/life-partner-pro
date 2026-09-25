@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Users, MessageSquarePlus } from "lucide-react";
+import { Loader2, Users, MessageSquarePlus, UserPlus, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -19,11 +19,12 @@ interface FamilyInteraction {
   nextFollowUpDate: string | null;
 }
 
-// STEP 21 Decision 5 — family involvement stays admin-mediated through the
-// applicant's own account; no separate family login is ever created.
-// Requesting outreach reuses the existing Support Center ticketing system
-// (Case model, category FAMILY_INTERACTION_REQUEST) rather than a parallel
-// inbox.
+// STEP 21 Decision 5 — admin-mediated family outreach (this page's own
+// interaction log) stays exactly as-is. STEP 22 adds a SEPARATE, genuinely
+// new capability alongside it: inviting a family member to their own
+// password-based account with scoped, delegated, revocable access — see
+// /dashboard/family/members and /dashboard/family/access. The two are
+// complementary, not a replacement of one by the other.
 export default function FamilyInteractionPage() {
   const [items, setItems] = useState<FamilyInteraction[] | null>(null);
 
@@ -40,9 +41,17 @@ export default function FamilyInteractionPage() {
           <h1 className="font-heading text-2xl font-semibold">Family Interaction</h1>
           <p className="mt-1 text-sm text-muted">A record of family outreach handled by our team on your behalf.</p>
         </div>
-        <Link href="/my-cases/new?type=SUPPORT&category=FAMILY_INTERACTION_REQUEST">
-          <Button size="sm"><MessageSquarePlus className="h-4 w-4" /> Request Family Outreach</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/family/members">
+            <Button size="sm" variant="outline"><UserPlus className="h-4 w-4" /> Invite Family Member</Button>
+          </Link>
+          <Link href="/dashboard/family/access">
+            <Button size="sm" variant="outline"><ShieldCheck className="h-4 w-4" /> Manage Access</Button>
+          </Link>
+          <Link href="/my-cases/new?type=SUPPORT&category=FAMILY_INTERACTION_REQUEST">
+            <Button size="sm"><MessageSquarePlus className="h-4 w-4" /> Request Family Outreach</Button>
+          </Link>
+        </div>
       </div>
 
       {items === null ? (

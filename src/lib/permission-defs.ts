@@ -249,6 +249,7 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "candidate:compare": "Compare multiple candidates side by side",
   "candidate:shortlist": "Create and manage candidate shortlists",
   "candidate:recommend": "Run mutual-compatibility candidate search",
+  "family:manage": "Search, review, suspend, and manage family/guardian accounts",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {
