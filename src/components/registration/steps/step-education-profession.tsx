@@ -10,10 +10,16 @@ export function StepEducationProfession({
   data,
   errors,
   onChange,
+  hideIncome,
 }: {
   data: WizardData["educationProfession"];
   errors: Record<string, string>;
   onChange: <K extends keyof WizardData["educationProfession"]>(field: K, value: WizardData["educationProfession"][K]) => void;
+  // Admin edit form only — an admin editing a profile without
+  // sensitive:income:view never sees these fields at all, so they can't be
+  // blanked out by an edit they didn't intend (see the PATCH route's
+  // raw-body-presence guard, which this omission is the client-side half of).
+  hideIncome?: boolean;
 }) {
   const { t } = useRegistrationLocale();
   const isJob = JOB_TYPES.has(data.employmentType);
@@ -107,14 +113,16 @@ export function StepEducationProfession({
               </>
             )}
 
-            {(isJob || isBusiness) && (
+            {!hideIncome && (isJob || isBusiness) && (
               <Field label={`🔒 ${t("monthlyIncome")}`} hint={t("adminOnlyIncome")} htmlFor="monthlyIncome">
                 <Input id="monthlyIncome" type="number" min={0} value={data.monthlyIncome} onChange={(e) => onChange("monthlyIncome", e.target.value)} />
               </Field>
             )}
-            <Field label={`🔒 ${t("annualIncome")}`} hint={t("adminOnlyIncome")} htmlFor="annualIncome">
-              <Input id="annualIncome" type="number" min={0} value={data.annualIncome} onChange={(e) => onChange("annualIncome", e.target.value)} />
-            </Field>
+            {!hideIncome && (
+              <Field label={`🔒 ${t("annualIncome")}`} hint={t("adminOnlyIncome")} htmlFor="annualIncome">
+                <Input id="annualIncome" type="number" min={0} value={data.annualIncome} onChange={(e) => onChange("annualIncome", e.target.value)} />
+              </Field>
+            )}
           </div>
         </OptionalSection>
       </div>

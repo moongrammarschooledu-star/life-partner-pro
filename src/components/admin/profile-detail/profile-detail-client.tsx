@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, ShieldCheck, Sparkles, CalendarPlus } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck, Sparkles, CalendarPlus, Pencil } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs } from "@/components/ui/tabs";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { StatusControl } from "@/components/admin/profile-detail/status-control"
 import { ContactPanel } from "@/components/admin/profile-detail/contact-panel";
 import { PendingUpdateCard } from "@/components/admin/profile-detail/pending-update-card";
 import { OverviewTab } from "@/components/admin/profile-detail/overview-tab";
+import { EditProfileForm } from "@/components/admin/profile-detail/edit-profile-form";
 import { MatchesTab } from "@/components/admin/profile-detail/matches-tab";
 import { NotesTab } from "@/components/admin/profile-detail/notes-tab";
 import { RestrictionsTab } from "@/components/admin/profile-detail/restrictions-tab";
@@ -19,6 +20,7 @@ import type { ProfileDetailDto } from "@/lib/serializers";
 
 const TABS = [
   { value: "overview", label: "Overview" },
+  { value: "edit", label: "Edit" },
   { value: "matches", label: "Matches" },
   { value: "notes", label: "Notes & Communication" },
   { value: "restrictions", label: "Cases & Restrictions" },
@@ -96,6 +98,9 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
             <Link href={`/admin/matching?seekerId=${profile.id}`} className={buttonClass({ variant: "outline", size: "sm" })}>
               <Sparkles className="h-4 w-4" /> Find Match
             </Link>
+            <Button variant="outline" size="sm" onClick={() => setTab("edit")}>
+              <Pencil className="h-4 w-4" /> Edit Profile
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setAddFollowUpOpen(true)}>
               <CalendarPlus className="h-4 w-4" /> Add Follow-up
             </Button>
@@ -108,6 +113,16 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
           <Tabs tabs={TABS} value={tab} onChange={setTab} className="mb-4" />
 
           {tab === "overview" && <OverviewTab profile={profile} />}
+          {tab === "edit" && (
+            <EditProfileForm
+              profile={profile}
+              onSaved={() => {
+                load();
+                setTab("overview");
+              }}
+              onCancel={() => setTab("overview")}
+            />
+          )}
           {tab === "matches" && <MatchesTab profileId={profile.id} />}
           {tab === "notes" && <NotesTab profileId={profile.id} notes={profile.notes} />}
           {tab === "restrictions" && <RestrictionsTab profileId={profile.id} />}

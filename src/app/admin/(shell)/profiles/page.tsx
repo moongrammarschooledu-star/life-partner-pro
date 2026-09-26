@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Users } from "lucide-react";
+import Link from "next/link";
+import { Users, UserPlus } from "lucide-react";
 import { FilterPanel, emptyFilters, type ProfileFilters } from "@/components/admin/filter-panel";
 import { ProfileTable } from "@/components/admin/profile-table";
 import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buttonClass } from "@/components/ui/button";
 import type { ProfileListDto } from "@/lib/serializers";
 
 export default function ProfilesPage() {
@@ -56,6 +58,9 @@ export default function ProfilesPage() {
           <h1 className="font-heading text-2xl font-semibold">Profiles</h1>
           <p className="text-sm text-muted">{total} profile{total === 1 ? "" : "s"} found</p>
         </div>
+        <Link href="/admin/profiles/new" className={buttonClass({ size: "sm" })}>
+          <UserPlus className="h-4 w-4" /> Add New Profile
+        </Link>
       </div>
 
       <FilterPanel

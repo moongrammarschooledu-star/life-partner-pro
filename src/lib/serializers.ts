@@ -107,6 +107,16 @@ export function toDetailDto(profile: ProfileDetail, viewerAdminId: string, permi
       adminName: n.admin.name,
       isOwnNote: n.adminId === viewerAdminId,
     })),
+    // Lets the admin edit form know whether it's safe to render/submit the
+    // fields toDetailDto redacted above — an admin who can't see income or
+    // family data must never have the edit form silently blank it out
+    // because the input looked empty (see PATCH's own raw-body-presence
+    // guard in admin/profiles/[id]/route.ts, which this flag exists to let
+    // the client cooperate with).
+    permissionFlags: {
+      canViewIncome: canViewIncome(permissions),
+      canViewFamily: canFamily,
+    },
     hasConsent: !!profile.consent,
     pendingUpdate: profile.pendingUpdate
       ? { id: profile.pendingUpdate.id, payload: JSON.parse(profile.pendingUpdate.payload), submittedAt: profile.pendingUpdate.submittedAt }

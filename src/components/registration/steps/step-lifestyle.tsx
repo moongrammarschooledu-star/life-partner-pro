@@ -53,21 +53,29 @@ function MultiCheckboxGroup({
 export function StepLifestyle({
   data,
   onChange,
+  hideReligious,
 }: {
   data: WizardData["lifestyle"];
   errors: Record<string, string>;
   onChange: <K extends keyof WizardData["lifestyle"]>(field: K, value: WizardData["lifestyle"][K]) => void;
+  // Admin edit form only — same reasoning as StepEducationProfession's
+  // hideIncome: an admin without sensitive:family:view never sees
+  // religion/sect/religiousPractice, so the fields are omitted rather than
+  // shown blank and then submitted as a silent clear.
+  hideReligious?: boolean;
 }) {
   const { t } = useRegistrationLocale();
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">{t("skipStepHint")}</p>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("religion")} htmlFor="religion">
-          <Input id="religion" value={data.religion} onChange={(e) => onChange("religion", e.target.value)} />
-        </Field>
-      </div>
+      {!hideReligious && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t("religion")} htmlFor="religion">
+            <Input id="religion" value={data.religion} onChange={(e) => onChange("religion", e.target.value)} />
+          </Field>
+        </div>
+      )}
 
       <Field label={t("languages")} htmlFor="languages">
         <MultiCheckboxGroup options={LANGUAGE_OPTIONS} value={data.languages} onChange={(v) => onChange("languages", v)} allowCustom />
@@ -75,14 +83,16 @@ export function StepLifestyle({
 
       <OptionalSection>
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("sect")} htmlFor="sect">
-          <Input id="sect" value={data.sect} onChange={(e) => onChange("sect", e.target.value)} />
-        </Field>
-        <Field label={t("religiousPractice")} htmlFor="religiousPractice">
-          <Input id="religiousPractice" value={data.religiousPractice} onChange={(e) => onChange("religiousPractice", e.target.value)} placeholder="e.g. Practicing" />
-        </Field>
-          </div>
+          {!hideReligious && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t("sect")} htmlFor="sect">
+                <Input id="sect" value={data.sect} onChange={(e) => onChange("sect", e.target.value)} />
+              </Field>
+              <Field label={t("religiousPractice")} htmlFor="religiousPractice">
+                <Input id="religiousPractice" value={data.religiousPractice} onChange={(e) => onChange("religiousPractice", e.target.value)} placeholder="e.g. Practicing" />
+              </Field>
+            </div>
+          )}
           <div className="flex gap-6">
             <Field label={t("smoking")} htmlFor="smoking">
               <Checkbox label={t("yes")} checked={data.smoking} onChange={(e) => onChange("smoking", e.target.checked)} />

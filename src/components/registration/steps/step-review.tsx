@@ -48,12 +48,17 @@ export function StepReview({
   onConsentChange,
   errors,
   onEditStep,
+  contextNote,
 }: {
   data: WizardData;
   photoFile: File | null;
   onConsentChange: <K extends keyof WizardData["consent"]>(field: K, value: WizardData["consent"][K]) => void;
   errors: Record<string, string>;
   onEditStep: (step: number) => void;
+  // Admin-created-profile wizard only — an explanatory line shown above the
+  // consent checkboxes, since the person ticking them there is staff
+  // attesting to the applicant's own consent, not the applicant themselves.
+  contextNote?: React.ReactNode;
 }) {
   const { t } = useRegistrationLocale();
   const { percent, suggestions } = computeCompletion({
@@ -133,6 +138,7 @@ export function StepReview({
 
       <div className="rounded-lg border border-border bg-surface-muted p-4">
         <p className="font-medium mb-2">{t("consentTitle")}</p>
+        {contextNote && <div className="mb-3 text-xs text-muted">{contextNote}</div>}
         <div className="space-y-2.5">
           <div>
             <Checkbox label={t("consentAccurate")} checked={data.consent.accurate} onChange={(e) => onConsentChange("accurate", e.target.checked)} />
