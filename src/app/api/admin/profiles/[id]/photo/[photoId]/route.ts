@@ -4,6 +4,7 @@ import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { readPhoto } from "@/lib/storage";
 import { writeAudit } from "@/lib/audit";
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
+import { resolvePurposeForPermission } from "@/lib/compliance/purpose-mapping";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string; photoId: string }> }) {
   try {
@@ -16,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const buffer = await readPhoto(photo.storageKey, photo.ivBase64, photo.authTagBase64);
 
     await writeAudit({ action: "PHOTO_VIEWED", adminId: admin.id, targetProfileId: id, meta: { photoId } });
-    await logPrivacyAccess({ actorAdminId: admin.id, action: "PHOTO_VIEWED", field: "profilePhoto", targetProfileId: id });
+    await logPrivacyAccess({ actorAdminId: admin.id, action: "PHOTO_VIEWED", field: "profilePhoto", targetProfileId: id, purpose: resolvePurposeForPermission("profile:view") });
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

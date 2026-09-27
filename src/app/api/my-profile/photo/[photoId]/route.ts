@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ photoId
   const buffer = await readPhoto(photo.storageKey, photo.ivBase64, photo.authTagBase64);
 
   await writeAudit({ action: "PHOTO_VIEWED", targetProfileId: profileId, meta: { photoId } });
-  await logPrivacyAccess({ actorProfileId: profileId, action: "PHOTO_VIEWED", field: "profilePhoto", targetProfileId: profileId });
+  await logPrivacyAccess({ actorProfileId: profileId, action: "PHOTO_VIEWED", field: "profilePhoto", targetProfileId: profileId, purpose: "ACCOUNT_OPERATION" });
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: { "Content-Type": photo.mimeType, "Cache-Control": "private, max-age=3600" },

@@ -7,6 +7,7 @@ import { assertContactShareAllowed, resolveAdHocContactAccessLevel, ContactShare
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
 import { redactForAudit } from "@/lib/privacy/audit-redaction";
 import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
+import { resolvePurposeForPermission } from "@/lib/compliance/purpose-mapping";
 
 // Reveals contact info for a single profile. Every call is audited — this is
 // the only code path in the app that ever reads ContactInfo for display.
@@ -29,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!contact) throw new ApiError(404, "Contact info not found");
 
     await writeAudit({ action: "CONTACT_VIEWED", adminId: admin.id, targetProfileId: id, meta: redactForAudit({ mobileNumber: contact.mobileNumber, email: contact.email }) });
-    await logPrivacyAccess({ actorAdminId: admin.id, action: "CONTACT_VIEWED", field: "mobileNumber", targetProfileId: id });
+    await logPrivacyAccess({ actorAdminId: admin.id, action: "CONTACT_VIEWED", field: "mobileNumber", targetProfileId: id, purpose: "CONTACT_SHARING" });
 
     return NextResponse.json({
       mobileNumber: contact.mobileNumber,
@@ -116,7 +117,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       targetProfileId: id,
       meta: { otherProfileId, shareId: share.id, accessLevel: accessResult.level, overrideReason: overrideReason ?? null, phoneShared: !!phoneShared, whatsappShared: !!whatsappShared, emailShared: !!emailShared },
     });
-    await logPrivacyAccess({ actorAdminId: admin.id, action: "CONTACT_SHARED", field: "mobileNumber", targetProfileId: id, reason: overrideReason ?? null });
+    await logPrivacyAccess({ actorAdminId: admin.id, action: "CONTACT_SHARED", field: "mobileNumber", targetProfileId: id, reason: overrideReason ?? null, purpose: resolvePurposeForPermission("contact:reveal") });
     if (gate.requiresApproval) await markApprovalExecuted(gate.approvalRequestId, admin.id);
 
     return NextResponse.json({ ok: true, sharedAt: share.sharedAt, accessLevel: accessResult.level });

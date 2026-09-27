@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
 import { hasBroadRecordAccess } from "@/lib/permissions";
+import { resolvePurposeForPermission } from "@/lib/compliance/purpose-mapping";
 
 // Spec §37 — Payment/Customer/Order/Invoice/Refunds/Timeline/Audit sections.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +32,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     });
     if (!payment) throw new ApiError(404, "Payment not found");
 
-    await logPrivacyAccess({ actorAdminId: admin.id, action: "PAYMENT_VIEWED", field: "payment", targetProfileId: payment.profileId });
+    await logPrivacyAccess({ actorAdminId: admin.id, action: "PAYMENT_VIEWED", field: "payment", targetProfileId: payment.profileId, purpose: resolvePurposeForPermission("finance:payments:view") });
 
     return NextResponse.json(payment);
   } catch (error) {

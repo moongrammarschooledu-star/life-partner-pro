@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { nextSequenceCode } from "@/lib/privacy/codes";
 import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
-import { createTask } from "@/lib/workflow/engine";
+import { createTask, createFromEvent } from "@/lib/workflow/engine";
+import { notifyAdmins } from "@/lib/notifications/notification-service";
 import type { SessionAdmin } from "@/lib/route-guard";
 import type { ComplianceSourceType } from "@prisma/client";
 
@@ -152,6 +153,42 @@ export async function activateRule(ruleId: string, actor: SessionAdmin) {
 
   const rule = await prisma.complianceRule.update({ where: { id: ruleId }, data: { status: "ACTIVE" } });
   await writeAudit({ action: "COMPLIANCE_RULE_STATUS_CHANGED", adminId: actor.id, meta: { ruleId, status: "ACTIVE" } });
+
+  // Never blocks activation (the legal decision already happened in
+  // approveRule()) — this only flags for a human to decide which rule should
+  // actually govern when two ACTIVE rules could both apply to the same
+  // jurisdiction+requirementType with overlapping effective windows. The
+  // rule engine itself already has a deterministic tiebreak (highest
+  // ruleVersion wins), so this is a heads-up, not a correctness gap.
+  const now = new Date();
+  const overlapping = await prisma.complianceRule.findMany({
+    where: {
+      id: { not: rule.id },
+      jurisdictionId: rule.jurisdictionId,
+      requirementType: rule.requirementType,
+      status: "ACTIVE",
+      effectiveFrom: { lte: rule.effectiveTo ?? new Date(8640000000000000) },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: rule.effectiveFrom } }],
+    },
+  });
+  if (overlapping.length > 0) {
+    const day = now.toISOString().slice(0, 10);
+    await createFromEvent({
+      eventName: "COMPLIANCE_POLICY_CONFLICT",
+      dedupKey: `POLICY_CONFLICT:${rule.jurisdictionId}:${rule.requirementType}:${day}`,
+      resourceType: "CASE",
+      resourceId: rule.id,
+      taskType: "COMPLIANCE_REVIEW",
+      title: "Compliance policy conflict — multiple ACTIVE rules overlap",
+      description: `Rule ${rule.ruleCode} conflicts with ${overlapping.map((r) => r.ruleCode).join(", ")} for the same jurisdiction/requirementType.`,
+    });
+    await notifyAdmins({
+      type: "COMPLIANCE_POLICY_CONFLICT",
+      data: { templateVars: { ruleCode: rule.ruleCode } },
+      roles: ["COMPLIANCE_MANAGER"],
+    });
+  }
+
   return rule;
 }
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
 import { maskEmail, maskPhone } from "@/lib/verification/otp";
+import { resolvePurposeForPermission } from "@/lib/compliance/purpose-mapping";
 
 // Read-only aggregation view (spec §24) — no new evidence table. Every
 // record here already exists and is already immutable-by-construction
@@ -27,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ profile
       prisma.profileNote.findMany({ where: { profileId }, orderBy: { createdAt: "desc" }, take: 20, include: { admin: { select: { name: true } } } }),
     ]);
 
-    await logPrivacyAccess({ actorAdminId: admin.id, action: "VERIFICATION_EVIDENCE_VIEWED", field: "verificationDocument", targetProfileId: profileId });
+    await logPrivacyAccess({ actorAdminId: admin.id, action: "VERIFICATION_EVIDENCE_VIEWED", field: "verificationDocument", targetProfileId: profileId, purpose: resolvePurposeForPermission("sensitive:verification:view") });
 
     return NextResponse.json({
       verification: verification

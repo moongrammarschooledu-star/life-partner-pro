@@ -9,6 +9,7 @@ import { runDueSubscriptionRenewals } from "@/lib/finance/subscription";
 import { runScheduledReconciliation } from "@/lib/finance/reconciliation";
 import { runWorkflowAutomationSweep } from "@/lib/workflow/automation-sweep";
 import { runApprovalAutomationSweep } from "@/lib/approvals/automation-sweep";
+import { runComplianceReminders } from "@/lib/compliance/reminders";
 
 // The single daily tick (Vercel Hobby allows exactly one cron job). Every
 // sub-task is isolated (one failing task no longer discards the others'
@@ -25,6 +26,7 @@ export const CRON_TASKS = [
   { name: "payment-reconciliation", label: "Payment reconciliation (per configured frequency)", schedule: "daily tick" },
   { name: "workflow-automation", label: "Task SLA sweep, auto-escalation & automation retry", schedule: "daily tick" },
   { name: "approval-automation", label: "Approval expiration sweep & expiring-soon reminders", schedule: "daily tick" },
+  { name: "compliance-reminders", label: "Compliance rule/processor/authority-request due-date reminders", schedule: "daily tick" },
   { name: "enqueue-jobs", label: "Schedule daily background jobs", schedule: "daily tick" },
   { name: "job-worker", label: "Background job worker", schedule: "daily tick + manual" },
   { name: "alert-evaluation", label: "Monitoring alert evaluation", schedule: "daily tick" },
@@ -59,6 +61,7 @@ export async function runDailyTick(correlationId?: string) {
         runCronTask("payment-reconciliation", runScheduledReconciliation, opts),
         runCronTask("workflow-automation", runWorkflowAutomationSweep, opts),
         runCronTask("approval-automation", runApprovalAutomationSweep, opts),
+        runCronTask("compliance-reminders", runComplianceReminders, opts),
       ]);
       const enqueue = await runCronTask("enqueue-jobs", enqueueDailyJobs, opts);
       const worker = await runCronTask("job-worker", () => runDueJobs({ limit: 8, budgetMs: 30_000 }), opts);

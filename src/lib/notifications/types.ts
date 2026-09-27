@@ -1,4 +1,5 @@
 import type { NotificationType } from "@prisma/client";
+import type { AdminRole } from "@/lib/permissions";
 
 // Shared input shapes for the notification service (src/lib/notifications/notification-service.ts).
 // Exactly one of profileId/adminId/familyMemberId must be set on SendNotificationInput.
@@ -27,4 +28,10 @@ export interface NotifyAdminsInput {
   type: NotificationType;
   data: SendNotificationInput["data"];
   assignedAdminId?: string | null;
+  // STEP 23 Add-on — targets a specific role set (e.g. COMPLIANCE_MANAGER)
+  // instead of the default SUPER_ADMIN/ADMIN/OPERATIONS_ADMIN fan-out.
+  // SUPER_ADMIN is always included alongside whatever is given here, so a
+  // compliance-only notification is never invisible to the one role that
+  // can always see everything.
+  roles?: AdminRole[];
 }

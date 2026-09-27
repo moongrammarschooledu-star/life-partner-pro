@@ -16,10 +16,16 @@ let gateCalls: Record<string, unknown>[];
 let gateResult: { requiresApproval: boolean; status?: string; approvalRequestId?: string; approvalCode?: string };
 let executedCalls: string[];
 let taskCalls: Record<string, unknown>[];
+let eventCalls: Record<string, unknown>[];
+let notifyCalls: Record<string, unknown>[];
 
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async (call: Record<string, unknown>) => { auditCalls.push(call); }) }));
 vi.mock("@/lib/privacy/codes", () => ({ nextSequenceCode: vi.fn(async () => `LPP-CRULE-${String(++seq).padStart(6, "0")}`) }));
-vi.mock("@/lib/workflow/engine", () => ({ createTask: vi.fn(async (call: Record<string, unknown>) => { taskCalls.push(call); return { id: "task1" }; }) }));
+vi.mock("@/lib/workflow/engine", () => ({
+  createTask: vi.fn(async (call: Record<string, unknown>) => { taskCalls.push(call); return { id: "task1" }; }),
+  createFromEvent: vi.fn(async (call: Record<string, unknown>) => { eventCalls.push(call); return { id: "task2" }; }),
+}));
+vi.mock("@/lib/notifications/notification-service", () => ({ notifyAdmins: vi.fn(async (call: Record<string, unknown>) => { notifyCalls.push(call); }) }));
 vi.mock("@/lib/approvals/gate", () => ({
   enforceApprovalGate: vi.fn(async (params: Record<string, unknown>) => { gateCalls.push(params); return gateResult; }),
   markApprovalExecuted: vi.fn(async (id: string) => { executedCalls.push(id); }),
@@ -45,13 +51,20 @@ vi.mock("@/lib/prisma", () => ({
         return row;
       }),
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => rules.get(where.id) ?? null),
-      findMany: vi.fn(async ({ where }: { where: { jurisdictionId?: string; status?: string; reviewDate?: { lte: Date } } }) => {
-        return [...rules.values()].filter(
-          (r) =>
-            (!where.jurisdictionId || r.jurisdictionId === where.jurisdictionId) &&
-            (!where.status || r.status === where.status) &&
-            (!where.reviewDate || (r.reviewDate && r.reviewDate <= where.reviewDate.lte))
-        );
+      findMany: vi.fn(async ({ where }: { where: { id?: { not: string }; jurisdictionId?: string; requirementType?: string; status?: string; reviewDate?: { lte: Date }; effectiveFrom?: { lte: Date }; OR?: Array<{ effectiveTo: null } | { effectiveTo: { gt: Date } }> } }) => {
+        return [...rules.values()].filter((r) => {
+          if (where.id && r.id === where.id.not) return false;
+          if (where.jurisdictionId && r.jurisdictionId !== where.jurisdictionId) return false;
+          if (where.requirementType && r.requirementType !== where.requirementType) return false;
+          if (where.status && r.status !== where.status) return false;
+          if (where.reviewDate && !(r.reviewDate && r.reviewDate <= where.reviewDate.lte)) return false;
+          if (where.effectiveFrom && !(r.effectiveFrom <= where.effectiveFrom.lte)) return false;
+          if (where.OR) {
+            const overlapOk = where.OR.some((clause) => ("effectiveTo" in clause && clause.effectiveTo === null ? r.effectiveTo === null : r.effectiveTo !== null && r.effectiveTo > (clause as { effectiveTo: { gt: Date } }).effectiveTo.gt));
+            if (!overlapOk) return false;
+          }
+          return true;
+        });
       }),
     },
   },
@@ -84,6 +97,8 @@ beforeEach(() => {
   executedCalls = [];
   gateResult = { requiresApproval: false };
   taskCalls = [];
+  eventCalls = [];
+  notifyCalls = [];
 });
 
 describe("createRule", () => {
@@ -146,6 +161,51 @@ describe("state machine transitions", () => {
     await approveRule(rule.id, actor, "reason");
     const activated = await activateRule(rule.id, actor);
     expect(activated.status).toBe("ACTIVE");
+  });
+
+  it("activating a rule with no overlapping ACTIVE rule never flags a conflict", async () => {
+    const rule = await makeDraftRule();
+    await submitRuleForReview(rule.id, actor);
+    await approveRule(rule.id, actor, "reason");
+    await activateRule(rule.id, actor);
+    expect(eventCalls).toHaveLength(0);
+    expect(notifyCalls).toHaveLength(0);
+  });
+
+  it("activating a rule that overlaps another ACTIVE rule for the same jurisdiction+requirementType flags COMPLIANCE_POLICY_CONFLICT, but still activates", async () => {
+    const first = await makeDraftRule();
+    await submitRuleForReview(first.id, actor);
+    await approveRule(first.id, actor, "reason");
+    await activateRule(first.id, actor);
+
+    const second = await createRule(
+      { jurisdictionId: "j1", subject: "verification.document.CNIC", requirementType: "AGE_MINIMUM", description: "second", sourceType: "LAW" as never, effectiveFrom: new Date("2026-01-01"), configuration: { minAge: 21 } },
+      actor
+    );
+    await submitRuleForReview(second.id, actor);
+    await approveRule(second.id, actor, "reason");
+    const activated = await activateRule(second.id, actor);
+
+    expect(activated.status).toBe("ACTIVE"); // never blocked
+    expect(eventCalls[0]).toMatchObject({ eventName: "COMPLIANCE_POLICY_CONFLICT", taskType: "COMPLIANCE_REVIEW" });
+    expect(notifyCalls[0]).toMatchObject({ type: "COMPLIANCE_POLICY_CONFLICT", roles: ["COMPLIANCE_MANAGER"] });
+  });
+
+  it("does not flag a conflict against a rule in a different jurisdiction or requirementType", async () => {
+    const first = await makeDraftRule();
+    await submitRuleForReview(first.id, actor);
+    await approveRule(first.id, actor, "reason");
+    await activateRule(first.id, actor);
+
+    const differentType = await createRule(
+      { jurisdictionId: "j1", subject: "*", requirementType: "RETENTION_PERIOD", description: "unrelated", sourceType: "LAW" as never, effectiveFrom: new Date("2026-01-01"), configuration: {} },
+      actor
+    );
+    await submitRuleForReview(differentType.id, actor);
+    await approveRule(differentType.id, actor, "reason");
+    await activateRule(differentType.id, actor);
+
+    expect(eventCalls).toHaveLength(0);
   });
 
   it("suspendRule requires ACTIVE status", async () => {

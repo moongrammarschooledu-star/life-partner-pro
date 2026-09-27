@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { nextSequenceCode } from "@/lib/privacy/codes";
 import { isCrossBorderTransferAllowed } from "@/lib/compliance/rule-engine";
+import { createFromEvent } from "@/lib/workflow/engine";
+import { notifyAdmins } from "@/lib/notifications/notification-service";
 import type { DataClassification, TransferStatus } from "@prisma/client";
 
 export interface AssessTransferInput {
@@ -74,15 +76,34 @@ export async function assessTransfer(input: AssessTransferInput) {
     meta: { assessmentId: assessment.id, assessmentCode: assessment.assessmentCode, status, dataClass: input.dataClass, dataType: input.dataType },
   });
 
-  // Deliberately does NOT auto-create a TRANSFER_REVIEW AdminTask here: this
-  // function is called on every verification-provider session (best-effort,
-  // non-blocking — src/lib/verification/provider/session.ts), and
+  // A TRANSFER_REVIEW task/notification IS created for a non-ALLOWED outcome,
+  // but deduplicated once per day per (provider, destination) pair rather
+  // than once per assessment — this function is called on every
+  // verification-provider session (best-effort, non-blocking), and
   // REVIEW_REQUIRED/UNKNOWN is the default outcome until jurisdictions are
-  // actually configured. Auto-dispatching a task per assessment would flood
-  // the task queue long before any admin has set up a single Jurisdiction
-  // row. The Compliance dashboard/reviews pages already surface the
-  // aggregate "transfers needing review" count; TRANSFER_REVIEW remains
-  // available for a future, more targeted trigger (e.g. only once per
-  // distinct provider/jurisdiction pair) rather than one per assessment.
+  // actually configured, so a per-assessment task would flood the queue.
+  // The dedup key, not a separate "already notified" flag, is what prevents
+  // the flood — createFromEvent's unique constraint on WorkflowEvent.dedupKey
+  // silently no-ops a repeat within the same day.
+  if (status !== "ALLOWED") {
+    const day = new Date().toISOString().slice(0, 10);
+    const bucket = `${input.provider ?? "unknown-provider"}:${input.destJurisdictionCode ?? "unknown-destination"}`;
+    await createFromEvent({
+      eventName: status === "UNKNOWN" ? "TRANSFER_JURISDICTION_UNKNOWN" : "TRANSFER_REVIEW_REQUIRED",
+      dedupKey: `${status === "UNKNOWN" ? "JURISDICTION_UNKNOWN" : "TRANSFER_REVIEW"}:${bucket}:${day}`,
+      resourceType: "CASE",
+      resourceId: assessment.id,
+      taskType: status === "UNKNOWN" ? "JURISDICTION_REVIEW" : "TRANSFER_REVIEW",
+      priority: status === "BLOCKED" ? "HIGH" : "NORMAL",
+      title: status === "UNKNOWN" ? "Cross-border transfer: jurisdiction could not be resolved" : "Cross-border transfer needs compliance review",
+      description: `Provider: ${input.provider ?? "n/a"}, destination: ${input.destJurisdictionCode ?? "n/a"}, status: ${status}`,
+    });
+    await notifyAdmins({
+      type: status === "UNKNOWN" ? "COMPLIANCE_JURISDICTION_UNKNOWN" : "COMPLIANCE_TRANSFER_REVIEW_REQUIRED",
+      data: { templateVars: { assessmentCode: assessment.assessmentCode, status } },
+      roles: ["COMPLIANCE_MANAGER"],
+    });
+  }
+
   return assessment;
 }

@@ -3817,15 +3817,21 @@ model DataExportRequest {
 // src/lib/privacy/data-classification.ts reference table, not computed by a
 // runtime policy engine.
 model PrivacyAccessLog {
-  id              String             @id @default(cuid())
-  actorAdmin      AdminUser?         @relation(fields: [actorAdminId], references: [id])
+  id              String                 @id @default(cuid())
+  actorAdmin      AdminUser?             @relation(fields: [actorAdminId], references: [id])
   actorAdminId    String?
   actorProfileId  String?
   action          String // "CONTACT_VIEWED" | "EXPORT_DOWNLOADED" | "PHOTO_VIEWED" | ...
   dataCategory    DataClassification
   targetProfileId String?
   reason          String?
-  createdAt       DateTime           @default(now())
+  // STEP 23 Add-on §14 — purpose-limitation tagging, derived from the
+  // permission the caller already checked (see
+  // src/lib/compliance/purpose-mapping.ts). Additive and nullable: this
+  // records WHY an access happened, it never gates it (see this model's own
+  // header comment in access-log.ts).
+  purpose         DataProcessingPurpose?
+  createdAt       DateTime               @default(now())
 
   @@index([targetProfileId, createdAt])
   @@index([actorAdminId, createdAt])

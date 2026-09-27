@@ -254,8 +254,9 @@ export async function notifyAdmins(input: NotifyAdminsInput): Promise<void> {
       await sendNotification({ adminId: input.assignedAdminId, type: input.type, data: input.data });
       return;
     }
+    const roles = input.roles?.length ? [...new Set([...input.roles, "SUPER_ADMIN"])] : ["SUPER_ADMIN", "ADMIN", "OPERATIONS_ADMIN"];
     const admins = await prisma.adminUser.findMany({
-      where: { active: true, role: { in: ["SUPER_ADMIN", "ADMIN", "OPERATIONS_ADMIN"] } },
+      where: { active: true, role: { in: roles as never[] } },
       select: { id: true },
     });
     await Promise.all(admins.map((a) => sendNotification({ adminId: a.id, type: input.type, data: input.data })));

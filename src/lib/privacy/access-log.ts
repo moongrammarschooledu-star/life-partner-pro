@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { classify } from "@/lib/privacy/data-classification";
+import type { DataProcessingPurpose } from "@prisma/client";
 
 // Spec §30 — a focused, queryable-without-scanning-AuditLog access trail for
 // high-sensitivity touchpoints, mirroring STEP 12's CaseAccessLog precedent.
@@ -13,6 +14,11 @@ export async function logPrivacyAccess(params: {
   field: string; // looked up in data-classification.ts for the stored category
   targetProfileId?: string | null;
   reason?: string | null;
+  // STEP 23 Add-on — purpose-limitation tagging (see
+  // src/lib/compliance/purpose-mapping.ts's resolvePurposeForPermission()).
+  // Optional and additive; omitting it changes nothing about this
+  // function's existing, non-gating behavior.
+  purpose?: DataProcessingPurpose | null;
 }) {
   await prisma.privacyAccessLog.create({
     data: {
@@ -22,6 +28,7 @@ export async function logPrivacyAccess(params: {
       dataCategory: classify(params.field),
       targetProfileId: params.targetProfileId ?? null,
       reason: params.reason ?? null,
+      purpose: params.purpose ?? null,
     },
   });
 }
