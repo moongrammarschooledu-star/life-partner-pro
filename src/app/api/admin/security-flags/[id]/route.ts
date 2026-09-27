@@ -11,17 +11,27 @@ const VALID_STATUSES: SecurityFlagStatus[] = ["OPEN", "INVESTIGATING", "RESOLVED
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const admin = await requireAdmin("verification:flag:manage");
+    // STEP 23 — the new Risk Signals workspace acts on this exact route
+    // rather than a parallel one (SecurityFlag already IS the risk-signal
+    // store, see the STEP 23 plan). verification:flag:manage remains
+    // sufficient on its own (unchanged for existing callers); risk:review/
+    // risk:resolve are the narrower STEP 23 grants that let a
+    // VERIFICATION_MANAGER-style role act here without the broader
+    // flag-management permission.
+    const admin = await requireAdmin();
     const { id } = await params;
     const { status, assignedToId, resolution } = await req.json();
 
     if (status && !VALID_STATUSES.includes(status)) throw new ApiError(400, "Invalid status");
+    const isResolving = status === "RESOLVED" || status === "DISMISSED";
+
+    const hasBroadAccess = admin.permissions.includes("verification:flag:manage");
+    const hasNarrowAccess = admin.permissions.includes(isResolving ? "risk:resolve" : "risk:review");
+    if (!hasBroadAccess && !hasNarrowAccess) throw new ApiError(403, "You do not have permission to manage this flag.");
 
     const existing = await prisma.securityFlag.findUnique({ where: { id } });
     if (!existing) throw new ApiError(404, "Not found");
     assertSecurityFlagAccess(admin, existing);
-
-    const isResolving = status === "RESOLVED" || status === "DISMISSED";
     const isReassigning = assignedToId !== undefined && assignedToId !== existing.assignedToId;
 
     const flag = await prisma.securityFlag.update({

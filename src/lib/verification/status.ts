@@ -86,7 +86,11 @@ const NOTIFICATION_TYPE_FOR_STATUS: Partial<
 };
 
 interface SetStatusOptions {
-  adminId: string;
+  // Optional (STEP 23) — a system-triggered transition (e.g. a verified
+  // identity-provider webhook, see src/lib/verification/provider/webhook.ts)
+  // has no acting admin. writeAudit()'s own convention already treats a
+  // missing adminId as "not an admin action" rather than requiring one.
+  adminId?: string;
   note?: string;
   rejectionReasonCategory?: string;
   rejectionNote?: string;
@@ -121,8 +125,10 @@ export async function setVerificationStatus(profileId: string, newStatus: Verifi
 
   const data: Record<string, unknown> = {
     status: newStatus,
-    lastReviewedAt: new Date(),
-    lastReviewedById: opts.adminId,
+    // A system-triggered transition (no adminId — see SetStatusOptions) isn't
+    // an admin "review", so it leaves lastReviewedAt/lastReviewedById alone
+    // rather than misattributing it.
+    ...(opts.adminId ? { lastReviewedAt: new Date(), lastReviewedById: opts.adminId } : {}),
   };
   if (newStatus === "VERIFICATION_REJECTED") {
     data.rejectionReasonCategory = opts.rejectionReasonCategory ?? null;
@@ -149,7 +155,9 @@ export async function setVerificationStatus(profileId: string, newStatus: Verifi
     prisma.profile.update({ where: { id: profileId }, data: { verified: nextVerified } }),
   ]);
 
-  if (opts.note && opts.note.trim()) {
+  // A note is inherently admin-authored — a system-triggered transition
+  // (no adminId) never leaves one, even if a caller somehow passed opts.note.
+  if (opts.note && opts.note.trim() && opts.adminId) {
     await prisma.profileNote.create({ data: { profileId, adminId: opts.adminId, text: opts.note.trim() } });
   }
 

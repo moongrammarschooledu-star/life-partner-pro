@@ -88,6 +88,18 @@ export async function POST(req: Request) {
       throw new ApiError(403, "One of these profiles is currently restricted from receiving proposals.");
     }
 
+    // STEP 23 §11/§20/§27 — a broader, safety-review-driven pause on ALL new
+    // proposal activity (e.g. while a duplicate/risk review is open),
+    // distinct from CANNOT_RECEIVE_PROPOSAL's narrower "opted out of
+    // receiving proposals" restriction.
+    const [aNoNewProposals, bNoNewProposals] = await Promise.all([
+      hasActiveRestriction(profileAId, "NO_NEW_PROPOSALS"),
+      hasActiveRestriction(profileBId, "NO_NEW_PROPOSALS"),
+    ]);
+    if (aNoNewProposals || bNoNewProposals) {
+      throw new ApiError(403, "One of these profiles currently requires additional review before a new proposal can be created.");
+    }
+
     // Match creation never implies contact sharing (spec §4) — this only
     // records the proposal + a snapshot of the match score it came from.
     let matchScore: number | undefined;

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
-import { findDuplicateSignals, type DuplicateCandidateProfile } from "@/lib/verification/duplicate-detection";
+import { findDuplicateSignals, computeDuplicateConfidence, type DuplicateCandidateProfile } from "@/lib/verification/duplicate-detection";
 import { notifyDuplicateScanSummary } from "@/lib/notifications/events";
+import { nextSequenceCode } from "@/lib/privacy/codes";
 
 // Admin-triggered scan (spec §12) — never a background cron, matching the
 // project's existing match-caching deferral precedent. Never auto-deletes;
@@ -28,7 +29,8 @@ export async function POST() {
     for (const profile of candidates) {
       const matches = findDuplicateSignals(profile, candidates);
       for (const match of matches) {
-        const pairKey = [profile.id, match.candidateId].sort().join(":");
+        const [profileAId, profileBId] = [profile.id, match.candidateId].sort();
+        const pairKey = `${profileAId}:${profileBId}`;
         if (seenPairs.has(pairKey)) continue;
         seenPairs.add(pairKey);
 
@@ -44,13 +46,43 @@ export async function POST() {
         });
         if (existing) continue;
 
-        await prisma.securityFlag.create({
+        // STEP 23 — an already-reviewed pair (confirmed OR explicitly
+        // dismissed as unrelated) is never re-flagged (plan decision 8).
+        const existingRelationship = await prisma.accountRelationship.findFirst({
+          where: {
+            status: "ACTIVE",
+            relationshipType: { in: ["CONFIRMED_DUPLICATE", "UNKNOWN_RELATIONSHIP"] },
+            OR: [
+              { profileId: profileAId, relatedProfileId: profileBId },
+              { profileId: profileBId, relatedProfileId: profileAId },
+            ],
+          },
+        });
+        if (existingRelationship) continue;
+
+        const flag = await prisma.securityFlag.create({
           data: {
             profileId: profile.id,
             relatedProfileId: match.candidateId,
             flagType: "DUPLICATE_PROFILE_SUSPECTED",
             severity: match.signals.includes("MOBILE") || match.signals.includes("EMAIL") ? "HIGH" : "MEDIUM",
             description: `Possible duplicate detected via: ${match.signals.join(", ")}.`,
+          },
+        });
+
+        // STEP 23 — the richer evidence companion (plan decision 3), always
+        // recorded with a consistent (sorted) profile ordering so a pair
+        // scanned from either direction never creates two candidate rows.
+        const confidence = computeDuplicateConfidence(match.signals);
+        await prisma.duplicateCandidate.create({
+          data: {
+            candidateCode: await nextSequenceCode("DUPC"),
+            profileId: profileAId,
+            candidateProfileId: profileBId,
+            securityFlagId: flag.id,
+            confidenceBand: confidence.band,
+            confidenceScore: confidence.score,
+            matchingSignals: JSON.stringify(match.signals),
           },
         });
         flagsCreated++;

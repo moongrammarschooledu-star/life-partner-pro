@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { buildProposalDetailForProfile, projectMeetingSummary, type ProposalDetail } from "@/lib/visibility/proposal-visibility";
 import { buildSelfProfileView } from "@/lib/visibility/user-data-visibility";
 import { getFamilyMembership, hasFamilyPermission, getSharedRecord, isAccessExpired } from "@/lib/family/access-control";
+import { computeVerificationLevel } from "@/lib/verification/level";
 import type { FamilyCommentTargetType, ProposalSharingLevel } from "@prisma/client";
 
 // FamilyDataVisibilityService (STEP 22 plan Decision 6) — NEVER queries
@@ -179,4 +180,43 @@ export function getVisibleContactData(): null {
 
 export function getVisibleDocuments(): [] {
   return [];
+}
+
+// STEP 23 §45 — a family member may see ONLY a coarse verification status
+// ("Identity Verification: Verified"), and only when the applicant has
+// explicitly granted profile.verification.view. Never a document, a risk
+// signal, a duplicate-review flag, or a provider response.
+export async function getVisibleVerificationStatus(familyMemberId: string): Promise<{ status: string; level: number } | null> {
+  const membership = await getFamilyMembership(familyMemberId);
+  if (!membership) return null;
+  if (!(await hasFamilyPermission(familyMemberId, "profile.verification.view"))) return null;
+
+  const verification = await prisma.profileVerification.findUnique({ where: { profileId: membership.applicantId }, include: { items: true } });
+  if (!verification) return { status: "NOT_VERIFIED", level: 0 };
+
+  const openFlag = await prisma.securityFlag.findFirst({
+    where: { profileId: membership.applicantId, status: { in: ["OPEN", "INVESTIGATING"] }, severity: { in: ["HIGH", "CRITICAL"] } },
+  });
+
+  const level = computeVerificationLevel({
+    phoneVerified: !!verification.phoneVerifiedAt,
+    emailVerified: !!verification.emailVerifiedAt,
+    adminReviewCompleted: verification.status === "VERIFIED",
+    identityVerified: verification.status === "VERIFIED" && !!verification.providerReference,
+    hasOpenHighOrCriticalFlag: !!openFlag,
+    enhancedAvailable: false,
+    enhancedCompleted: false,
+  });
+
+  return { status: verification.status, level };
+}
+
+// Hard-deny stubs (Decision 9's pattern, extended) — never wired to any
+// permission at all, so no grant can ever make these return real data.
+export function getVisibleVerificationDocuments(): [] {
+  return [];
+}
+
+export function getVisibleRiskSignals(): null {
+  return null;
 }

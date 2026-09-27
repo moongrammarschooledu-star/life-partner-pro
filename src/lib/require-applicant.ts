@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyProfileToken, verifySessionIdToken, APPLICANT_COOKIE, APPLICANT_SESSION_ID_COOKIE } from "@/lib/applicant-session";
 import { touchAndValidateSession } from "@/lib/profile-session";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
 // Shared helper for every /api/my-*, /api/my-cases/*, /api/my-account/*, and
 // /api/my-privacy/* route (STEP 13 migrated the remaining routes that used
@@ -15,6 +16,11 @@ export async function requireApplicantProfileId(): Promise<string | null> {
 
   const me = await prisma.profile.findUnique({ where: { id: profileId }, select: { id: true, softDeleted: true } });
   if (!me || me.softDeleted) return null;
+
+  // STEP 23 §11/§27 — a LOGIN_RESTRICTED restriction locks the applicant out
+  // of every /api/my-*, /api/my-cases/*, /api/my-account/*, and
+  // /api/my-privacy/* route that funnels through this one check.
+  if (await hasActiveRestriction(profileId, "LOGIN_RESTRICTED")) return null;
 
   // A browser with no session cookie yet (pre-STEP-13) is grandfathered
   // through session-less rather than logged out — the next /api/my-status

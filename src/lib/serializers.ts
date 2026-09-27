@@ -19,6 +19,15 @@ function canViewAllNotes(permissions: Permission[]): boolean {
 function canViewFamily(permissions: Permission[]): boolean {
   return permissions.includes("sensitive:family:view");
 }
+// STEP 23 — identity documents and risk signals are both highly sensitive;
+// gated the same way as the other sensitive:* fields above, never granted
+// automatically alongside plain profile:view/profile:edit (see permissions.ts).
+function canViewDocuments(permissions: Permission[]): boolean {
+  return permissions.includes("sensitive:documents:view");
+}
+function canViewRisk(permissions: Permission[]): boolean {
+  return permissions.includes("sensitive:risk:view");
+}
 
 // Contact info is intentionally NOT part of this include set — every list
 // and detail query in the admin app uses this shape by default. The only
@@ -39,6 +48,11 @@ export const profileDetailInclude = {
   notes: { include: { admin: { select: { id: true, name: true } } }, orderBy: [{ pinned: "desc" }, { createdAt: "desc" }] },
   consent: true,
   pendingUpdate: true,
+  // STEP 23 — never includes secureStorageReference/ivBase64/authTagBase64
+  // (the raw blob key + decryption material) — those stay exclusively
+  // server-side in the authenticated document-download route.
+  verificationDocuments: { orderBy: { uploadedAt: "desc" } },
+  securityFlags: { where: { status: { in: ["OPEN", "INVESTIGATING"] } }, orderBy: { createdAt: "desc" } },
 } satisfies Prisma.ProfileInclude;
 
 export type ProfileListItem = Prisma.ProfileGetPayload<{ include: typeof profileListInclude }>;
@@ -72,6 +86,8 @@ export function toDetailDto(profile: ProfileDetail, viewerAdminId: string, permi
   const canFamily = canViewFamily(permissions);
   const family = canFamily ? profile.family : null;
   const lifestyle = profile.lifestyle && !canFamily ? { ...profile.lifestyle, religion: null, sect: null, religiousPractice: null } : profile.lifestyle;
+  const canDocuments = canViewDocuments(permissions);
+  const canRisk = canViewRisk(permissions);
 
   return {
     id: profile.id,
@@ -116,7 +132,29 @@ export function toDetailDto(profile: ProfileDetail, viewerAdminId: string, permi
     permissionFlags: {
       canViewIncome: canViewIncome(permissions),
       canViewFamily: canFamily,
+      canViewDocuments: canDocuments,
+      canViewRisk: canRisk,
     },
+    // STEP 23 — never the raw storage reference/decryption material, just
+    // review-status metadata; null (not []) when the admin can't view them
+    // at all, distinguishing "hidden" from "genuinely none uploaded".
+    documents: canDocuments
+      ? profile.verificationDocuments.map((d) => ({
+          id: d.id,
+          documentType: d.documentType,
+          mimeType: d.mimeType,
+          sizeBytes: d.sizeBytes,
+          uploadedAt: d.uploadedAt,
+          reviewStatus: d.reviewStatus,
+          reviewedAt: d.reviewedAt,
+          expiresAt: d.expiresAt,
+        }))
+      : null,
+    // Open (OPEN/INVESTIGATING) risk signals only — resolved/dismissed
+    // history stays in the dedicated Risk Signals admin surface, not here.
+    riskSignals: canRisk
+      ? profile.securityFlags.map((f) => ({ id: f.id, flagType: f.flagType, severity: f.severity, status: f.status, description: f.description, createdAt: f.createdAt }))
+      : null,
     hasConsent: !!profile.consent,
     pendingUpdate: profile.pendingUpdate
       ? { id: profile.pendingUpdate.id, payload: JSON.parse(profile.pendingUpdate.payload), submittedAt: profile.pendingUpdate.submittedAt }

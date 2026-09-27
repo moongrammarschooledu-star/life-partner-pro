@@ -112,6 +112,14 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   AI_PROVIDER_CHANGE: { label: "Change AI provider", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_ROLLOUT: { label: "Change AI rollout phase", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_KILL_SWITCH_OVERRIDE: { label: "Use the AI kill switch", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
+
+  // ---------- STEP 23 — KYC, Duplicate Detection & Safety Intelligence ----------
+  // Confirming a suspected duplicate has real consequences (a lasting
+  // AccountRelationship, and often a follow-up restriction) — gated the same
+  // way as every other high-risk decision above. Dismissing as NOT_DUPLICATE
+  // is not gated (it's the "nothing happens" outcome, no elevated risk).
+  DUPLICATE_CONFIRMATION: { label: "Confirm a suspected duplicate profile", domain: "SAFETY", sourceType: "SECURITY_FLAG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPER_ADMIN"] },
+  ACCOUNT_RELATIONSHIP_LINK: { label: "Manually link two accounts as related", domain: "SAFETY", sourceType: "PROFILE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPER_ADMIN"] },
 };
 
 export function getCatalogEntry(actionType: string): CatalogEntry | null {

@@ -270,9 +270,14 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
 
   return (
     <div className="space-y-6">
-      <Link href="/admin/verification" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back to Verification Center
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href="/admin/verification" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back to Verification Center
+        </Link>
+        <Link href={`/admin/verification/${profileId}/evidence`} className="text-sm font-medium text-primary hover:underline">
+          Open Evidence Center
+        </Link>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr_300px]">
         {/* LEFT: Profile summary */}

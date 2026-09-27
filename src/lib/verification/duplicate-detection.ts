@@ -48,3 +48,30 @@ export function findDuplicateSignals(profile: DuplicateCandidateProfile, candida
   }
   return matches;
 }
+
+// ---------- STEP 23 — weighted, explainable duplicate confidence ----------
+// Normalized to exactly 100. Only ever fed the allowed signal set below —
+// there is no code path that lets religion/ethnicity/race/political
+// affiliation/sexual orientation/health/photo-facial-similarity become an
+// input, by construction (DuplicateSignal itself has no such value).
+// Weights, out of 100:
+//   MOBILE 35, EMAIL 35  (STRONG — verified-contact-equivalent signals)
+//   NAME_AND_DOB 30      (MEDIUM — combined, since name+DOB together is far
+//                          more specific than either alone; kept as a single
+//                          signal rather than double-weighting the same pair)
+const SIGNAL_WEIGHTS: Record<DuplicateSignal, number> = {
+  MOBILE: 35,
+  EMAIL: 35,
+  NAME_AND_DOB: 30,
+};
+
+export interface DuplicateConfidence {
+  band: "STRONG" | "MEDIUM" | "LOW";
+  score: number; // 0-100
+}
+
+export function computeDuplicateConfidence(signals: DuplicateSignal[]): DuplicateConfidence {
+  const score = Math.min(100, signals.reduce((sum, s) => sum + SIGNAL_WEIGHTS[s], 0));
+  const band: DuplicateConfidence["band"] = score >= 65 ? "STRONG" : score >= 30 ? "MEDIUM" : "LOW";
+  return { score, band };
+}

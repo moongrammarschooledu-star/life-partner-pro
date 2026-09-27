@@ -8,20 +8,21 @@ import type { DocumentReviewStatus } from "@prisma/client";
 const VALID_REVIEW_STATUSES: DocumentReviewStatus[] = ["PENDING", "APPROVED", "REJECTED"];
 
 // Streams the decrypted document bytes — never a raw <img src={blobUrl}>,
-// never a public URL. Requires the stricter verification:document:view
-// permission (deliberately not given to STAFF by default, spec §25) and
-// audit-logs every single access.
+// never a public URL. STEP 23 splits "can see a document exists/its review
+// status" (verification:document:view / sensitive:documents:view, checked
+// where document metadata is listed, e.g. the profile detail DTO) from "can
+// actually stream its bytes" (documents:download, checked here) — deliberately
+// not given to STAFF by default, spec §25 — and audit-logs every single access.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const admin = await requireAdmin("verification:document:view");
+    const admin = await requireAdmin("documents:download");
     const { id } = await params;
 
     const doc = await prisma.verificationDocument.findUnique({ where: { id } });
     if (!doc) throw new ApiError(404, "Document not found");
 
+    await writeAudit({ action: "VERIFICATION_DOCUMENT_DOWNLOADED", adminId: admin.id, targetProfileId: doc.profileId, meta: { documentId: id } });
     const bytes = await readVerificationDocument(doc.secureStorageReference, doc.ivBase64, doc.authTagBase64);
-
-    await writeAudit({ action: "ADMIN_ACCESSED_VERIFICATION_DOCUMENT", adminId: admin.id, targetProfileId: doc.profileId, meta: { documentId: id } });
 
     return new NextResponse(new Uint8Array(bytes), { headers: { "Content-Type": doc.mimeType, "Cache-Control": "no-store" } });
   } catch (error) {

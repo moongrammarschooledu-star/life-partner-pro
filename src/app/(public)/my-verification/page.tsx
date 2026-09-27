@@ -101,6 +101,73 @@ function DocumentUploadCard() {
   );
 }
 
+const IDENTITY_DOCUMENT_TYPES = ["CNIC", "PASSPORT", "DRIVING_LICENSE", "NATIONAL_ID", "OTHER"];
+
+// STEP 23 §5 — only rendered when a provider is actually configured
+// (identityVerification.enabled); otherwise the existing manual document
+// upload card below is the only identity-adjacent path, unchanged.
+function IdentityVerificationCard({ status, providerStatus, hasActiveSession, onStarted }: { status: string; providerStatus: string | null; hasActiveSession: boolean; onStarted: () => void }) {
+  const { show } = useToast();
+  const [documentType, setDocumentType] = useState("CNIC");
+  const [country, setCountry] = useState("Pakistan");
+  const [starting, setStarting] = useState(false);
+  const [instructions, setInstructions] = useState<string | null>(null);
+
+  async function start() {
+    setStarting(true);
+    try {
+      const res = await fetch("/api/my-verification/identity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentType, country }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        show(json.error ?? "Could not start identity verification.", "error");
+        return;
+      }
+      setInstructions(json.instructions ?? null);
+      show("Identity verification started.", "success");
+      onStarted();
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Identity Verification</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {status === "VERIFIED" ? (
+          <p className="flex items-center gap-1.5 text-sm text-success">
+            <CheckCircle2 className="h-4 w-4" /> Identity Verified
+          </p>
+        ) : hasActiveSession ? (
+          <p className="text-sm text-muted">Verification in progress ({formatEnumLabel(providerStatus ?? "PENDING")}). We&apos;ll update this page once it completes.</p>
+        ) : (
+          <>
+            <p className="text-sm text-muted">Optional identity verification, processed securely. Choose a document type to begin.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className="w-auto">
+                {IDENTITY_DOCUMENT_TYPES.map((t) => (
+                  <option key={t} value={t}>{formatEnumLabel(t)}</option>
+                ))}
+              </Select>
+              <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country" className="w-40" />
+              <Button size="sm" onClick={start} disabled={starting}>
+                {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Start Verification
+              </Button>
+            </div>
+          </>
+        )}
+        {instructions && <p className="text-xs text-muted">{instructions}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 interface CompletenessCategory {
   key: string;
   label: string;
@@ -119,8 +186,10 @@ interface MyVerification {
   status: string;
   phoneVerified: boolean;
   emailVerified: boolean;
+  verificationLevel: number;
   completeness: { percent: number; categories: CompletenessCategory[] };
   checklist: ChecklistEntry[];
+  identityVerification: { enabled: boolean; providerStatus: string | null; hasActiveSession: boolean };
 }
 
 const STATE_ICON = { completed: CheckCircle2, under_review: Clock, action_required: AlertTriangle, pending: Clock };
@@ -328,6 +397,15 @@ export default function MyVerificationPage() {
             <OtpBox channel="email" verified={data.emailVerified} onVerified={load} />
           </CardContent>
         </Card>
+
+        {data.identityVerification.enabled && (
+          <IdentityVerificationCard
+            status={data.status}
+            providerStatus={data.identityVerification.providerStatus}
+            hasActiveSession={data.identityVerification.hasActiveSession}
+            onStarted={load}
+          />
+        )}
 
         <Card>
           <CardHeader>

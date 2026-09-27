@@ -33,6 +33,7 @@ let seqCounter = 0;
 
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async (call: Record<string, unknown>) => { auditCalls.push(call); }) }));
 vi.mock("@/lib/admin-tasks", () => ({ createTask: vi.fn(async (call: Record<string, unknown>) => { taskCalls.push(call); }) }));
+vi.mock("@/lib/profile-restrictions", () => ({ hasActiveRestriction: vi.fn(async () => false) }));
 vi.mock("@/lib/notifications/events", () => ({ notifyFamilyInvitationAccepted: vi.fn(async () => {}) }));
 vi.mock("@/lib/notifications/providers/email-provider", () => ({
   emailProvider: { send: vi.fn(async (to: string, body: string, subject?: string) => { emailCalls.push({ to, body, subject }); return { providerMessageId: "x" }; }) },
@@ -134,6 +135,15 @@ describe("createInvitation", () => {
 
   it("requires an email or mobile number", async () => {
     await expect(createInvitation({ applicantId: "app1", invitedName: "X", relationship: "Sibling" })).rejects.toThrow(FamilyInvitationError);
+  });
+
+  it("blocks a new invitation when the applicant has an active NO_FAMILY_INVITATIONS restriction", async () => {
+    const { hasActiveRestriction } = await import("@/lib/profile-restrictions");
+    vi.mocked(hasActiveRestriction).mockResolvedValueOnce(true);
+    await expect(createInvitation({ applicantId: "app1", invitedName: "Ammi", invitedEmail: "ammi@example.com", relationship: "Parent" })).rejects.toThrow(
+      /additional review/i
+    );
+    expect(accounts.size).toBe(0);
   });
 });
 

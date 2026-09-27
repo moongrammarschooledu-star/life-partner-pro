@@ -150,6 +150,10 @@ enum AdminTaskType {
   FAMILY_PROPOSAL_REVIEW // PROPOSAL — family proposal-sharing activity needs review
   FAMILY_DECISION_CONFIRMATION // PROPOSAL — a family decision is awaiting applicant confirmation past SLA
   FAMILY_SECURITY_REVIEW // PROFILE — a family-account security/abuse concern needs review
+
+  // ---------- STEP 23 — KYC, Duplicate Detection & Safety Intelligence ----------
+  DUPLICATE_REVIEW // PROFILE — a DuplicateCandidate needs admin review
+  RISK_SIGNAL_REVIEW // PROFILE — a new-type SecurityFlag risk signal needs review
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -326,6 +330,12 @@ enum RestrictionType {
   CANNOT_CONTACT_SHARE
   CANNOT_SCHEDULE_MEETING
   CANNOT_UPDATE_FIELDS
+
+  // ---------- STEP 23 — KYC, Duplicate Detection & Safety Intelligence ----------
+  VERIFICATION_REQUIRED // informational category flag — the applicant verification center explains why a feature is gated; not itself a hard block
+  NO_NEW_PROPOSALS // distinct from CANNOT_MATCH — blocks new proposal creation, not matching/discovery
+  LOGIN_RESTRICTED // checked in requireApplicantProfileId/requireFamilyMemberId session validation
+  NO_FAMILY_INVITATIONS // checked in src/lib/family/invitation.ts's createInvitation
 }
 
 enum ResolutionCategory {
@@ -441,6 +451,16 @@ enum SecurityFlagType {
   DUPLICATE_PROFILE_SUSPECTED
   VERIFICATION_INCONSISTENCY
   ABUSIVE_BEHAVIOR_REPORT
+
+  // ---------- STEP 23 — Risk Signal Engine ----------
+  // SecurityFlag is the risk-signal store (spec's "risk_signals" table maps
+  // onto this existing model, see src/lib/risk/signal-engine.ts) — these are
+  // additive signal types, not a parallel model.
+  RAPID_REGISTRATION_SIGNAL
+  CONTACT_REUSE_SIGNAL
+  EXCESSIVE_PROPOSAL_ACTIVITY
+  ABNORMAL_CONTACT_REQUEST_ACTIVITY
+  PAYMENT_ANOMALY_SIGNAL
 }
 
 enum SecurityFlagSeverity {
@@ -455,6 +475,43 @@ enum SecurityFlagStatus {
   INVESTIGATING
   RESOLVED
   DISMISSED
+}
+
+// ---------- STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety Intelligence ----------
+
+enum DuplicateConfidenceBand {
+  STRONG
+  MEDIUM
+  LOW
+}
+
+enum DuplicateCandidateStatus {
+  POTENTIAL_DUPLICATE
+  DUPLICATE_REVIEW_REQUIRED
+  CONFIRMED_DUPLICATE
+  NOT_DUPLICATE
+  RESOLVED
+}
+
+enum AccountRelationshipType {
+  POTENTIAL_DUPLICATE
+  CONFIRMED_DUPLICATE
+  FAMILY_RELATED
+  AUTHORIZED_FAMILY_ACCOUNT
+  SHARED_CONTACT_SIGNAL
+  SHARED_VERIFICATION_SIGNAL
+  UNKNOWN_RELATIONSHIP
+}
+
+enum AccountRelationshipStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum VerificationPolicyStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
 }
 
 enum ContactMethod {
@@ -933,6 +990,23 @@ enum AuditAction {
   FAMILY_MEETING_ACTION
   FAMILY_SESSION_REVOKED
   FAMILY_LOGIN_FAILED
+
+  // ---------- STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety Intelligence ----------
+  VERIFICATION_REQUESTED
+  DUPLICATE_MATCH_DETECTED
+  DUPLICATE_CANDIDATE_REVIEWED
+  DUPLICATE_CONFIRMED
+  DUPLICATE_DISMISSED
+  ACCOUNT_RELATIONSHIP_CREATED
+  RISK_SIGNAL_DETECTED
+  RISK_SIGNAL_REVIEWED
+  RISK_SIGNAL_RESOLVED
+  VERIFICATION_DOCUMENT_DOWNLOADED
+  VERIFICATION_POLICY_CHANGED
+  PROVIDER_SESSION_CREATED
+  PROVIDER_WEBHOOK_RECEIVED
+  PROVIDER_WEBHOOK_REJECTED
+  REVERIFICATION_TRIGGERED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1112,6 +1186,15 @@ enum NotificationType {
   FAMILY_MEETING_UPDATED
   FAMILY_PERMISSION_EXPIRING
   FAMILY_PERMISSION_EXPIRED
+
+  // ---------- STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety Intelligence ----------
+  // ADMIN_DUPLICATE_PROFILE_ALERT (above, STEP 8) is reused for duplicate
+  // signals — these are the genuinely new ones.
+  ADMIN_HIGH_RISK_SIGNAL
+  ADMIN_REVERIFICATION_DUE
+  PROVIDER_VERIFICATION_FAILURE
+  KYC_VERIFICATION_REQUIRES_ACTION
+  KYC_VERIFICATION_COMPLETED
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1394,6 +1477,12 @@ model AdminUser {
   securityFlagsAssigned      SecurityFlag[]         @relation("SecurityFlagAssignee")
   securityFlagsResolved      SecurityFlag[]         @relation("SecurityFlagResolver")
 
+  // ---------- STEP 23 — Duplicate/Relationship/Policy review attribution ----------
+  duplicateCandidatesReviewed AccountRelationship[] @relation("AccountRelationshipReviewer")
+  accountRelationshipsCreated AccountRelationship[] @relation("AccountRelationshipCreator")
+  duplicateCandidateReviews   DuplicateCandidate[]  @relation("DuplicateCandidateReviewer")
+  verificationPoliciesCreated VerificationPolicy[]  @relation("VerificationPolicyCreator")
+
   notificationsReceived       Notification[]         @relation("NotificationRecipientAdmin")
   communicationLogsSent       CommunicationLog[]
   notificationTemplatesEdited NotificationTemplate[]
@@ -1552,6 +1641,12 @@ model Profile {
   verificationDocuments VerificationDocument[]
   securityFlags         SecurityFlag[]         @relation("SecurityFlagProfile")
   relatedSecurityFlags  SecurityFlag[]         @relation("SecurityFlagRelatedProfile")
+
+  // ---------- STEP 23 — Duplicate Detection & Account Relationships ----------
+  duplicateCandidatesAsSubject   DuplicateCandidate[]  @relation("DuplicateCandidateProfile")
+  duplicateCandidatesAsCandidate DuplicateCandidate[]  @relation("DuplicateCandidateCandidateProfile")
+  accountRelationships           AccountRelationship[] @relation("AccountRelationshipProfile")
+  relatedAccountRelationships    AccountRelationship[] @relation("AccountRelationshipRelatedProfile")
 
   notificationsReceived  Notification[]          @relation("NotificationRecipientProfile")
   notificationsRelated   Notification[]          @relation("NotificationRelatedProfile")
@@ -2112,6 +2207,16 @@ model ProfileVerification {
   lastReviewedBy   AdminUser? @relation("VerificationReviewer", fields: [lastReviewedById], references: [id])
   lastReviewedById String?
 
+  // ---------- STEP 23 — Identity Verification Provider session tracking ----------
+  // Additive columns on the row they track, matching how assignedToId/expiresAt/
+  // verificationVersion were already added — never split into a 1:1 satellite
+  // model. Only ever set when IDENTITY_VERIFICATION_ENABLED and a provider is
+  // configured; null otherwise (today's manual-document-review path, unchanged).
+  providerName      String? // e.g. "mock" — see src/lib/verification/provider/
+  providerSessionId String?
+  providerReference String?
+  providerStatus    String? // the provider's own status string, stored as-is for display; never itself sufficient to reach VERIFIED — see setVerificationStatus()
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2199,8 +2304,111 @@ model SecurityFlag {
   resolvedAt       DateTime?
   createdAt        DateTime             @default(now())
 
+  // STEP 23 — the richer evidence companion, when this flag is a duplicate signal.
+  duplicateCandidate DuplicateCandidate?
+
   @@index([profileId])
   @@index([status])
+}
+
+// ---------- STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety Intelligence ----------
+
+// The richer evidence companion to a SecurityFlag(DUPLICATE_PROFILE_SUSPECTED)
+// row (see decision 3 in the STEP 23 plan) — the flag is what the existing
+// Security Flags page/notifications/permission already handle unchanged;
+// this carries the weighted confidence band, raw matching signals, and its
+// own richer review lifecycle for the new Duplicate Detection workspace.
+model DuplicateCandidate {
+  id                 String                   @id @default(cuid())
+  candidateCode      String                   @unique // LPP-DUPC-###### via src/lib/privacy/codes.ts
+  profile            Profile                  @relation("DuplicateCandidateProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  profileId          String
+  candidateProfile   Profile                  @relation("DuplicateCandidateCandidateProfile", fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  candidateProfileId String
+  securityFlag       SecurityFlag?            @relation(fields: [securityFlagId], references: [id])
+  securityFlagId     String?                  @unique
+  confidenceBand     DuplicateConfidenceBand
+  confidenceScore    Int // 0-100, normalized weighted score — see computeDuplicateConfidence()
+  matchingSignals    String // JSON array of signal names, e.g. ["MOBILE","EMAIL"]
+  status             DuplicateCandidateStatus @default(POTENTIAL_DUPLICATE)
+  reviewer           AdminUser?               @relation("DuplicateCandidateReviewer", fields: [reviewerId], references: [id])
+  reviewerId         String?
+  reviewedAt         DateTime?
+  resolution         String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@unique([profileId, candidateProfileId])
+  @@index([profileId])
+  @@index([candidateProfileId])
+  @@index([status])
+}
+
+// A confirmed, lasting relationship between two profiles — distinct from a
+// transient SecurityFlag/DuplicateCandidate review. Created automatically
+// when a DuplicateCandidate resolves (CONFIRMED_DUPLICATE or, so an
+// already-cleared pair is never re-flagged, UNKNOWN_RELATIONSHIP for
+// NOT_DUPLICATE), and manually creatable by an admin for the other types.
+model AccountRelationship {
+  id               String                    @id @default(cuid())
+  profile          Profile                   @relation("AccountRelationshipProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  profileId        String
+  relatedProfile   Profile                   @relation("AccountRelationshipRelatedProfile", fields: [relatedProfileId], references: [id], onDelete: Cascade)
+  relatedProfileId String
+  relationshipType AccountRelationshipType
+  confidenceBand   DuplicateConfidenceBand?
+  source           String // e.g. "duplicate_scan", "admin_manual"
+  status           AccountRelationshipStatus @default(ACTIVE)
+  evidenceRef      String? // loose pointer to the originating DuplicateCandidate.id or a note — no enforced FK, matching this codebase's existing polymorphic-reference convention
+  notes            String?
+  createdBy        AdminUser?                @relation("AccountRelationshipCreator", fields: [createdById], references: [id])
+  createdById      String?
+  reviewedBy       AdminUser?                @relation("AccountRelationshipReviewer", fields: [reviewedById], references: [id])
+  reviewedById     String?
+  reviewedAt       DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@unique([profileId, relatedProfileId, relationshipType])
+  @@index([profileId])
+  @@index([relatedProfileId])
+}
+
+// Admin-configurable, versioned verification policy — mirrors ApprovalPolicy's
+// (STEP 19) never-overwrite-in-place pattern: a change creates a new version
+// row rather than mutating one, so the effective-date/audit trail the spec
+// requires falls out of the model shape itself.
+model VerificationPolicy {
+  id            String                   @id @default(cuid())
+  policyKey     String // e.g. "identityVerification.enabled", "reverification.intervalDays"
+  policyVersion Int                      @default(1)
+  configuration String // JSON value for this key
+  status        VerificationPolicyStatus @default(ACTIVE)
+  effectiveFrom DateTime                 @default(now())
+  effectiveTo   DateTime?
+  createdBy     AdminUser?               @relation("VerificationPolicyCreator", fields: [createdById], references: [id])
+  createdById   String?
+  createdAt     DateTime                 @default(now())
+
+  @@index([policyKey, status])
+}
+
+// Idempotency/replay ledger for identity-verification provider webhooks —
+// mirrors STEP 14's finance-webhook event-log shape exactly (checked before
+// adding this, per the "don't duplicate an existing system" instruction: this
+// is a distinct table because it protects a distinct webhook source).
+model VerificationProviderEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  providerEventId String    @unique
+  eventType       String
+  payloadHash     String
+  signatureValid  Boolean
+  processed       Boolean   @default(false)
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([provider, eventType])
 }
 
 // ---------- Audit ----------

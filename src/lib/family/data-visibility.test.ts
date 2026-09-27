@@ -10,6 +10,8 @@ let accounts: Map<string, FakeAccount>;
 let permissions: FakePermission[];
 let shares: FakeShare[];
 let proposals: Map<string, { id: string; proposalCode: string; profileAId: string; profileBId: string }>;
+let verifications: Map<string, { profileId: string; status: string; providerReference: string | null; phoneVerifiedAt: Date | null; emailVerifiedAt: Date | null; items: { status: string }[] }>;
+let flags: { profileId: string; status: string; severity: string }[];
 
 vi.mock("@/lib/family/family-member-session", () => ({ revokeAllFamilyMemberSessions: vi.fn(async () => 0) }));
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async () => {}) }));
@@ -87,10 +89,27 @@ vi.mock("@/lib/prisma", () => ({
         return proposals.get(where.id!) ?? null;
       }),
     },
+    profileVerification: {
+      findUnique: vi.fn(async ({ where }: { where: { profileId: string } }) => verifications.get(where.profileId) ?? null),
+    },
+    securityFlag: {
+      findFirst: vi.fn(async ({ where }: { where: { profileId: string; status: { in: string[] }; severity: { in: string[] } } }) =>
+        flags.find((f) => f.profileId === where.profileId && where.status.in.includes(f.status) && where.severity.in.includes(f.severity)) ?? null
+      ),
+    },
   },
 }));
 
-const { getVisibleApplicantProfile, getVisibleFamilyData, getVisibleProposal, getVisibleContactData, getVisibleDocuments } = await import("./data-visibility");
+const {
+  getVisibleApplicantProfile,
+  getVisibleFamilyData,
+  getVisibleProposal,
+  getVisibleContactData,
+  getVisibleDocuments,
+  getVisibleVerificationStatus,
+  getVisibleVerificationDocuments,
+  getVisibleRiskSignals,
+} = await import("./data-visibility");
 
 function seedMember(id: string, role: string, applicantId = "app1") {
   accounts.set("acc1", { id: "acc1", applicantId, status: "ACTIVE" });
@@ -103,6 +122,8 @@ beforeEach(() => {
   permissions = [];
   shares = [];
   proposals = new Map([["prop1", { id: "prop1", proposalCode: "LPP-RP-000001", profileAId: "app1", profileBId: "other" }]]);
+  verifications = new Map([["app1", { profileId: "app1", status: "VERIFIED", providerReference: null, phoneVerifiedAt: new Date(), emailVerifiedAt: new Date(), items: [{ status: "COMPLETED" }] }]]);
+  flags = [];
 });
 
 describe("getVisibleApplicantProfile", () => {
@@ -180,4 +201,43 @@ describe("getVisibleProposal — record-and-permission required (Decision 7)", (
 describe("Decision 9 — contact and documents always deny in this pass", () => {
   it("getVisibleContactData always returns null", () => expect(getVisibleContactData()).toBeNull());
   it("getVisibleDocuments always returns an empty list", () => expect(getVisibleDocuments()).toEqual([]));
+});
+
+describe("getVisibleVerificationStatus (STEP 23)", () => {
+  it("returns null without an explicit profile.verification.view grant", async () => {
+    seedMember("fm1", "FAMILY_VIEWER");
+    expect(await getVisibleVerificationStatus("fm1")).toBeNull();
+  });
+
+  it("returns a coarse status + level once granted", async () => {
+    seedMember("fm1", "FAMILY_VIEWER");
+    permissions.push({ familyMemberId: "fm1", permission: "profile.verification.view", scope: null, status: "ACTIVE", expiresAt: null });
+    const result = await getVisibleVerificationStatus("fm1");
+    expect(result).toEqual({ status: "VERIFIED", level: 2 }); // no providerReference set → level 2, not 3
+  });
+
+  it("caps the level when an open high/critical flag exists, mirroring the admin-side confidence override", async () => {
+    seedMember("fm1", "FAMILY_VIEWER");
+    permissions.push({ familyMemberId: "fm1", permission: "profile.verification.view", scope: null, status: "ACTIVE", expiresAt: null });
+    flags.push({ profileId: "app1", status: "OPEN", severity: "HIGH" });
+    const result = await getVisibleVerificationStatus("fm1");
+    expect(result!.level).toBe(1);
+  });
+
+  // Unlike getVisibleProposal, there is no client-supplied target id here —
+  // applicantId always comes from the authenticated family member's own
+  // resolved membership, so a family member belonging to a different
+  // applicant simply sees THAT applicant's own status, never someone else's;
+  // there is no cross-family probe surface for this function to guard against.
+  it("resolves strictly from the caller's own membership, never a different applicant's data", async () => {
+    seedMember("fm1", "FAMILY_VIEWER", "someone-else");
+    permissions.push({ familyMemberId: "fm1", permission: "profile.verification.view", scope: null, status: "ACTIVE", expiresAt: null });
+    const result = await getVisibleVerificationStatus("fm1");
+    expect(result).not.toEqual({ status: "VERIFIED", level: 2 }); // that's app1's status, not someone-else's
+  });
+});
+
+describe("hard-deny stubs — never reachable regardless of any permission grant", () => {
+  it("getVisibleVerificationDocuments always returns an empty list", () => expect(getVisibleVerificationDocuments()).toEqual([]));
+  it("getVisibleRiskSignals always returns null", () => expect(getVisibleRiskSignals()).toBeNull());
 });

@@ -169,6 +169,16 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   FAMILY_MEETING_UPDATED: ESSENTIAL,
   FAMILY_PERMISSION_EXPIRING: ESSENTIAL,
   FAMILY_PERMISSION_EXPIRED: ESSENTIAL,
+
+  // STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety
+  // Intelligence. ADMIN_* types are internal-only, same convention as every
+  // other admin-only type above; the two applicant-facing KYC_* types are
+  // security/account-integrity notices, essential like VERIFICATION_* above.
+  ADMIN_HIGH_RISK_SIGNAL: ESSENTIAL,
+  ADMIN_REVERIFICATION_DUE: ESSENTIAL,
+  PROVIDER_VERIFICATION_FAILURE: ESSENTIAL,
+  KYC_VERIFICATION_REQUIRES_ACTION: ESSENTIAL,
+  KYC_VERIFICATION_COMPLETED: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

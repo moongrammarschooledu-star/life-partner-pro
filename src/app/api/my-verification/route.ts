@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { CHECKLIST_CATALOG } from "@/lib/verification/checklist-catalog";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
+import { isIdentityVerificationEnabled } from "@/lib/verification/provider";
+import { computeVerificationLevel } from "@/lib/verification/level";
 
 // Deliberately narrow (spec §20): mobile/email/profile status, completeness
 // %, and the requirement checklist as plain ✓/⏳/⚠ — never internal
@@ -65,12 +67,29 @@ export async function GET() {
     return { key: entry.key, category: entry.category, label: entry.label, state };
   });
 
+  const level = computeVerificationLevel({
+    phoneVerified,
+    emailVerified,
+    adminReviewCompleted: verification?.status === "VERIFIED",
+    identityVerified: verification?.status === "VERIFIED" && !!verification?.providerReference,
+    hasOpenHighOrCriticalFlag: false, // never disclosed to the applicant (spec §5/§23) — internal-only signal
+    enhancedAvailable: false,
+    enhancedCompleted: false,
+  });
+
   return NextResponse.json({
     profileCode: profile.profileCode,
     status: verification?.status ?? "NOT_VERIFIED",
     phoneVerified,
     emailVerified,
+    verificationLevel: level,
     completeness: { percent, categories: categories.map((c) => ({ key: c.key, label: c.label, weight: c.weight, earnedWeight: c.earnedWeight, missingFields: c.missingFields })) },
     checklist,
+    // Identity-provider section (spec §5) — only ever shown when a provider
+    // is actually configured; when disabled, the UI falls back to the
+    // existing manual-document-upload path unchanged.
+    identityVerification: isIdentityVerificationEnabled()
+      ? { enabled: true, providerStatus: verification?.providerStatus ?? null, hasActiveSession: !!verification?.providerSessionId }
+      : { enabled: false, providerStatus: null, hasActiveSession: false },
   });
 }

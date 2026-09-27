@@ -7,6 +7,7 @@ import { writeAudit } from "@/lib/audit";
 import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 import { parseDateOnly } from "@/lib/utils";
 import { basicInfoSchema, educationProfessionSchema, familyInfoSchema, lifestyleSchema, partnerPreferenceSchema } from "@/lib/validation/registration";
+import { checkAndTriggerReverification } from "@/lib/verification/reverification-trigger";
 
 // Every section is independently optional — a PATCH only ever touches the
 // sections the admin edit form actually submitted, never wipes sections it
@@ -187,6 +188,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     });
 
     await writeAudit({ action: "PROFILE_EDITED", adminId: admin.id, targetProfileId: id, meta: { sections: Object.keys(value) } });
+
+    // STEP 23 §25/§26 — only an actual change to an identity-adjacent field
+    // triggers reverification, not merely submitting the basic section
+    // (the edit form always sends it in full, even when only e.g. city changed).
+    if (value.basic) {
+      const changedFields: string[] = [];
+      if (value.basic.fullName !== existing.fullName) changedFields.push("fullName");
+      if (parseDateOnly(value.basic.dateOfBirth).getTime() !== existing.dateOfBirth.getTime()) changedFields.push("dateOfBirth");
+      if (changedFields.length > 0) await checkAndTriggerReverification(id, changedFields);
+    }
 
     return NextResponse.json(toDetailDto(profile, admin.id, admin.permissions));
   } catch (error) {

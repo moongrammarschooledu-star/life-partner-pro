@@ -51,6 +51,7 @@ export default function FamilyApplicantPage() {
         <h1 className="font-heading text-2xl font-semibold">Applicant Profile</h1>
         <p className="mt-1 text-sm text-muted">Only the information the applicant has authorized you to see. Sections not shared show as unavailable.</p>
       </div>
+      <Section title="Identity Verification" data={data.verification as Record<string, unknown> | null} />
       <Section title="Personal Information" data={data.personal as Record<string, unknown>} />
       <Section title="Education" data={data.education as Record<string, unknown>} />
       <Section title="Career" data={data.profession as Record<string, unknown>} />

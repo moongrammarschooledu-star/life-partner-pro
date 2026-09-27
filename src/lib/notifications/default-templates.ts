@@ -455,4 +455,26 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Family Access Expired", body: "A family member's access has expired." },
     UR: { title: "خاندانی رسائی ختم", body: "ایک خاندان کے فرد کی رسائی ختم ہو چکی ہے۔" },
   },
+
+  // ---------- STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety Intelligence ----------
+  ADMIN_HIGH_RISK_SIGNAL: {
+    EN: { title: "High-Severity Risk Signal", body: "A high-severity risk signal requires review." },
+    UR: { title: "زیادہ شدت کا رسک سگنل", body: "ایک زیادہ شدت کے رسک سگنل کا جائزہ درکار ہے۔" },
+  },
+  ADMIN_REVERIFICATION_DUE: {
+    EN: { title: "Re-verification Due", body: "A profile is due for re-verification." },
+    UR: { title: "دوبارہ تصدیق درکار ہے", body: "ایک پروفائل کی دوبارہ تصدیق درکار ہے۔" },
+  },
+  PROVIDER_VERIFICATION_FAILURE: {
+    EN: { title: "Verification Provider Failure", body: "The identity verification provider reported a failure." },
+    UR: { title: "تصدیقی سروس میں خرابی", body: "شناختی تصدیق فراہم کرنے والی سروس نے خرابی کی اطلاع دی ہے۔" },
+  },
+  KYC_VERIFICATION_REQUIRES_ACTION: {
+    EN: { title: "Verification Action Required", body: "Your identity verification requires additional action." },
+    UR: { title: "تصدیق کے لیے کارروائی درکار ہے", body: "آپ کی شناختی تصدیق کے لیے مزید کارروائی درکار ہے۔" },
+  },
+  KYC_VERIFICATION_COMPLETED: {
+    EN: { title: "Identity Verification Completed", body: "Your identity verification has been completed." },
+    UR: { title: "شناختی تصدیق مکمل ہو گئی", body: "آپ کی شناختی تصدیق مکمل ہو چکی ہے۔" },
+  },
 };

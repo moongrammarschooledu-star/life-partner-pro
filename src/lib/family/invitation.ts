@@ -8,6 +8,7 @@ import { emailProvider } from "@/lib/notifications/providers/email-provider";
 import { FAMILY_ROLE_PERMISSIONS } from "@/lib/family/permissions";
 import { grantFamilyPermission } from "@/lib/family/grants";
 import { notifyFamilyInvitationAccepted } from "@/lib/notifications/events";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import type { FamilyRole } from "@prisma/client";
 
 export class FamilyInvitationError extends HttpError {
@@ -41,6 +42,13 @@ export async function createInvitation(params: {
 }): Promise<{ invitationCode: string; rawToken: string; expiresAt: Date }> {
   if (!params.invitedEmail && !params.invitedMobile) {
     throw new FamilyInvitationError(400, "An email or mobile number is required to invite a family member.");
+  }
+
+  // STEP 23 §11/§27 — a NO_FAMILY_INVITATIONS restriction (e.g. while a
+  // duplicate/risk review is open on this applicant) blocks new invitations
+  // without disabling the family portal for members already invited.
+  if (await hasActiveRestriction(params.applicantId, "NO_FAMILY_INVITATIONS")) {
+    throw new FamilyInvitationError(403, "This account currently requires additional review before new family invitations can be sent.");
   }
 
   const familyAccount = await getOrCreateFamilyAccount(params.applicantId);

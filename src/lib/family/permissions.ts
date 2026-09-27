@@ -28,6 +28,11 @@ export const FAMILY_PERMISSION_CATALOG = {
   "meeting.reschedule": { label: "Request a meeting reschedule", sensitive: false },
   "communication.view": { label: "View family communications", sensitive: false },
   "communication.respond": { label: "Respond in family communications", sensitive: false },
+  // STEP 23 §45 — a coarse status only ("Identity Verification: Verified"),
+  // never documents/risk signals/duplicate info (those are hard-deny stubs
+  // in data-visibility.ts, never wired to any permission at all — granting
+  // this can never expose them).
+  "profile.verification.view": { label: "View identity verification status", sensitive: false },
 } satisfies Record<string, FamilyPermissionDef>;
 
 export type FamilyPermissionKey = keyof typeof FAMILY_PERMISSION_CATALOG;

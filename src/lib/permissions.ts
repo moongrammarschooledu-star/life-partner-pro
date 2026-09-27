@@ -289,7 +289,30 @@ export type Permission =
   | "candidate:shortlist"
   | "candidate:recommend"
   // ---------- Family/Guardian Portal (STEP 22) ----------
-  | "family:manage";
+  | "family:manage"
+  // ---------- STEP 23 — KYC, Duplicate Detection & Safety Intelligence ----------
+  | "risk:view"
+  | "risk:review"
+  | "risk:resolve"
+  | "risk:escalate"
+  | "risk:policy:view"
+  | "risk:policy:manage"
+  | "duplicates:view"
+  | "duplicates:review"
+  | "duplicates:resolve"
+  | "duplicates:link"
+  | "duplicates:manage"
+  | "relationships:view"
+  | "relationships:create"
+  | "relationships:review"
+  | "relationships:manage"
+  | "documents:download"
+  | "verification:policy:view"
+  | "verification:policy:manage"
+  | "safety:verification:restrict"
+  | "safety:verification:suspend"
+  | "sensitive:verification:view"
+  | "sensitive:risk:view";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -310,6 +333,8 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "sensitive:approval:view",
   "sensitive:approval:approve",
   "search:sensitive",
+  "sensitive:verification:view",
+  "sensitive:risk:view",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -676,6 +701,29 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "staff:view",
     "profile:assign",
     "verification:assign",
+    // ---------- STEP 23 ----------
+    "risk:view",
+    "risk:review",
+    "risk:resolve",
+    "risk:escalate",
+    "risk:policy:view",
+    "risk:policy:manage",
+    "duplicates:view",
+    "duplicates:review",
+    "duplicates:resolve",
+    "duplicates:link",
+    "duplicates:manage",
+    "relationships:view",
+    "relationships:create",
+    "relationships:review",
+    "relationships:manage",
+    "documents:download",
+    "verification:policy:view",
+    "verification:policy:manage",
+    "safety:verification:restrict",
+    "safety:verification:suspend",
+    "sensitive:verification:view",
+    "sensitive:risk:view",
     ...CASE_PERMISSIONS,
     ...PRIVACY_PERMISSIONS,
     ...FINANCE_ALL_PERMISSIONS,
@@ -930,11 +978,29 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:escalate",
     "reports:view",
     "audit:view",
+    // ---------- STEP 23 ----------
+    "risk:view",
+    "risk:review",
+    "risk:resolve",
+    "duplicates:view",
+    "duplicates:review",
+    "duplicates:resolve",
+    "duplicates:link",
+    "relationships:view",
+    "relationships:create",
+    "relationships:review",
+    "documents:download",
+    "verification:policy:view",
+    "sensitive:verification:view",
+    "sensitive:risk:view",
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
     ...MANAGER_SEARCH_PERMISSIONS,
     // deliberately lacks proposal:finalize/contact:reveal (spec §7: cannot finalize proposals or
-    // share contacts merely because verification is complete), finance:*, roles:*.
+    // share contacts merely because verification is complete), finance:*, roles:*,
+    // risk:escalate/risk:policy:manage/verification:policy:manage/duplicates:manage/
+    // relationships:manage/safety:verification:* (policy-setting and safety-restriction
+    // authority stay with Support Manager/Super Admin, spec §44).
   ],
 
   // ---------------------------------------------------------------- SUPPORT_MANAGER (spec §8)
@@ -965,6 +1031,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     "reports:view",
     "audit:view",
+    // ---------- STEP 23 ----------
+    "risk:view",
+    "risk:escalate",
+    "safety:verification:restrict",
+    "safety:verification:suspend",
+    "sensitive:risk:view",
     ...MANAGER_TASK_PERMISSIONS,
     "tasks:escalate:senior", // spec's "senior" case-escalation tier already lives here (cases:escalate:senior above) — mirrors it for tasks
     ...MANAGER_APPROVAL_PERMISSIONS,

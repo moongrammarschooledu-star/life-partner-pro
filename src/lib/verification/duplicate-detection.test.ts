@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicateSignals, type DuplicateCandidateProfile } from "./duplicate-detection";
+import { findDuplicateSignals, computeDuplicateConfidence, type DuplicateCandidateProfile } from "./duplicate-detection";
 
 function profile(overrides: Partial<DuplicateCandidateProfile>): DuplicateCandidateProfile {
   return {
@@ -51,5 +51,28 @@ describe("findDuplicateSignals", () => {
     const candidates = [profile({ id: "other" })]; // identical mobile, email, name+dob
     const matches = findDuplicateSignals(target, candidates);
     expect(matches[0].signals.sort()).toEqual(["EMAIL", "MOBILE", "NAME_AND_DOB"]);
+  });
+});
+
+describe("computeDuplicateConfidence", () => {
+  it("a single MOBILE or EMAIL signal alone lands in MEDIUM, not STRONG", () => {
+    expect(computeDuplicateConfidence(["MOBILE"])).toEqual({ score: 35, band: "MEDIUM" });
+    expect(computeDuplicateConfidence(["EMAIL"])).toEqual({ score: 35, band: "MEDIUM" });
+  });
+
+  it("MOBILE + EMAIL together reach STRONG", () => {
+    expect(computeDuplicateConfidence(["MOBILE", "EMAIL"])).toEqual({ score: 70, band: "STRONG" });
+  });
+
+  it("NAME_AND_DOB alone is MEDIUM", () => {
+    expect(computeDuplicateConfidence(["NAME_AND_DOB"])).toEqual({ score: 30, band: "MEDIUM" });
+  });
+
+  it("all three signals cap at 100, not 100+", () => {
+    expect(computeDuplicateConfidence(["MOBILE", "EMAIL", "NAME_AND_DOB"])).toEqual({ score: 100, band: "STRONG" });
+  });
+
+  it("no signals is LOW with a score of 0", () => {
+    expect(computeDuplicateConfidence([])).toEqual({ score: 0, band: "LOW" });
   });
 });

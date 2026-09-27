@@ -175,9 +175,9 @@ export function SafetyPanel() {
       <PanelIntro>What the assistant will and will not do, and the known limits of these safeguards.</PanelIntro>
       <Card title="Hard boundaries">
         <ul className="list-disc space-y-1 pl-5 text-sm">
-          <li>AI recommends and explains; humans decide. It cannot approve or reject a profile, reveal or share contact details, finalise a proposal, suspend, delete, refund or send a message.</li>
-          <li>The compatibility score and ranking come only from the deterministic matching engine. AI text cannot change them and never ranks candidates.</li>
-          <li>No facial or appearance assessment, no inference of ethnicity, health, personality or legal status, no guarantee or probability of marriage, and no accusation of fraud.</li>
+          <li>AI recommends and explains; humans decide. It cannot approve or reject a profile, approve or reject an identity verification, confirm or dismiss a suspected duplicate, restrict or suspend an account, reveal or share contact details, finalise a proposal, delete, refund or send a message.</li>
+          <li>The compatibility score and ranking come only from the deterministic matching engine. AI text cannot change them and never ranks candidates. Verification status and risk signals are never used to change a compatibility score.</li>
+          <li>No facial or appearance assessment, no inference of ethnicity, health, personality or legal status, no guarantee or probability of marriage, and no accusation of fraud, dishonesty, or criminality — only neutral, review-required language.</li>
           <li>Missing information is shown as &ldquo;insufficient information&rdquo;, never as incompatibility.</li>
           <li>Data the requesting admin cannot see is never loaded. Member consent is checked before processing; an external provider is used only with explicit member AI consent.</li>
         </ul>

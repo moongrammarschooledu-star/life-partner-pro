@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyFamilySessionIdToken, FAMILY_SESSION_ID_COOKIE } from "@/lib/family/family-session";
 import { touchAndValidateFamilyMemberSession } from "@/lib/family/family-member-session";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
 // The canonical guard every /api/family/* route must call — mirrors
 // requireApplicantProfileId()'s pattern exactly. Returns null (never a
@@ -17,8 +18,17 @@ export async function requireFamilyMemberId(): Promise<string | null> {
   const familyMemberId = await touchAndValidateFamilyMemberSession(sessionId);
   if (!familyMemberId) return null;
 
-  const member = await prisma.familyMember.findUnique({ where: { id: familyMemberId }, select: { status: true } });
+  const member = await prisma.familyMember.findUnique({
+    where: { id: familyMemberId },
+    select: { status: true, familyAccount: { select: { applicantId: true } } },
+  });
   if (!member || member.status !== "ACTIVE") return null;
+
+  // STEP 23 §11/§27 — a LOGIN_RESTRICTED restriction on the applicant's own
+  // profile locks out the whole family account, not just the applicant's
+  // own session; a restricted applicant is not a channel to route around via
+  // a delegated family login.
+  if (await hasActiveRestriction(member.familyAccount.applicantId, "LOGIN_RESTRICTED")) return null;
 
   return familyMemberId;
 }

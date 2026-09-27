@@ -9,6 +9,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { formatEnumLabel } from "@/lib/utils";
 import { StatusControl } from "@/components/admin/profile-detail/status-control";
 import { ContactPanel } from "@/components/admin/profile-detail/contact-panel";
+import { TrustSummaryCard } from "@/components/admin/profile-detail/trust-summary-card";
 import { PendingUpdateCard } from "@/components/admin/profile-detail/pending-update-card";
 import { OverviewTab } from "@/components/admin/profile-detail/overview-tab";
 import { EditProfileForm } from "@/components/admin/profile-detail/edit-profile-form";
@@ -132,6 +133,7 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
           {profile.pendingUpdate && (
             <PendingUpdateCard profileId={profile.id} pendingUpdate={profile.pendingUpdate} onResolved={load} />
           )}
+          <TrustSummaryCard profileId={profile.id} />
           <ContactPanel profileId={profile.id} />
         </div>
       </div>
