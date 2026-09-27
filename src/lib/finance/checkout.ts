@@ -78,6 +78,16 @@ export async function startCheckout(params: { profileId: string; packageId: stri
     await prisma.couponRedemption.create({ data: { couponId, profileId: params.profileId, orderId: order.id, discountAppliedMinor: discountMinor } });
   }
 
+  // STEP 23 Add-on — non-blocking jurisdiction/tax review flag (spec: "use
+  // TAX_REVIEW_REQUIRED where configuration is incomplete"). Never halts
+  // checkout — payments aren't blocked, this only queues a
+  // ComplianceReview row for a human to look at when the country either
+  // has no configured Jurisdiction at all, or has one but no TaxRule was
+  // found for it (an incomplete configuration, not a resolved "no tax due").
+  if (!taxRule) {
+    await flagOrderForTaxReview(order.id, params.country).catch(() => undefined);
+  }
+
   const paymentCode = await nextSequenceCode("PAY");
   const provider = await getActiveProvider();
   const payment = await prisma.payment.create({
@@ -99,4 +109,17 @@ export async function startCheckout(params: { profileId: string; packageId: stri
   await writeAudit({ action: "PAYMENT_STATUS_CHANGED", targetProfileId: params.profileId, meta: { paymentId: payment.id, orderId: order.id, status: "PENDING" } });
 
   return { order, payment, checkout };
+}
+
+async function flagOrderForTaxReview(orderId: string, country: string): Promise<void> {
+  await prisma.complianceReview.create({
+    data: {
+      reviewCode: await nextSequenceCode("CREV"),
+      subjectType: "ORDER",
+      subjectId: orderId,
+      status: "REVIEW_REQUIRED",
+      reviewType: "TAX_CONFIGURATION",
+      notes: `No active TaxRule found for country "${country}" at checkout time.`,
+    },
+  });
 }

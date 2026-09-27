@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { revokeAllFamilyMemberSessions } from "@/lib/family/family-member-session";
+import { isFamilyAccessRestricted } from "@/lib/compliance/rule-engine";
 import type { FamilyRole, FamilySharedRecordType } from "@prisma/client";
 
 // FamilyAccessControlService (STEP 22 plan Decision 5) — the single choke
@@ -25,12 +26,36 @@ export interface FamilyMembership {
 // that maps a family session to "which applicant does this belong to."
 // Routes should always derive applicantId from here, never accept it as a
 // client-supplied parameter (structurally prevents cross-family access).
+//
+// STEP 23 Add-on — also the single choke point for a jurisdiction-based
+// family-access restriction (plan: "propagates to every existing getter
+// automatically, no changes needed to data-visibility.ts"). Age is looked up
+// by the applicant's own country directly (same reasoning as
+// src/lib/compliance/age-policy.ts — a personal attribute, not a multi-
+// signal business decision), and access is only ever denied when an ACTIVE
+// ComplianceRule explicitly says so for that jurisdiction; absent one, every
+// existing family portal keeps working exactly as before.
 export async function getFamilyMembership(familyMemberId: string): Promise<FamilyMembership | null> {
   const member = await prisma.familyMember.findUnique({
     where: { id: familyMemberId },
-    select: { id: true, role: true, status: true, familyAccount: { select: { applicantId: true, status: true } } },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+      familyAccount: { select: { applicantId: true, status: true, applicant: { select: { country: true } } } },
+    },
   });
   if (!member || member.status !== "ACTIVE" || member.familyAccount.status !== "ACTIVE") return null;
+
+  const now = new Date();
+  const jurisdiction = await prisma.jurisdiction.findFirst({
+    where: { countryCode: member.familyAccount.applicant.country, status: "ACTIVE", effectiveFrom: { lte: now }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }] },
+  });
+  if (jurisdiction) {
+    const restriction = await isFamilyAccessRestricted(jurisdiction.id);
+    if (restriction.resolved && restriction.value?.restricted) return null;
+  }
+
   return { familyMemberId: member.id, applicantId: member.familyAccount.applicantId, role: member.role, status: member.status };
 }
 

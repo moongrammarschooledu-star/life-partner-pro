@@ -43,14 +43,14 @@ describe("permissions", () => {
 // ---------------------------------------------------------------------------
 
 describe("STEP 17 — ADMIN_ROLES (the canonical, assignable-today role list)", () => {
-  it("has exactly the 13 spec roles, and excludes the two legacy labels", () => {
-    expect(ADMIN_ROLES).toHaveLength(13);
+  it("has exactly the 13 spec roles plus STEP 23 Add-on's COMPLIANCE_MANAGER, and excludes the two legacy labels", () => {
+    expect(ADMIN_ROLES).toHaveLength(14);
     expect(ADMIN_ROLES).not.toContain("ADMIN");
     expect(ADMIN_ROLES).not.toContain("STAFF");
     for (const role of [
       "SUPER_ADMIN", "OPERATIONS_ADMIN", "MATCHMAKING_MANAGER", "VERIFICATION_MANAGER", "SUPPORT_MANAGER",
-      "COMMUNICATION_MANAGER", "FINANCE_MANAGER", "STAFF_MATCHMAKER", "VERIFICATION_STAFF", "SUPPORT_STAFF",
-      "COMMUNICATION_STAFF", "REPORTING_ANALYST", "VIEWER",
+      "COMMUNICATION_MANAGER", "FINANCE_MANAGER", "COMPLIANCE_MANAGER", "STAFF_MATCHMAKER", "VERIFICATION_STAFF",
+      "SUPPORT_STAFF", "COMMUNICATION_STAFF", "REPORTING_ANALYST", "VIEWER",
     ] as const) {
       expect(ADMIN_ROLES).toContain(role);
     }

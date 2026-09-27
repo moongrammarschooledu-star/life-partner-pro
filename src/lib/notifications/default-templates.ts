@@ -477,4 +477,40 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Identity Verification Completed", body: "Your identity verification has been completed." },
     UR: { title: "شناختی تصدیق مکمل ہو گئی", body: "آپ کی شناختی تصدیق مکمل ہو چکی ہے۔" },
   },
+
+  // ---------- STEP 23 Add-on — Legal Jurisdiction Safeguards & Regulatory Compliance Framework ----------
+  // All admin-internal (compliance/legal ops surface), same convention as the
+  // ADMIN_* types above.
+  COMPLIANCE_RULE_EXPIRING: {
+    EN: { title: "Compliance Rule Expiring Soon", body: "A compliance rule is due for review before it expires." },
+    UR: { title: "کمپلائنس رول جلد ختم ہو رہا ہے", body: "ایک کمپلائنس رول کی میعاد ختم ہونے سے پہلے جائزہ درکار ہے۔" },
+  },
+  COMPLIANCE_RULE_EXPIRED: {
+    EN: { title: "Compliance Rule Expired", body: "A compliance rule has expired and no longer applies." },
+    UR: { title: "کمپلائنس رول کی میعاد ختم", body: "ایک کمپلائنس رول کی میعاد ختم ہو چکی ہے اور اب لاگو نہیں ہے۔" },
+  },
+  COMPLIANCE_JURISDICTION_UNKNOWN: {
+    EN: { title: "Jurisdiction Could Not Be Resolved", body: "An action could not be matched to a known jurisdiction and requires review." },
+    UR: { title: "دائرہ اختیار کا تعین نہ ہو سکا", body: "ایک کارروائی کو کسی معلوم دائرہ اختیار سے نہیں ملایا جا سکا، جائزہ درکار ہے۔" },
+  },
+  COMPLIANCE_TRANSFER_REVIEW_REQUIRED: {
+    EN: { title: "Cross-Border Transfer Needs Review", body: "A data transfer assessment requires compliance review." },
+    UR: { title: "بین الاقوامی ڈیٹا ٹرانسفر کا جائزہ درکار ہے", body: "ایک ڈیٹا ٹرانسفر کے جائزے کے لیے کمپلائنس ریویو درکار ہے۔" },
+  },
+  COMPLIANCE_PROVIDER_REVIEW_DUE: {
+    EN: { title: "Processor Review Due", body: "A third-party processor is due for a compliance review." },
+    UR: { title: "پراسیسر کا جائزہ درکار ہے", body: "ایک تھرڈ پارٹی پراسیسر کے لیے کمپلائنس ریویو درکار ہے۔" },
+  },
+  COMPLIANCE_LEGAL_HOLD_ACTIVE: {
+    EN: { title: "Legal Hold Active", body: "A legal/compliance hold is active and requires attention." },
+    UR: { title: "لیگل ہولڈ فعال ہے", body: "ایک لیگل/کمپلائنس ہولڈ فعال ہے اور توجہ درکار ہے۔" },
+  },
+  COMPLIANCE_POLICY_CONFLICT: {
+    EN: { title: "Compliance Policy Conflict", body: "Two or more compliance rules conflict and require review." },
+    UR: { title: "کمپلائنس پالیسی میں تضاد", body: "دو یا زیادہ کمپلائنس رولز میں تضاد ہے، جائزہ درکار ہے۔" },
+  },
+  COMPLIANCE_AUTHORITY_REQUEST_DUE: {
+    EN: { title: "Authority Request Awaiting Review", body: "A law enforcement or regulator request is awaiting legal review." },
+    UR: { title: "سرکاری درخواست جائزے کی منتظر ہے", body: "قانون نافذ کرنے والے ادارے یا ریگولیٹر کی درخواست قانونی جائزے کی منتظر ہے۔" },
+  },
 };

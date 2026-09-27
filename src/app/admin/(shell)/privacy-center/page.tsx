@@ -298,10 +298,13 @@ function RetentionSection({ onChanged }: { onChanged: () => void }) {
 }
 
 function HoldsSection({ onChanged }: { onChanged: () => void }) {
+  const { show } = useToast();
   const [items, setItems] = useState<Array<{ id: string; profileId: string | null; recordType: string | null; recordId: string | null; reason: string; placedAt: string; active: boolean }> | null>(null);
   const [creating, setCreating] = useState(false);
   const [profileId, setProfileId] = useState("");
   const [reason, setReason] = useState("");
+  const [releasing, setReleasing] = useState<string | null>(null);
+  const [releaseReason, setReleaseReason] = useState("");
 
   function load() {
     fetch("/api/admin/privacy-center/holds").then((r) => r.json()).then((j) => setItems(j.items ?? []));
@@ -323,11 +326,28 @@ function HoldsSection({ onChanged }: { onChanged: () => void }) {
     }
   }
 
-  async function lift(id: string) {
-    const res = await fetch(`/api/admin/privacy-center/holds/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      onChanged();
+  // STEP 23 Add-on §28 — release now goes through a maker-checker gate
+  // instead of lifting immediately, so a 202 here means "requested, awaiting
+  // a second approver" rather than "done."
+  async function requestRelease(id: string) {
+    const res = await fetch(`/api/admin/privacy-center/holds/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: releaseReason }),
+    });
+    if (res.status === 202) {
+      show("Release requested — awaiting a second approver.", "success");
+      setReleasing(null);
+      setReleaseReason("");
       load();
+    } else if (res.ok) {
+      onChanged();
+      setReleasing(null);
+      setReleaseReason("");
+      load();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      show(body.error ?? "Could not request release.", "error");
     }
   }
 
@@ -355,7 +375,7 @@ function HoldsSection({ onChanged }: { onChanged: () => void }) {
                   <td className="p-3">{h.reason}</td>
                   <td className="p-3 text-muted">{formatDate(h.placedAt)}</td>
                   <td className="p-3"><Badge variant={h.active ? "warning" : "muted"}>{h.active ? "Active" : "Released"}</Badge></td>
-                  <td className="p-3">{h.active && <Button size="sm" variant="outline" onClick={() => lift(h.id)}>Release</Button>}</td>
+                  <td className="p-3">{h.active && <Button size="sm" variant="outline" onClick={() => setReleasing(h.id)}>Release</Button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -369,6 +389,19 @@ function HoldsSection({ onChanged }: { onChanged: () => void }) {
         </Field>
         <Field label="Reason" htmlFor="hold-reason">
           <Textarea id="hold-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!releasing}
+        title="Request Hold Release"
+        description="Releasing a legal/compliance hold requires a second approver's sign-off before it takes effect."
+        confirmLabel="Request Release"
+        onConfirm={() => releasing && requestRelease(releasing)}
+        onCancel={() => { setReleasing(null); setReleaseReason(""); }}
+      >
+        <Field label="Reason" htmlFor="hold-release-reason">
+          <Textarea id="hold-release-reason" rows={2} value={releaseReason} onChange={(e) => setReleaseReason(e.target.value)} />
         </Field>
       </ConfirmDialog>
     </div>

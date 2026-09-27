@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
-import type { ConsentCategory, ConsentGrantStatus } from "@prisma/client";
+import type { ConsentCategory, ConsentGrantStatus, DataProcessingPurpose, LegalBasis } from "@prisma/client";
 
 // Spec §3/§4 — the new Consent Center's read/write surface. Additive to (not
 // a replacement for) ConsentRecord and CommunicationConsent/
@@ -23,6 +23,15 @@ export async function recordConsent(params: {
   status: ConsentGrantStatus;
   source: string;
   ipHash?: string | null;
+  // STEP 23 Add-on §11 — optional; existing call sites keep working
+  // unchanged without populating jurisdiction data they don't yet collect
+  // (plan decision 5). legalBasis defaults to CONSENT, matching today's
+  // implicit assumption without silently reinterpreting history.
+  jurisdictionId?: string;
+  purpose?: DataProcessingPurpose;
+  legalBasis?: LegalBasis;
+  privacyNoticeVersionId?: string;
+  method?: string;
 }) {
   const grant = await prisma.consentGrant.create({
     data: {
@@ -32,6 +41,12 @@ export async function recordConsent(params: {
       version: CONSENT_VERSION,
       source: params.source,
       ipHash: params.ipHash ?? null,
+      jurisdictionId: params.jurisdictionId ?? null,
+      purpose: params.purpose ?? null,
+      legalBasis: params.legalBasis ?? "CONSENT",
+      privacyNoticeVersionId: params.privacyNoticeVersionId ?? null,
+      method: params.method ?? null,
+      withdrawnAt: params.status === "REVOKED" ? new Date() : null,
     },
   });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 interface FakeMember { id: string; role: string; status: string; familyAccountId: string; }
-interface FakeAccount { id: string; applicantId: string; status: string; }
+interface FakeAccount { id: string; applicantId: string; status: string; applicantCountry?: string; }
 interface FakePermission { familyMemberId: string; permission: string; scope: string | null; status: string; expiresAt: Date | null; }
 interface FakeShare { familyMemberId: string; recordType: string; recordId: string; status: string; accessLevel: string; allowComments: boolean; allowResponse: boolean; expiresAt: Date | null; }
 
@@ -68,7 +68,7 @@ vi.mock("@/lib/prisma", () => ({
         const m = members.get(where.id);
         if (!m) return null;
         const acc = accounts.get(m.familyAccountId)!;
-        return { id: m.id, role: m.role, status: m.status, familyAccount: { applicantId: acc.applicantId, status: acc.status } };
+        return { id: m.id, role: m.role, status: m.status, familyAccount: { applicantId: acc.applicantId, status: acc.status, applicant: { country: acc.applicantCountry ?? "Pakistan" } } };
       }),
     },
     familyPermission: {
@@ -96,6 +96,11 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: vi.fn(async ({ where }: { where: { profileId: string; status: { in: string[] }; severity: { in: string[] } } }) =>
         flags.find((f) => f.profileId === where.profileId && where.status.in.includes(f.status) && where.severity.in.includes(f.severity)) ?? null
       ),
+    },
+    jurisdiction: {
+      // STEP 23 Add-on — no jurisdiction configured by default, so these
+      // pre-existing family-visibility tests keep exercising unrestricted access.
+      findFirst: vi.fn(async () => null),
     },
   },
 }));

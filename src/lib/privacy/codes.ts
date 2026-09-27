@@ -28,7 +28,14 @@ export type SequencePrefix =
   | "FAMGRP"
   | "FAMREQ"
   | "FAMDEC"
-  | "DUPC";
+  | "DUPC"
+  | "JRSD"
+  | "CRULE"
+  | "CREV"
+  | "XFER"
+  | "PROC"
+  | "AGRMT"
+  | "AUTHREQ";
 
 export async function nextSequenceCode(prefix: SequencePrefix): Promise<string> {
   const counter = await prisma.sequenceCounter.upsert({

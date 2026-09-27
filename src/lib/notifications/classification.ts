@@ -179,6 +179,18 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   PROVIDER_VERIFICATION_FAILURE: ESSENTIAL,
   KYC_VERIFICATION_REQUIRES_ACTION: ESSENTIAL,
   KYC_VERIFICATION_COMPLETED: ESSENTIAL,
+
+  // STEP 23 Add-on — Legal Jurisdiction Safeguards & Regulatory Compliance
+  // Framework. All admin-internal (compliance/legal ops), same convention as
+  // ADMIN_* above — essential, not subject to applicant notification preferences.
+  COMPLIANCE_RULE_EXPIRING: ESSENTIAL,
+  COMPLIANCE_RULE_EXPIRED: ESSENTIAL,
+  COMPLIANCE_JURISDICTION_UNKNOWN: ESSENTIAL,
+  COMPLIANCE_TRANSFER_REVIEW_REQUIRED: ESSENTIAL,
+  COMPLIANCE_PROVIDER_REVIEW_DUE: ESSENTIAL,
+  COMPLIANCE_LEGAL_HOLD_ACTIVE: ESSENTIAL,
+  COMPLIANCE_POLICY_CONFLICT: ESSENTIAL,
+  COMPLIANCE_AUTHORITY_REQUEST_DUE: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

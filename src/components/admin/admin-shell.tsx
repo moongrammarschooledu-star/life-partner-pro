@@ -50,6 +50,7 @@ import {
   Copy,
   ShieldQuestion,
   Settings2,
+  Scale,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -85,6 +86,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/team-workload", label: "Team Workload", icon: Users2, permission: "staff:view" },
   { href: "/admin/case-management", label: "Case Management", icon: LifeBuoy, permission: "cases:view" },
   { href: "/admin/privacy-center", label: "Privacy Center", icon: Lock, permission: "privacy:view" },
+  { href: "/admin/compliance", label: "Compliance", icon: Scale, permission: "compliance:view" },
   { href: "/admin/finance-center", label: "Finance Center", icon: Wallet, permission: "finance:view" },
   { href: "/admin/packages", label: "Packages", icon: Package, permission: "finance:packages:view" },
   { href: "/admin/system-health", label: "System Health", icon: Activity, permission: "system:view" },

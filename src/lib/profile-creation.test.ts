@@ -40,6 +40,9 @@ vi.mock("@/lib/prisma", () => ({
     profileVerification: {
       create: vi.fn(async () => ({})),
     },
+    jurisdiction: {
+      findFirst: vi.fn(async () => null),
+    },
   },
 }));
 
@@ -170,5 +173,14 @@ describe("createProfileFromRegistration", () => {
     const { profile } = await createProfileFromRegistration(buildInput(), null, { ipHashSource: "x" });
     expect(profiles).toHaveLength(1);
     expect(profile).toBeDefined();
+  });
+
+  it("rejects registration below the minimum age (STEP 23 Add-on §16) — server-side, cannot be bypassed by client data", async () => {
+    const under18Dob = new Date();
+    under18Dob.setFullYear(under18Dob.getFullYear() - 16);
+    const input = buildInput({ basic: { ...buildInput().basic, dateOfBirth: under18Dob.toISOString().slice(0, 10) } });
+
+    await expect(createProfileFromRegistration(input, null, { ipHashSource: "x" })).rejects.toThrow(ProfileCreationError);
+    expect(profiles).toHaveLength(0);
   });
 });

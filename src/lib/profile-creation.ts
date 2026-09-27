@@ -6,6 +6,7 @@ import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { writeAudit } from "@/lib/audit";
 import { notifyProfileRegistered, notifyProfileSubmitted } from "@/lib/notifications/events";
+import { validateMinimumAge } from "@/lib/compliance/age-policy";
 import type { RegistrationInput } from "@/lib/validation/registration";
 
 export class ProfileCreationError extends Error {
@@ -56,6 +57,16 @@ export async function createProfileFromRegistration(
       409,
       "We found a possible existing profile. Please contact Life Partner Pro support if you already have an account."
     );
+  }
+
+  // STEP 23 Add-on §16 — server-side minimum-age gate, so it can never be
+  // bypassed by editing frontend values. Applies identically to
+  // self-registration and admin-entered profiles, since both call this
+  // shared function. Uses the conservative platform default (18) when the
+  // applicant's country has no configured jurisdiction override.
+  const ageCheck = await validateMinimumAge(value.basic.dateOfBirth, value.basic.country);
+  if (!ageCheck.allowed) {
+    throw new ProfileCreationError(422, "Registration is not permitted below the minimum age for this country.");
   }
 
   const profileCode = await nextProfileCode();

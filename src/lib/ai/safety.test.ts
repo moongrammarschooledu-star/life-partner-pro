@@ -50,6 +50,24 @@ describe("safety — accusations and pressure are rewritten to neutral wording",
   });
 });
 
+describe("safety — STEP 23 Add-on: compliance conclusions are rewritten, never asserted", () => {
+  const cases = [
+    "This profile is compliant with all requirements.",
+    "Compliance confirmed for this jurisdiction.",
+    "This meets all the regulatory requirements.",
+    "The process satisfies the regulation.",
+    "You must report this to the authority.",
+    "You must disclose this information.",
+  ];
+  for (const text of cases) {
+    it(`rewrites: ${text}`, () => {
+      const r = checkText(text);
+      expect(r.blocked).toBe(false);
+      expect(r.text).toMatch(/human compliance\/legal review is required/i);
+    });
+  }
+});
+
 describe("safety — inappropriate inference and leakage are blocked", () => {
   const blocked: Array<[string, string]> = [
     ["APPEARANCE_JUDGEMENT", "She is very attractive and has a fair complexion."],

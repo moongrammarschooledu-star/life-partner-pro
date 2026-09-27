@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 interface FakeMember { id: string; role: string; status: string; familyAccountId: string; }
-interface FakeAccount { id: string; applicantId: string; status: string; }
+interface FakeAccount { id: string; applicantId: string; status: string; applicantCountry: string; }
 interface FakePermission { familyMemberId: string; permission: string; scope: string | null; status: string; expiresAt: Date | null; }
 interface FakeShare { familyMemberId: string; recordType: string; recordId: string; status: string; accessLevel: string; allowComments: boolean; allowResponse: boolean; expiresAt: Date | null; }
 interface FakeConsent { familyMemberId: string; consentType: string; status: string; expiresAt: Date | null; grantedAt: Date; }
@@ -14,9 +14,15 @@ let consents: FakeConsent[];
 let auditCalls: Record<string, unknown>[];
 let sessionRevokeCalls: string[];
 
+let restrictionResult: { resolved: boolean; value: { restricted: boolean } | null; reviewRequired: boolean; matchedRules: unknown[] };
+let jurisdictionRow: { id: string; countryCode: string } | null;
+
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async (call: Record<string, unknown>) => { auditCalls.push(call); }) }));
 vi.mock("@/lib/family/family-member-session", () => ({
   revokeAllFamilyMemberSessions: vi.fn(async (id: string) => { sessionRevokeCalls.push(id); return 1; }),
+}));
+vi.mock("@/lib/compliance/rule-engine", () => ({
+  isFamilyAccessRestricted: vi.fn(async () => restrictionResult),
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -25,7 +31,7 @@ vi.mock("@/lib/prisma", () => ({
         const m = members.get(where.id);
         if (!m) return null;
         const acc = accounts.get(m.familyAccountId)!;
-        return { id: m.id, role: m.role, status: m.status, familyAccount: { applicantId: acc.applicantId, status: acc.status } };
+        return { id: m.id, role: m.role, status: m.status, familyAccount: { applicantId: acc.applicantId, status: acc.status, applicant: { country: acc.applicantCountry } } };
       }),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<FakeMember> & { removedAt?: Date; suspendedAt?: Date; suspendedReason?: string | null } }) => {
         const m = members.get(where.id)!;
@@ -59,6 +65,12 @@ vi.mock("@/lib/prisma", () => ({
       }),
     },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    jurisdiction: {
+      // STEP 23 Add-on — no jurisdiction configured by default, so the
+      // existing family-access tests below keep exercising the pre-existing,
+      // unrestricted behavior unchanged.
+      findFirst: vi.fn(async () => jurisdictionRow),
+    },
   },
 }));
 
@@ -79,7 +91,7 @@ const {
 } = await import("./access-control");
 
 function seedMember(id: string, role: string, applicantId = "app1") {
-  accounts.set("acc1", { id: "acc1", applicantId, status: "ACTIVE" });
+  accounts.set("acc1", { id: "acc1", applicantId, status: "ACTIVE", applicantCountry: "Pakistan" });
   members.set(id, { id, role, status: "ACTIVE", familyAccountId: "acc1" });
 }
 
@@ -91,6 +103,8 @@ beforeEach(() => {
   consents = [];
   auditCalls = [];
   sessionRevokeCalls = [];
+  jurisdictionRow = null;
+  restrictionResult = { resolved: false, value: null, reviewRequired: true, matchedRules: [] };
 });
 
 describe("getFamilyMembership / isFamilyMember / getFamilyRole", () => {
@@ -98,6 +112,21 @@ describe("getFamilyMembership / isFamilyMember / getFamilyRole", () => {
     seedMember("fm1", "FAMILY_VIEWER", "app1");
     const m = await getFamilyMembership("fm1");
     expect(m).toEqual({ familyMemberId: "fm1", applicantId: "app1", role: "FAMILY_VIEWER", status: "ACTIVE" });
+  });
+
+  it("STEP 23 Add-on — a matched jurisdiction with no ACTIVE restriction rule keeps access unchanged", async () => {
+    seedMember("fm1", "FAMILY_VIEWER", "app1");
+    jurisdictionRow = { id: "j1", countryCode: "Pakistan" };
+    restrictionResult = { resolved: false, value: null, reviewRequired: true, matchedRules: [] };
+    const m = await getFamilyMembership("fm1");
+    expect(m).toEqual({ familyMemberId: "fm1", applicantId: "app1", role: "FAMILY_VIEWER", status: "ACTIVE" });
+  });
+
+  it("STEP 23 Add-on — denies family access when an ACTIVE ComplianceRule explicitly restricts it for the resolved jurisdiction", async () => {
+    seedMember("fm1", "FAMILY_VIEWER", "app1");
+    jurisdictionRow = { id: "j1", countryCode: "Pakistan" };
+    restrictionResult = { resolved: true, value: { restricted: true }, reviewRequired: false, matchedRules: [{ id: "r1", ruleCode: "LPP-CRULE-000001", subject: "*" }] };
+    expect(await getFamilyMembership("fm1")).toBeNull();
   });
 
   it("returns null (not an error) for an unknown or non-ACTIVE member — deny by default", async () => {

@@ -37,6 +37,12 @@ enum AdminRole {
   SUPPORT_STAFF
   COMMUNICATION_STAFF
   REPORTING_ANALYST
+  // ---------- STEP 23 Add-on — Legal Jurisdiction & Regulatory Compliance ----------
+  // The first new role since STEP 17 established this list — every step since
+  // has only assigned permissions to existing roles. Added because the spec
+  // explicitly asks for Compliance as a distinct function, matching every
+  // other manager role's domain-specific shape (see src/lib/permissions.ts).
+  COMPLIANCE_MANAGER
 }
 
 // STEP 17 §3 — cross-cutting graded record access. Ordered least to most:
@@ -154,6 +160,12 @@ enum AdminTaskType {
   // ---------- STEP 23 — KYC, Duplicate Detection & Safety Intelligence ----------
   DUPLICATE_REVIEW // PROFILE — a DuplicateCandidate needs admin review
   RISK_SIGNAL_REVIEW // PROFILE — a new-type SecurityFlag risk signal needs review
+
+  // ---------- STEP 23 Add-on — Legal Jurisdiction & Regulatory Compliance ----------
+  COMPLIANCE_REVIEW // CASE — a compliance incident or rule needs review
+  JURISDICTION_REVIEW // PROFILE — jurisdiction could not be resolved, needs manual determination
+  AUTHORITY_REQUEST_REVIEW // PROFILE — an authority/regulator request needs verification and legal review
+  TRANSFER_REVIEW // PROFILE — a cross-border transfer assessment needs review
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -276,6 +288,19 @@ enum CaseCategory {
   BACKUP_FAILURE
   DEPLOYMENT_FAILURE
   DATA_INTEGRITY_INCIDENT
+
+  // Compliance Incidents (STEP 23 add-on §54) — system-detected or
+  // staff-reported legal/regulatory incidents, filed under CaseType.INTERNAL
+  // exactly like Payment Incidents above (no dedicated CaseType/case-number
+  // prefix needed for a new incident domain — established precedent).
+  UNAUTHORIZED_DISCLOSURE
+  WRONG_JURISDICTION_CONFIGURATION
+  INCORRECT_RETENTION
+  UNAUTHORIZED_DOCUMENT_ACCESS
+  PROVIDER_TRANSFER_ISSUE
+  PRIVACY_REQUEST_FAILURE
+  POLICY_CONFLICT
+  ACCIDENTAL_SENSITIVE_DATA_EXPOSURE
 }
 
 enum CaseStatus {
@@ -872,6 +897,7 @@ enum AuditAction {
   AI_FOLLOWUP_DRAFTED
   AI_REPORT_SUMMARY_GENERATED
   AI_DATA_QUALITY_CHECKED
+  AI_COMPLIANCE_SUMMARY_GENERATED
 
   // ---------- Exact Admin Roles & Granular Permission Matrix (STEP 17) ----------
   // Existing ADMIN_USER_ROLE_CHANGED / ADMIN_SESSION_REVOKED / ASSIGNMENT_CREATED /
@@ -1007,6 +1033,26 @@ enum AuditAction {
   PROVIDER_WEBHOOK_RECEIVED
   PROVIDER_WEBHOOK_REJECTED
   REVERIFICATION_TRIGGERED
+
+  // ---------- STEP 23 Add-on — Legal Jurisdiction & Regulatory Compliance ----------
+  JURISDICTION_CREATED
+  JURISDICTION_UPDATED
+  COMPLIANCE_RULE_CREATED
+  COMPLIANCE_RULE_STATUS_CHANGED
+  COMPLIANCE_REVIEW_COMPLETED
+  TRANSFER_ASSESSED
+  TRANSFER_BLOCKED
+  PROCESSOR_CREATED
+  PROCESSOR_REVIEWED
+  PROCESSOR_AGREEMENT_RECORDED
+  AUTHORITY_REQUEST_RECEIVED
+  AUTHORITY_REQUEST_VERIFIED
+  AUTHORITY_REQUEST_DISCLOSED
+  LEGAL_HOLD_RELEASE_REQUESTED
+  LEGAL_HOLD_RELEASE_EXECUTED
+  COMPLIANCE_INCIDENT_CREATED
+  LEGAL_DOCUMENT_VERSION_PUBLISHED
+  AGE_VERIFICATION_BLOCKED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1195,6 +1241,17 @@ enum NotificationType {
   PROVIDER_VERIFICATION_FAILURE
   KYC_VERIFICATION_REQUIRES_ACTION
   KYC_VERIFICATION_COMPLETED
+
+  // ---------- STEP 23 Add-on — Legal Jurisdiction & Regulatory Compliance ----------
+  // All admin-only, internal — never dispatched externally to a profile.
+  COMPLIANCE_RULE_EXPIRING
+  COMPLIANCE_RULE_EXPIRED
+  COMPLIANCE_JURISDICTION_UNKNOWN
+  COMPLIANCE_TRANSFER_REVIEW_REQUIRED
+  COMPLIANCE_PROVIDER_REVIEW_DUE
+  COMPLIANCE_LEGAL_HOLD_ACTIVE
+  COMPLIANCE_POLICY_CONFLICT
+  COMPLIANCE_AUTHORITY_REQUEST_DUE
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1523,8 +1580,19 @@ model AdminUser {
   retentionPoliciesUpdated RetentionPolicy[]
   dataHoldsPlaced          DataHold[]               @relation("DataHoldPlacedBy")
   dataHoldsLifted          DataHold[]               @relation("DataHoldLiftedBy")
+  dataHoldsApproved        DataHold[]               @relation("DataHoldApprovedBy")
   breakGlassGrants         BreakGlassAccess[]
   privacyAccessLogs        PrivacyAccessLog[]
+
+  // ---------- Legal Jurisdiction & Regulatory Compliance (STEP 23 Add-on) ----------
+  complianceRulesCreated       ComplianceRule[]         @relation("ComplianceRuleCreatedBy")
+  complianceRulesApproved      ComplianceRule[]         @relation("ComplianceRuleApprovedBy")
+  complianceReviewsHandled     ComplianceReview[]       @relation("ComplianceReviewReviewer")
+  complianceReviewsCreated     ComplianceReview[]       @relation("ComplianceReviewCreatedBy")
+  transferAssessmentsMade      DataTransferAssessment[]
+  processorAgreementsApproved  ProcessorAgreement[]
+  authorityRequestsReviewed    AuthorityRequest[]
+  legalDocumentVersionsCreated LegalDocumentVersion[]
 
   // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
   packagesCreated           Package[]
@@ -3601,6 +3669,20 @@ model ConsentGrant {
   ipHash     String?
   recordedAt DateTime           @default(now())
 
+  // ---------- STEP 23 Add-on — Legal Jurisdiction & Regulatory Compliance ----------
+  // All nullable/additive — every existing call site (registration, family
+  // invitation acceptance, etc.) keeps working unchanged without passing
+  // these; this wires the columns/API, not a retrofit of prior consent
+  // history (see the plan's disclosed decision 5).
+  jurisdiction           Jurisdiction?          @relation(fields: [jurisdictionId], references: [id])
+  jurisdictionId         String?
+  purpose                DataProcessingPurpose?
+  legalBasis             LegalBasis?            @default(CONSENT)
+  privacyNoticeVersion   LegalDocumentVersion?  @relation(fields: [privacyNoticeVersionId], references: [id])
+  privacyNoticeVersionId String?
+  method                 String? // "CHECKBOX" | "SIGNATURE" | "VERBAL" | ...
+  withdrawnAt            DateTime?
+
   @@index([profileId, category, recordedAt])
 }
 
@@ -3677,6 +3759,18 @@ model DataHold {
   liftedById String?
   liftedAt   DateTime?
   active     Boolean    @default(true)
+
+  // ---------- STEP 23 Add-on ----------
+  // holdStatus is kept in lockstep with `active` (never a replacement for
+  // it — hasActiveHold() and every existing caller keep reading `active`
+  // unchanged). RELEASE_PENDING is the new state a maker-checker release
+  // request sits in before an approver executes it (see legal-hold.ts).
+  holdStatus   DataHoldStatus @default(ACTIVE)
+  authority    String? // e.g. "Court Order #123", "Regulator XYZ"
+  dataClasses  String? // JSON array of DataClassification values
+  scope        String?
+  approvedBy   AdminUser?     @relation("DataHoldApprovedBy", fields: [approvedById], references: [id])
+  approvedById String?
 
   @@index([profileId, active])
   @@index([recordType, recordId, active])
@@ -3782,6 +3876,370 @@ model ProfileSession {
 model SequenceCounter {
   key     String @id
   lastSeq Int    @default(0)
+}
+
+// ---------- Legal Jurisdiction Safeguards & Regulatory Compliance Framework (STEP 23 Add-on) ----------
+// Research confirmed ZERO existing concept of jurisdiction, legal basis, or
+// policy versioning anywhere in the app before this — STEP 13's consent/
+// retention/hold system is real but jurisdiction-blind by design. This block
+// is genuinely new; everywhere it touches an existing system it extends that
+// system's own models (ConsentGrant/DataHold above) rather than duplicating
+// them. See the plan's "Architecture decisions" for the full disclosure.
+
+enum JurisdictionStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+// spec §6 — only ACTIVE rules (with effectiveFrom/To in range) may affect
+// production behavior; APPROVED is a distinct, inert intermediate state so a
+// rule can be legally signed off ahead of its effective date without going
+// live early.
+enum ComplianceRuleStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  RETIRED
+}
+
+enum ComplianceSourceType {
+  LAW
+  REGULATION
+  REGULATOR_GUIDANCE
+  COURT_DECISION
+  CONTRACT
+  PROVIDER_REQUIREMENT
+  INTERNAL_POLICY
+  LEGAL_COUNSEL_ADVICE
+}
+
+// spec §13 — never auto-selected; a configured value an admin/legal reviewer
+// assigns, not something the system infers.
+enum LegalBasis {
+  CONSENT
+  CONTRACT
+  LEGAL_OBLIGATION
+  LEGITIMATE_INTEREST
+  VITAL_INTEREST
+  PUBLIC_TASK
+  OTHER_CONFIGURED_BASIS
+}
+
+// spec §11 — purpose limitation. Framework + new call sites use this; not a
+// retrofit of the ~200 existing profile-data routes in one pass (disclosed).
+enum DataProcessingPurpose {
+  ACCOUNT_OPERATION
+  IDENTITY_VERIFICATION
+  SECURITY
+  MATCHMAKING
+  PROPOSAL_MANAGEMENT
+  CONTACT_SHARING
+  CUSTOMER_SUPPORT
+  PAYMENT_PROCESSING
+  LEGAL_COMPLIANCE
+  FRAUD_PREVENTION
+  SAFETY
+  ANALYTICS
+  AI_ASSISTANCE
+}
+
+enum ComplianceReviewStatus {
+  DRAFT
+  PENDING_REVIEW
+  LEGAL_REVIEW
+  COMPLIANCE_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  REVIEW_REQUIRED
+}
+
+// spec §19 — never defaults to ALLOWED; UNKNOWN/REVIEW_REQUIRED is the
+// conservative return whenever no active rule resolves a transfer.
+enum TransferStatus {
+  ALLOWED
+  ALLOWED_WITH_CONTROLS
+  REVIEW_REQUIRED
+  BLOCKED
+  UNKNOWN
+}
+
+enum AuthorityRequestType {
+  LAW_ENFORCEMENT
+  REGULATOR
+  COURT_ORDER
+  LEGAL_NOTICE
+  OTHER_AUTHORITY
+}
+
+enum LegalDocumentType {
+  PRIVACY_POLICY
+  TERMS_OF_SERVICE
+  CONSENT_NOTICE
+  VERIFICATION_NOTICE
+  COOKIE_NOTICE
+  AI_PROCESSING_NOTICE
+  FAMILY_SHARING_NOTICE
+  PAYMENT_NOTICE
+}
+
+// spec §25 — RELEASE_PENDING is new: a hold release now requires a
+// maker-checker approval before it actually takes effect (see DataHold above
+// and src/lib/compliance/legal-hold.ts) — closing a real, disclosed gap
+// where liftHold() was previously a single unilateral admin action.
+enum DataHoldStatus {
+  ACTIVE
+  RELEASE_PENDING
+  RELEASED
+  EXPIRED
+}
+
+// spec §3 — a real table, not a hardcoded list. Deliberately unseeded by
+// this migration: an empty jurisdiction table is the conservative, honest
+// starting state (spec §37 — unknown jurisdiction must never default to a
+// guess).
+model Jurisdiction {
+  id               String             @id @default(cuid())
+  jurisdictionCode String             @unique // e.g. "PK", "US-CA", "EU" — examples only, never assumed
+  countryCode      String
+  regionCode       String?
+  name             String
+  status           JurisdictionStatus @default(DRAFT)
+  effectiveFrom    DateTime           @default(now())
+  effectiveTo      DateTime?
+  configuration    String // JSON — e.g. { "minAge": 18 } (spec §16's configurable age policy lives here)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  rules               ComplianceRule[]
+  consentGrants       ConsentGrant[]
+  legalDocuments      LegalDocumentVersion[]
+  transfersAsSource   DataTransferAssessment[] @relation("TransferSourceJurisdiction")
+  transfersAsDest     DataTransferAssessment[] @relation("TransferDestJurisdiction")
+  processorAgreements ProcessorAgreement[]
+  authorityRequests   AuthorityRequest[]
+
+  @@index([status])
+  @@index([countryCode])
+}
+
+// The actual "law" table (spec §6/§7) — every rule carries its own source
+// reference directly (always 1:1, no separate source-reference table).
+model ComplianceRule {
+  id              String       @id @default(cuid())
+  ruleCode        String       @unique // LPP-CRULE-######
+  jurisdiction    Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  jurisdictionId  String
+  subject         String // dotted scope, e.g. "verification.document.CNIC", "consent.matchmaking"
+  requirementType String // free string per spec's own openness — "AGE_MINIMUM" | "RETENTION_PERIOD" | "CONSENT_REQUIRED" | "VERIFICATION_REQUIRED" | "CROSS_BORDER_TRANSFER" | "DISCLOSURE_REQUIREMENT" | ...
+  description     String
+
+  sourceType            ComplianceSourceType
+  sourceTitle           String?
+  sourceAuthority       String?
+  sourceReference       String?
+  sourceUrl             String?
+  sourcePublicationDate DateTime?
+  internalReviewNote    String?
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  reviewDate    DateTime?
+
+  status        ComplianceRuleStatus @default(DRAFT)
+  ruleVersion   Int                  @default(1)
+  configuration String // JSON — the actual requirement payload (e.g. { "minAge": 21 })
+
+  createdBy    AdminUser? @relation("ComplianceRuleCreatedBy", fields: [createdById], references: [id])
+  createdById  String?
+  approvedBy   AdminUser? @relation("ComplianceRuleApprovedBy", fields: [approvedById], references: [id])
+  approvedById String?
+  approvalDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reviews           ComplianceReview[]
+  transfersGoverned DataTransferAssessment[]
+
+  @@index([jurisdictionId, status])
+  @@index([status, effectiveFrom, effectiveTo])
+  @@index([requirementType])
+}
+
+// spec §8/§24/§39 — reviews a rule, a processor, an authority request, etc.
+// Polymorphic subjectType/subjectId string pair, matching this codebase's
+// existing loose-reference convention (AdminAssignment.resourceType/Id,
+// FamilySharedRecord.recordType/Id) rather than a nullable FK per subject type.
+model ComplianceReview {
+  id          String                 @id @default(cuid())
+  reviewCode  String                 @unique // LPP-CREV-######
+  subjectType String // "COMPLIANCE_RULE" | "PROCESSOR" | "TRANSFER_ASSESSMENT" | "AUTHORITY_REQUEST" | ...
+  subjectId   String
+  status      ComplianceReviewStatus @default(DRAFT)
+  reviewType  String? // "PRIVACY_POLICY_REVIEW" | "RETENTION_REVIEW" | "PROVIDER_REVIEW" | ...
+  notes       String?
+  dueDate     DateTime?
+  completedAt DateTime?
+
+  reviewer   AdminUser? @relation("ComplianceReviewReviewer", fields: [reviewerId], references: [id])
+  reviewerId String?
+  approvalId String? // loose pointer to an ApprovalRequest.id when a STEP 19 gate was involved
+
+  ruleRef   ComplianceRule? @relation(fields: [ruleRefId], references: [id])
+  ruleRefId String?
+
+  createdBy   AdminUser? @relation("ComplianceReviewCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([subjectType, subjectId])
+  @@index([status, dueDate])
+}
+
+// spec §19 — a real, persisted decision record; assessTransfer() creates one
+// row every time, never just a function return. UNKNOWN/REVIEW_REQUIRED is
+// the default whenever no ComplianceRule resolves the pair — never ALLOWED.
+model DataTransferAssessment {
+  id                   String             @id @default(cuid())
+  assessmentCode       String             @unique // LPP-XFER-######
+  sourceJurisdiction   Jurisdiction?      @relation("TransferSourceJurisdiction", fields: [sourceJurisdictionId], references: [id])
+  sourceJurisdictionId String?
+  destJurisdiction     Jurisdiction?      @relation("TransferDestJurisdiction", fields: [destJurisdictionId], references: [id])
+  destJurisdictionId   String?
+  dataClass            DataClassification
+  dataType             String
+  purpose              String
+  provider             String?
+  storageLocation      String?
+  transferMechanism    String?
+  userConsentRequired  Boolean            @default(false)
+  userConsentObtained  Boolean            @default(false)
+  contractualControls  String?
+  governingRule        ComplianceRule?    @relation(fields: [governingRuleId], references: [id])
+  governingRuleId      String?
+  status               TransferStatus     @default(UNKNOWN)
+
+  assessedBy   AdminUser? @relation(fields: [assessedById], references: [id])
+  assessedById String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([status])
+  @@index([sourceJurisdictionId, destJurisdictionId])
+}
+
+// spec §20/§21 — deliberately NOT auto-populated from PaymentProviderName/
+// OtpChannel/AI-provider config; an admin manually records each real
+// processor, since auto-generating rows would misrepresent an unreviewed
+// technical integration as a reviewed compliance record.
+model ComplianceProcessor {
+  id                String    @id @default(cuid())
+  processorCode     String    @unique // LPP-PROC-######
+  name              String
+  serviceType       String // "IDENTITY_VERIFICATION" | "EMAIL" | "SMS" | "WHATSAPP" | "PAYMENT" | "CLOUD_STORAGE" | "ANALYTICS" | "AI" | ...
+  legalEntity       String?
+  country           String
+  processingRegions String // JSON array
+  dataTypes         String // JSON array
+  subprocessors     String? // JSON array
+  transferMechanism String?
+  contractStatus    String    @default("NOT_RECORDED")
+  complianceStatus  String    @default("REVIEW_REQUIRED") // never "COMPLIANT" merely because a certification exists (spec §52) — an explicit reviewer-set value
+  lastReviewedAt    DateTime?
+  nextReviewDue     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  agreements ProcessorAgreement[]
+
+  @@index([serviceType])
+  @@index([complianceStatus])
+}
+
+model ProcessorAgreement {
+  id                String              @id @default(cuid())
+  agreementCode     String              @unique // LPP-AGRMT-######
+  processor         ComplianceProcessor @relation(fields: [processorId], references: [id], onDelete: Cascade)
+  processorId       String
+  agreementType     String // "DPA" | "SCC" | "BAA" | "MSA" | ...
+  agreementStatus   String              @default("DRAFT")
+  effectiveDate     DateTime?
+  expiryDate        DateTime?
+  jurisdiction      Jurisdiction?       @relation(fields: [jurisdictionId], references: [id])
+  jurisdictionId    String?
+  dataCategories    String // JSON array
+  subprocessorTerms String?
+  securityTerms     String?
+  transferTerms     String?
+  approvedBy        AdminUser?          @relation(fields: [approvedById], references: [id])
+  approvedById      String?
+  createdAt         DateTime            @default(now())
+
+  @@index([processorId])
+}
+
+// spec §29/§30/§31 — verificationStatus and legalReviewStatus are separate
+// fields so a request can never be disclosed against based solely on an
+// informal/unverified email. No "emergency bypass" model/field exists at all
+// (spec §30 explicitly says not to build a generic one) — a genuine
+// emergency is still just a row here with requestType OTHER_AUTHORITY,
+// through the same gated review.
+model AuthorityRequest {
+  id                      String               @id @default(cuid())
+  requestCode             String               @unique // LPP-AUTHREQ-######
+  requestType             AuthorityRequestType
+  authority               String
+  jurisdiction            Jurisdiction?        @relation(fields: [jurisdictionId], references: [id])
+  jurisdictionId          String?
+  receivedAt              DateTime             @default(now())
+  requestReference        String?
+  scope                   String
+  deadline                DateTime?
+  verificationStatus      String               @default("UNVERIFIED")
+  legalReviewStatus       String               @default("PENDING")
+  approvedDisclosureScope String?
+  disclosedData           String? // JSON — only ever populated after approval
+  disclosureDate          DateTime?
+
+  reviewer   AdminUser? @relation(fields: [reviewerId], references: [id])
+  reviewerId String?
+  approvalId String? // loose pointer to an ApprovalRequest.id
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([requestType, legalReviewStatus])
+  @@index([jurisdictionId])
+}
+
+// spec §15 — versioned per document type + jurisdiction; never overwritten
+// in place, mirrors VerificationPolicy's (STEP 23) own versioned-row pattern.
+// contentReference is a storage/URL pointer, never the full document text.
+model LegalDocumentVersion {
+  id               String            @id @default(cuid())
+  documentType     LegalDocumentType
+  version          String
+  jurisdiction     Jurisdiction?     @relation(fields: [jurisdictionId], references: [id])
+  jurisdictionId   String?
+  effectiveDate    DateTime          @default(now())
+  retirementDate   DateTime?
+  language         String            @default("EN")
+  contentReference String
+  approvalStatus   String            @default("DRAFT")
+
+  createdBy   AdminUser? @relation(fields: [createdById], references: [id])
+  createdById String?
+  createdAt   DateTime   @default(now())
+
+  consentGrants ConsentGrant[]
+
+  @@index([documentType, jurisdictionId, language])
 }
 
 // ---------- Payment, Subscription, Packages & Financial Management (STEP 14) ----------
@@ -4704,6 +5162,9 @@ enum AiFeature {
   REPORT_ASSISTANT
   DATA_QUALITY
   PROFILE_IMPROVEMENT
+  // STEP 23 Add-on — read-only; summarizes configured compliance rules/
+  // jurisdictions, cannot write to any compliance table (spec §35).
+  COMPLIANCE_SUMMARY
 }
 
 enum AiRequestStatus {

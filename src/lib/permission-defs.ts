@@ -273,6 +273,27 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "safety:verification:suspend": "Suspend an account for a verification/safety concern",
   "sensitive:verification:view": "View detailed identity verification data",
   "sensitive:risk:view": "View risk signal details",
+  // ---------- STEP 23 Add-on — Legal Jurisdiction & Regulatory Compliance ----------
+  "compliance:view": "View the compliance dashboard",
+  "compliance:review": "Review a compliance rule, transfer, or incident",
+  "compliance:manage": "Manage the compliance framework",
+  "compliance:rules:view": "View legal/compliance rules",
+  "compliance:rules:manage": "Create, edit, and change the status of compliance rules",
+  "compliance:jurisdictions:view": "View configured jurisdictions",
+  "compliance:jurisdictions:manage": "Create and edit jurisdictions",
+  "compliance:providers:view": "View the third-party processor register",
+  "compliance:providers:manage": "Manage third-party processors and their agreements",
+  "compliance:requests:view": "View privacy/compliance requests",
+  "compliance:requests:manage": "Manage privacy/compliance requests",
+  "compliance:authority-requests:view": "View law enforcement / regulator requests",
+  "compliance:authority-requests:manage": "Verify and respond to authority requests",
+  "compliance:legal-holds:view": "View legal holds",
+  "compliance:legal-holds:manage": "Place and request release of legal holds",
+  "compliance:audit:view": "View the compliance audit trail",
+  "ai:compliance:use": "Use the read-only AI compliance summary assistant",
+  "sensitive:compliance:view": "View detailed compliance rule configuration",
+  "sensitive:authority-request:view": "View authority request details and disclosed data",
+  "sensitive:legal-hold:view": "View legal hold details",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

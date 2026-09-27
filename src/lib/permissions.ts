@@ -19,6 +19,7 @@ export type AdminRole =
   | "SUPPORT_MANAGER"
   | "COMMUNICATION_MANAGER"
   | "FINANCE_MANAGER"
+  | "COMPLIANCE_MANAGER"
   | "STAFF_MATCHMAKER"
   | "VERIFICATION_STAFF"
   | "SUPPORT_STAFF"
@@ -37,6 +38,7 @@ export const ADMIN_ROLES: AdminRole[] = [
   "SUPPORT_MANAGER",
   "COMMUNICATION_MANAGER",
   "FINANCE_MANAGER",
+  "COMPLIANCE_MANAGER",
   "STAFF_MATCHMAKER",
   "VERIFICATION_STAFF",
   "SUPPORT_STAFF",
@@ -312,7 +314,28 @@ export type Permission =
   | "safety:verification:restrict"
   | "safety:verification:suspend"
   | "sensitive:verification:view"
-  | "sensitive:risk:view";
+  | "sensitive:risk:view"
+  // ---------- STEP 23 Add-on — Legal Jurisdiction & Regulatory Compliance ----------
+  | "compliance:view"
+  | "compliance:review"
+  | "compliance:manage"
+  | "compliance:rules:view"
+  | "compliance:rules:manage"
+  | "compliance:jurisdictions:view"
+  | "compliance:jurisdictions:manage"
+  | "compliance:providers:view"
+  | "compliance:providers:manage"
+  | "compliance:requests:view"
+  | "compliance:requests:manage"
+  | "compliance:authority-requests:view"
+  | "compliance:authority-requests:manage"
+  | "compliance:legal-holds:view"
+  | "compliance:legal-holds:manage"
+  | "compliance:audit:view"
+  | "ai:compliance:use"
+  | "sensitive:compliance:view"
+  | "sensitive:authority-request:view"
+  | "sensitive:legal-hold:view";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -335,6 +358,9 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "search:sensitive",
   "sensitive:verification:view",
   "sensitive:risk:view",
+  "sensitive:compliance:view",
+  "sensitive:authority-request:view",
+  "sensitive:legal-hold:view",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -353,6 +379,7 @@ const BROAD_ACCESS_ROLES = new Set<AdminRole>([
   "SUPPORT_MANAGER",
   "COMMUNICATION_MANAGER",
   "FINANCE_MANAGER",
+  "COMPLIANCE_MANAGER",
 ]);
 
 export function hasBroadRecordAccess(role: AdminRole): boolean {
@@ -490,6 +517,33 @@ const AI_ALL_PERMISSIONS: Permission[] = [
   "ai:activity:view",
   "ai:usage:view",
   "ai:test:run",
+  "ai:compliance:use",
+];
+
+// STEP 23 Add-on — the full compliance permission set; SUPER_ADMIN holds all
+// of it, COMPLIANCE_MANAGER holds everything except platform-wide admin
+// concerns it was never meant to carry (mirrors PRIVACY_PERMISSIONS's own
+// SUPER_ADMIN-vs-scoped-role split above).
+const COMPLIANCE_ALL_PERMISSIONS: Permission[] = [
+  "compliance:view",
+  "compliance:review",
+  "compliance:manage",
+  "compliance:rules:view",
+  "compliance:rules:manage",
+  "compliance:jurisdictions:view",
+  "compliance:jurisdictions:manage",
+  "compliance:providers:view",
+  "compliance:providers:manage",
+  "compliance:requests:view",
+  "compliance:requests:manage",
+  "compliance:authority-requests:view",
+  "compliance:authority-requests:manage",
+  "compliance:legal-holds:view",
+  "compliance:legal-holds:manage",
+  "compliance:audit:view",
+  "sensitive:compliance:view",
+  "sensitive:authority-request:view",
+  "sensitive:legal-hold:view",
 ];
 
 const ROLES_ALL_PERMISSIONS: Permission[] = ["roles:view", "roles:create", "roles:edit", "roles:disable", "roles:assign", "roles:delete"];
@@ -733,6 +787,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...TASKS_ALL_PERMISSIONS,
     ...APPROVALS_ALL_PERMISSIONS,
     ...SEARCH_ALL_PERMISSIONS,
+    ...COMPLIANCE_ALL_PERMISSIONS,
   ],
   // legacy — retired, kept only so a not-yet-migrated row keeps its historical permission set unchanged
   ADMIN: [
@@ -1080,6 +1135,35 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...MANAGER_SEARCH_PERMISSIONS,
     // deliberately lacks sensitive:income/family/notes/documents/contact:view, verification:*,
     // match:*, proposal:finalize, roles:*.
+  ],
+
+  // ---------------------------------------------------------------- COMPLIANCE_MANAGER (STEP 23 add-on)
+  // The first new role since STEP 17 — every prior step only assigned
+  // permissions to existing roles. Mirrors FINANCE_MANAGER's exact shape:
+  // the full domain permission spread, plus reporting/task/approval/search
+  // access. Maker-checker separation on any individual high-risk compliance
+  // action is enforced structurally by STEP 19's gate (a maker can never be
+  // their own approver on the same ApprovalRequest), not by withholding a
+  // permission from this role.
+  COMPLIANCE_MANAGER: [
+    "profile:view",
+    ...COMPLIANCE_ALL_PERMISSIONS,
+    "ai:compliance:use",
+    "reports:view",
+    "reports:export",
+    "audit:view",
+    "cases:view",
+    "cases:create",
+    "cases:escalate",
+    ...MANAGER_TASK_PERMISSIONS,
+    ...MANAGER_APPROVAL_PERMISSIONS,
+    "privacy:approval:view",
+    "privacy:approval:approve",
+    "security:approval:view",
+    "security:approval:approve",
+    ...MANAGER_SEARCH_PERMISSIONS,
+    // deliberately lacks admin:manage/roles:*, finance:*, verification:approve/reject
+    // (identity-verification decisions stay with VERIFICATION_MANAGER), profile:edit.
   ],
 
   // ---------------------------------------------------------------- STAFF_MATCHMAKER (spec §11)

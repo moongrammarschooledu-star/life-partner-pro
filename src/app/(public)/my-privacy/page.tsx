@@ -14,6 +14,7 @@ import { formatDateTime, formatEnumLabel } from "@/lib/utils";
 const TABS = [
   { value: "data", label: "My Data" },
   { value: "permissions", label: "My Permissions" },
+  { value: "legal", label: "Legal & Compliance" },
   { value: "activity", label: "My Activity" },
   { value: "requests", label: "My Requests" },
 ];
@@ -96,6 +97,7 @@ export default function MyPrivacyPage() {
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
       {tab === "data" && <MyDataTab />}
       {tab === "permissions" && <MyPermissionsTab />}
+      {tab === "legal" && <MyLegalComplianceTab />}
       {tab === "activity" && <MyActivityTab />}
       {tab === "requests" && <MyRequestsTab />}
     </div>
@@ -183,6 +185,68 @@ function MyPermissionsTab() {
         })}
       </CardContent>
     </Card>
+  );
+}
+
+interface ConsentHistoryRow {
+  id: string;
+  category: string;
+  status: string;
+  version: string;
+  purpose: string | null;
+  legalBasis: string | null;
+  method: string | null;
+  recordedAt: string;
+  withdrawnAt: string | null;
+}
+
+// STEP 23 Add-on §11/§15 — surfaces the jurisdiction/purpose/legal-basis
+// columns added to ConsentGrant when present, and clarifies that most
+// history rows predate this framework (decision 5: existing call sites
+// weren't retrofitted to populate them, only the columns/API were added).
+function MyLegalComplianceTab() {
+  const [history, setHistory] = useState<ConsentHistoryRow[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/my-privacy/consent")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setHistory(j?.history ?? []));
+  }, []);
+
+  if (!history) return <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent>
+          <p className="text-sm font-medium">Consent History</p>
+          <p className="mt-1 text-xs text-muted">
+            Purpose and legal basis are shown where recorded. Older entries may not have this detail — it was added alongside the platform&apos;s
+            legal jurisdiction framework and applies going forward.
+          </p>
+          {history.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">No consent history yet.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {history.map((h) => (
+                <div key={h.id} className="rounded-lg border border-border p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{formatEnumLabel(h.category)}</span>
+                    <Badge variant={h.status === "GRANTED" ? "success" : "muted"}>{formatEnumLabel(h.status)}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted">
+                    {formatDateTime(h.recordedAt)}
+                    {h.purpose ? ` · Purpose: ${formatEnumLabel(h.purpose)}` : ""}
+                    {h.legalBasis ? ` · Legal basis: ${formatEnumLabel(h.legalBasis)}` : ""}
+                    {h.method ? ` · Method: ${h.method}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

@@ -68,6 +68,18 @@ export const SAFETY_RULES: SafetyRule[] = [
     pattern: /\b(legally (valid|binding|eligible|permitted|required)|violates? the law|is illegal|illegal to|against the law|liable for)\b/i,
     neutral: "Legal questions are outside what this assistant can determine; please seek qualified advice.",
   },
+  // STEP 23 Add-on §35 — LEGAL_CONCLUSION above catches "legally valid/
+  // binding"/"is illegal" framing but not compliance-specific claims like
+  // "this is compliant" or "you must report/register/disclose," which the
+  // new read-only COMPLIANCE_SUMMARY AI feature could otherwise drift into.
+  // Backstops that feature's own human-review labeling even if a provider
+  // response strays.
+  {
+    id: "COMPLIANCE_CONCLUSION",
+    action: "REWRITE",
+    pattern: /\b(is compliant|compliance confirmed|meets (all )?(the )?(legal|regulatory) requirements|satisfies (the )?(law|regulation)|you must (register|report|disclose|file|comply)|legally required to)\b/i,
+    neutral: "Compliance and regulatory conclusions are outside what this assistant can determine; a human compliance/legal review is required.",
+  },
   {
     id: "MARKUP",
     action: "REWRITE",

@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE";
 
 export interface CatalogEntry {
   label: string;
@@ -120,6 +120,17 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   // is not gated (it's the "nothing happens" outcome, no elevated risk).
   DUPLICATE_CONFIRMATION: { label: "Confirm a suspected duplicate profile", domain: "SAFETY", sourceType: "SECURITY_FLAG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPER_ADMIN"] },
   ACCOUNT_RELATIONSHIP_LINK: { label: "Manually link two accounts as related", domain: "SAFETY", sourceType: "PROFILE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPER_ADMIN"] },
+
+  // ---------- COMPLIANCE (STEP 23 Add-on) ----------
+  // Activating a rule (not merely drafting/editing one) is the high-impact
+  // step — spec §8/§38: "high-impact legal configuration changes must use
+  // the maker-checker system." Editing a DRAFT rule itself is not gated.
+  COMPLIANCE_RULE_APPROVAL: { label: "Approve a compliance rule for activation", domain: "COMPLIANCE", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  // Distinct from the existing LEGAL_HOLD_OVERRIDE (bypassing a hold to
+  // access data anyway) — this is formally releasing one, spec §28.
+  LEGAL_HOLD_RELEASE: { label: "Release a legal/compliance hold", domain: "COMPLIANCE", sourceType: "CASE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  AUTHORITY_DISCLOSURE_APPROVAL: { label: "Approve disclosure to a law enforcement/regulator request", domain: "COMPLIANCE", sourceType: "CASE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_4", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  CROSS_BORDER_TRANSFER_APPROVAL: { label: "Approve a cross-border data transfer flagged for review", domain: "COMPLIANCE", sourceType: "PROFILE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
 };
 
 export function getCatalogEntry(actionType: string): CatalogEntry | null {
