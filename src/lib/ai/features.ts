@@ -9,6 +9,9 @@ import { analyzeMutual } from "@/lib/ai/analysis/mutual";
 import { detectFindings, improvementSuggestions, sufficiencyOf } from "@/lib/ai/analysis/quality";
 import { buildFollowUpSuggestion } from "@/lib/ai/analysis/followup";
 import { buildReportSummary } from "@/lib/ai/analysis/report";
+import { buildRiskCaseSummary } from "@/lib/ai/analysis/risk-summary";
+import { getRiskCaseForActor } from "@/lib/risk/case-service";
+import { verifyEvidenceRecord } from "@/lib/risk/evidence-service";
 import { STANDARD_LIMITATIONS } from "@/lib/ai/analysis/summary";
 import { loadMatchConfig } from "@/lib/ai/match-config";
 import { executeTool } from "@/lib/ai/copilot/tools";
@@ -246,6 +249,55 @@ export async function runReportSummary(admin: SessionAdmin, input: { report: "re
       const out = await executeTool("getReportSummary", input, admin);
       const figures = Object.entries((out.data as { figures?: Record<string, number> } | undefined)?.figures ?? {}).map(([label, value]) => ({ label, value }));
       return { payload: buildReportSummary({ title: input.report.charAt(0).toUpperCase() + input.report.slice(1), periodDays: input.days, figures, generatedAt: new Date() }) };
+    },
+  });
+}
+
+// STEP 24 — case-metadata summary for a risk case. Built-in deterministic builder only: no provider is
+// called, so no risk data can leave the system. Visibility is the case's own (an admin-subject case is
+// invisible to its subject); the pipeline still enforces ai:risk:use, flags, rollout and audits.
+export async function runRiskCaseSummary(admin: SessionAdmin, input: { riskCaseId: string }): Promise<AiOutcome> {
+  let riskCase;
+  try {
+    riskCase = await getRiskCaseForActor(input.riskCaseId, admin);
+  } catch {
+    await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature: "RISK_CASE_SUMMARY", reason: "UNKNOWN_OR_HIDDEN_CASE" });
+    return denied("You do not have access to this case.");
+  }
+  return runAiRequest({
+    admin,
+    feature: "RISK_CASE_SUMMARY",
+    profileIds: [],
+    extraCacheParts: { riskCaseId: riskCase.id, updatedAt: riskCase.updatedAt.toISOString() },
+    build: async () => {
+      const [signals, evidence, reviews, assessment, restrictions, cluster] = await Promise.all([
+        prisma.securityFlag.findMany({ where: { riskCaseId: riskCase.id }, select: { flagType: true, severity: true, confidence: true, status: true }, take: 50 }),
+        prisma.riskEvidence.findMany({ where: { riskCaseId: riskCase.id }, take: 50 }),
+        prisma.riskReview.findMany({ where: { riskCaseId: riskCase.id }, select: { decision: true }, take: 50 }),
+        prisma.riskAssessment.findFirst({ where: { riskCaseId: riskCase.id }, orderBy: { createdAt: "desc" }, select: { cappedBySingleSignal: true } }),
+        riskCase.subjectProfileId ? prisma.profileRestriction.count({ where: { riskCaseId: riskCase.id, active: true } }) : Promise.resolve(0),
+        riskCase.subjectProfileId ? prisma.duplicateClusterMember.count({ where: { profileId: riskCase.subjectProfileId, cluster: { status: "UNRESOLVED" } } }) : Promise.resolve(0),
+      ]);
+      return {
+        payload: buildRiskCaseSummary({
+          riskCode: riskCase.riskCode,
+          status: riskCase.status,
+          riskLevel: riskCase.riskLevel,
+          category: riskCase.category,
+          openedBy: riskCase.openedBy.split(":")[0],
+          subjectKind: riskCase.subjectAdminId ? "STAFF" : "APPLICANT",
+          ageHours: (Date.now() - riskCase.createdAt.getTime()) / 3_600_000,
+          overdue: !!riskCase.dueAt && riskCase.dueAt.getTime() < Date.now(),
+          signals: signals.map((s) => ({ type: s.flagType, severity: s.severity, confidence: s.confidence, status: s.status })),
+          evidenceTypes: evidence.map((e) => e.evidenceType),
+          evidenceIntegrityIssues: evidence.filter((e) => !verifyEvidenceRecord(e)).length,
+          reviewDecisions: reviews.map((r) => r.decision),
+          hasActiveRestrictions: restrictions > 0,
+          linkedDuplicateCluster: cluster > 0,
+          falsePositiveSignals: signals.filter((s) => s.status === "FALSE_POSITIVE").length,
+          cappedBySingleSignal: assessment?.cappedBySingleSignal ?? false,
+        }),
+      };
     },
   });
 }

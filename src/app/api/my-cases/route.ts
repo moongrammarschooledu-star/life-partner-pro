@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { nextCaseNumber } from "@/lib/case-code";
 import { isCategoryValidForType } from "@/lib/case-categories";
 import { computeSlaDueDates } from "@/lib/case-sla";
@@ -10,6 +10,7 @@ import { notifyCaseCreated } from "@/lib/notifications/events";
 import { writeAudit } from "@/lib/audit";
 import type { CaseType, CaseCategory } from "@prisma/client";
 import { blockedResponse } from "@/lib/ops/guards";
+import { attachUserReportToCase, REPORT_TYPE_FOR_CATEGORY } from "@/lib/risk/report-service";
 
 const VALID_TYPES: CaseType[] = ["SUPPORT", "COMPLAINT", "SAFETY_REPORT"];
 
@@ -23,10 +24,8 @@ export async function POST(req: Request) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const key = `my-cases-create:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many requests. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "my-cases-create", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
 
   const body = await req.json();
   const { type, category, subject, description, reportedProfileCode, relatedProposalId, relatedMeetingId, relatedVerificationId, relatedCommunicationId, preferredResponseMethod } = body as {
@@ -89,6 +88,16 @@ export async function POST(req: Request) {
 
   await writeAudit({ action: "CASE_CREATED", targetProfileId: profileId, meta: { caseId: created.id, caseNumber, type: caseType, category } });
   await notifyCaseCreated(created.id, profileId);
+
+  // STEP 24 — a Safety Concern also becomes a UserReport + a low-confidence allegation signal, so it reaches human risk
+  // review. Fail-open: it can never block or fail the applicant's own request, and nothing here acts on the reported profile.
+  if (caseType === "SAFETY_REPORT" && reportedProfileId !== profileId) {
+    try {
+      await attachUserReportToCase({ caseId: created.id, caseNumber, reportType: REPORT_TYPE_FOR_CATEGORY[category as CaseCategory] ?? "OTHER", reporterProfileId: profileId, reportedProfileId, description: description.trim() });
+    } catch (error) {
+      console.error("[risk] could not link the safety case to risk review", error instanceof Error ? error.message : "unknown");
+    }
+  }
 
   return NextResponse.json({ id: created.id, caseNumber, possibleDuplicates: duplicates });
 }

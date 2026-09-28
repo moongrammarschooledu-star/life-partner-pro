@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 
 // Spec §10/§32 — makes "Active Sessions"/"Log Out Other Sessions" real for
 // applicant accounts, mirroring AdminSession's shape (STEP 11). Applicants
@@ -9,6 +10,14 @@ import { writeAudit } from "@/lib/audit";
 const SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000; // matches the 1-year cookie maxAge
 
 export async function createProfileSession(profileId: string, deviceInfo?: string, userAgent?: string, ipAddress?: string) {
+  const session = await createProfileSessionRow(profileId, deviceInfo, userAgent, ipAddress);
+  // STEP 24 — informational only (feeds the OFF-by-default shared device/network rules; never a
+  // signal by itself). IP/user-agent are stored by the bus only as salted hashes, and only when enabled.
+  await publishSecurityEvent({ eventType: "NEW_DEVICE_SESSION", profileId, ip: ipAddress, userAgent, source: "profile-session", evaluate: false });
+  return session;
+}
+
+async function createProfileSessionRow(profileId: string, deviceInfo?: string, userAgent?: string, ipAddress?: string) {
   return prisma.profileSession.create({
     data: {
       profileId,

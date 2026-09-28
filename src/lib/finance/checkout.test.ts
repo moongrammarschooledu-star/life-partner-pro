@@ -7,6 +7,8 @@ let complianceReviews: Record<string, unknown>[];
 let auditCalls: Record<string, unknown>[];
 let seq = 0;
 
+let activeRestrictions: string[] = [];
+vi.mock("@/lib/profile-restrictions", () => ({ hasActiveRestriction: vi.fn(async (_profileId: string, type: string) => activeRestrictions.includes(type)) }));
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async (call: Record<string, unknown>) => { auditCalls.push(call); }) }));
 vi.mock("@/lib/privacy/codes", () => ({ nextSequenceCode: vi.fn(async (prefix: string) => `LPP-${prefix}-${String(++seq).padStart(6, "0")}`) }));
 vi.mock("@/lib/finance/coupon", () => ({ resolveCouponForOrder: vi.fn() }));
@@ -61,6 +63,7 @@ vi.mock("@/lib/prisma", () => ({
 const { startCheckout } = await import("./checkout");
 
 beforeEach(() => {
+  activeRestrictions = [];
   taxRule = { ratePercentBasisPoints: 500 };
   orders = [];
   payments = [];
@@ -70,6 +73,16 @@ beforeEach(() => {
 });
 
 describe("startCheckout", () => {
+  it("STEP 24 — a PAYMENT_RESTRICTED or FULL_ACCOUNT_RESTRICTED profile cannot start checkout, with neutral wording and no order created", async () => {
+    for (const type of ["PAYMENT_RESTRICTED", "FULL_ACCOUNT_RESTRICTED"]) {
+      activeRestrictions = [type];
+      await expect(startCheckout({ profileId: "p1", packageId: "pkg1", country: "PK" })).rejects.toThrow(/currently unavailable for this account/);
+    }
+    expect(orders).toHaveLength(0);
+    activeRestrictions = ["CANNOT_MATCH"]; // an unrelated restriction never blocks payment
+    await expect(startCheckout({ profileId: "p1", packageId: "pkg1", country: "PK" })).resolves.toBeDefined();
+  });
+
   it("creates an order and payment as usual when a TaxRule resolves for the country", async () => {
     const result = await startCheckout({ profileId: "p1", packageId: "pkg1", country: "PK" });
     expect(orders).toHaveLength(1);

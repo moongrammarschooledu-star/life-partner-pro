@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { acceptInvitation, FamilyInvitationError } from "@/lib/family/invitation";
 import { createFamilyMemberSession } from "@/lib/family/family-member-session";
 import { signFamilySessionId, FAMILY_SESSION_ID_COOKIE } from "@/lib/family/family-session";
@@ -10,10 +11,8 @@ import { signFamilySessionId, FAMILY_SESSION_ID_COOKIE } from "@/lib/family/fami
 // Rate-limited against token brute-forcing; the token is a high-entropy
 // random value hashed with bcrypt before storage (src/lib/family/invitation.ts).
 export async function POST(req: Request) {
-  const key = `family-register:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "family-register", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
 
   try {
     const { invitationCode, token, password } = await req.json();

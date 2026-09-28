@@ -19,6 +19,10 @@ export const PROMPT_VERSIONS = {
   REPORT_ASSISTANT: "LPP-AI-REPORT-v1.0",
   DATA_QUALITY: "LPP-AI-DATA-QUALITY-v1.0",
   PROFILE_IMPROVEMENT: "LPP-AI-PROFILE-IMPROVEMENT-v1.0",
+  // Previously missing (the STEP 23 Add-on wired the enum/permission but not this
+  // entry, so runAiRequest would have recorded an undefined promptVersion).
+  COMPLIANCE_SUMMARY: "LPP-AI-COMPLIANCE-SUMMARY-v1.0",
+  RISK_CASE_SUMMARY: "LPP-AI-RISK-CASE-SUMMARY-v1.0",
 } as const;
 
 export type AiFeatureKey = keyof typeof PROMPT_VERSIONS;

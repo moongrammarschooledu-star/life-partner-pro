@@ -513,4 +513,61 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Authority Request Awaiting Review", body: "A law enforcement or regulator request is awaiting legal review." },
     UR: { title: "سرکاری درخواست جائزے کی منتظر ہے", body: "قانون نافذ کرنے والے ادارے یا ریگولیٹر کی درخواست قانونی جائزے کی منتظر ہے۔" },
   },
+
+  // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
+  // Admin-internal copy is operational and neutral ("review required", never an
+  // accusation). The three applicant-facing entries deliberately reveal nothing
+  // about detection logic, thresholds or a risk level.
+  HIGH_RISK_DETECTED: {
+    EN: { title: "High-Risk Signal Detected", body: "A risk case with a high level requires review." },
+    UR: { title: "زیادہ رسک کا سگنل", body: "زیادہ رسک لیول کے ایک کیس کا جائزہ درکار ہے۔" },
+  },
+  CRITICAL_RISK_DETECTED: {
+    EN: { title: "Critical-Risk Signal Detected", body: "A risk case with a critical level requires prompt review." },
+    UR: { title: "انتہائی رسک کا سگنل", body: "انتہائی رسک لیول کے ایک کیس کا فوری جائزہ درکار ہے۔" },
+  },
+  DUPLICATE_REVIEW_REQUIRED: {
+    EN: { title: "Duplicate Review Required", body: "A possible duplicate-account cluster requires human review." },
+    UR: { title: "ڈپلیکیٹ کا جائزہ درکار ہے", body: "ممکنہ ڈپلیکیٹ اکاؤنٹس کے گروپ کا انسانی جائزہ درکار ہے۔" },
+  },
+  VERIFICATION_RISK: {
+    EN: { title: "Verification Review Required", body: "An identity-verification concern requires review." },
+    UR: { title: "تصدیق کا جائزہ درکار ہے", body: "شناختی تصدیق سے متعلق ایک معاملے کا جائزہ درکار ہے۔" },
+  },
+  ACCOUNT_SECURITY_ALERT: {
+    EN: { title: "Account Security Alert", body: "Unusual account-security activity requires review." },
+    UR: { title: "اکاؤنٹ سیکیورٹی الرٹ", body: "غیر معمولی اکاؤنٹ سیکیورٹی سرگرمی کا جائزہ درکار ہے۔" },
+  },
+  CONTACT_BYPASS_DETECTED: {
+    EN: { title: "Contact-Workflow Bypass Attempt", body: "Repeated attempts to reach protected contact details were recorded; security review required." },
+    UR: { title: "رابطہ ورک فلو کو بائی پاس کرنے کی کوشش", body: "محفوظ رابطہ تفصیلات تک پہنچنے کی بار بار کوششیں ریکارڈ ہوئیں؛ سیکیورٹی جائزہ درکار ہے۔" },
+  },
+  ADMIN_ACCESS_ANOMALY: {
+    EN: { title: "Privileged Access Anomaly", body: "Unusual privileged access activity was recorded; an investigation task was created." },
+    UR: { title: "مراعات یافتہ رسائی میں غیر معمولی سرگرمی", body: "مراعات یافتہ رسائی میں غیر معمولی سرگرمی ریکارڈ ہوئی؛ تحقیقاتی ٹاسک بنا دیا گیا ہے۔" },
+  },
+  SAFETY_REPORT_RECEIVED: {
+    EN: { title: "Safety Report Received", body: "An applicant submitted a safety concern for review." },
+    UR: { title: "حفاظتی رپورٹ موصول ہوئی", body: "ایک درخواست گزار نے جائزے کے لیے حفاظتی تشویش جمع کروائی ہے۔" },
+  },
+  RISK_REVIEW_DUE: {
+    EN: { title: "Risk Review Due", body: "A risk case review is due." },
+    UR: { title: "رسک جائزے کی مدت", body: "ایک رسک کیس کے جائزے کی مدت آ گئی ہے۔" },
+  },
+  RISK_CASE_ESCALATED: {
+    EN: { title: "Risk Case Escalated", body: "A risk case was escalated for senior review." },
+    UR: { title: "رسک کیس ایسکلیٹ ہو گیا", body: "ایک رسک کیس سینئر جائزے کے لیے ایسکلیٹ کیا گیا ہے۔" },
+  },
+  RISK_INFORMATION_REQUESTED: {
+    EN: { title: "Additional Information Required", body: "Additional verification information is required to continue processing your account." },
+    UR: { title: "اضافی معلومات درکار ہیں", body: "آپ کے اکاؤنٹ کی پراسیسنگ جاری رکھنے کے لیے اضافی تصدیقی معلومات درکار ہیں۔" },
+  },
+  SECURITY_NOTICE: {
+    EN: { title: "Account Security Notice", body: "A temporary security measure has been applied to your account while a review is completed. Please contact support if you have questions." },
+    UR: { title: "اکاؤنٹ سیکیورٹی نوٹس", body: "جائزہ مکمل ہونے تک آپ کے اکاؤنٹ پر ایک عارضی حفاظتی اقدام لاگو کیا گیا ہے۔ سوال ہونے پر سپورٹ سے رابطہ کریں۔" },
+  },
+  SAFETY_REPORT_ACKNOWLEDGED: {
+    EN: { title: "Report Received", body: "Thank you. Your report has been received and will be reviewed by our team." },
+    UR: { title: "رپورٹ موصول ہو گئی", body: "شکریہ۔ آپ کی رپورٹ موصول ہو گئی ہے اور ہماری ٹیم اس کا جائزہ لے گی۔" },
+  },
 };

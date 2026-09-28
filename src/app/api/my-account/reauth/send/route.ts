@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { sendOtp } from "@/lib/verification/otp-service";
 
 // Step 1 of identity reconfirmation before a high-risk account action —
@@ -10,10 +10,8 @@ export async function POST(req: Request) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const key = `my-account-reauth-send:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 5, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "my-account-reauth-send", { limit: 5, windowMs: 60_000 });
+  if (limited) return limited;
 
   const profile = await prisma.profile.findUnique({ where: { id: profileId }, include: { contact: true } });
   if (!profile?.contact) return NextResponse.json({ error: "Not found." }, { status: 404 });

@@ -4,6 +4,7 @@ import type { AdminRole } from "@/lib/permissions";
 import type { AdminUser } from "@prisma/client";
 import { createHash } from "crypto";
 import { writeAudit } from "@/lib/audit";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 
 // Shared by both the pre-check route (src/app/api/admin/auth/precheck) and
 // NextAuth's authorize() in src/lib/auth.ts — the latter is the only place a
@@ -46,6 +47,8 @@ async function recordAttempt(params: {
     adminId: params.adminId ?? null,
     meta: { emailHash: createHash("sha256").update(params.email.toLowerCase()).digest("hex").slice(0, 12) },
   }).catch(() => undefined);
+  // STEP 24 — the attempted e-mail is only ever hashed by the bus; fail-open.
+  await publishSecurityEvent({ eventType: "LOGIN_FAILED", adminId: params.adminId ?? null, subject: params.email, ip: params.ipAddress, userAgent: params.userAgent, source: "admin-login", outcome: params.event });
 }
 
 export async function checkAdminCredentials(params: {

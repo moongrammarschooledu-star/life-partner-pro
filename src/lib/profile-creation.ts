@@ -7,6 +7,8 @@ import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { writeAudit } from "@/lib/audit";
 import { notifyProfileRegistered, notifyProfileSubmitted } from "@/lib/notifications/events";
 import { validateMinimumAge } from "@/lib/compliance/age-policy";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
+import { evaluateNewAccountSafety } from "@/lib/risk/fraud-prevention-service";
 import type { RegistrationInput } from "@/lib/validation/registration";
 
 export class ProfileCreationError extends Error {
@@ -263,6 +265,12 @@ export async function createProfileFromRegistration(
   await writeAudit({ action: "PROFILE_CREATED", adminId: opts.adminId, targetProfileId: profile.id, meta: { profileCode } });
   await notifyProfileRegistered(profile.id);
   await notifyProfileSubmitted(profile.id);
+
+  // STEP 24 — record the creation and run real-time duplicate / rapid-registration detection.
+  // Both are fail-open and time-bounded: they can never block or fail a registration, and they
+  // only ever create signals / request human review — never an automatic decision.
+  await publishSecurityEvent({ eventType: "ACCOUNT_CREATED", profileId: profile.id, source: opts.adminId ? "admin-created" : "registration", evaluate: false });
+  await evaluateNewAccountSafety(profile.id);
 
   return { profile, profileCode };
 }

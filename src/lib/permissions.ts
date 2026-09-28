@@ -335,7 +335,32 @@ export type Permission =
   | "ai:compliance:use"
   | "sensitive:compliance:view"
   | "sensitive:authority-request:view"
-  | "sensitive:legal-hold:view";
+  | "sensitive:legal-hold:view"
+  // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
+  // Existing risk:view/review/resolve/escalate and duplicates:* are kept as-is;
+  // these are the additional spec permissions (risk:resolve == dismiss/false-positive).
+  | "risk:investigate"
+  | "risk:clear"
+  | "risk:restrict"
+  | "risk:suspend"
+  | "risk:rules:view"
+  | "risk:rules:manage"
+  | "risk:configuration:view"
+  | "risk:configuration:manage"
+  | "risk:evidence:view"
+  | "risk:evidence:manage"
+  | "risk:reports:view"
+  | "risk:reports:export"
+  | "duplicates:merge"
+  | "security:events:view"
+  | "security:incidents:manage"
+  | "user-reports:view"
+  | "user-reports:manage"
+  | "ai:risk:use"
+  | "sensitive:security:view"
+  | "sensitive:device:view"
+  | "sensitive:network:view"
+  | "sensitive:evidence:view";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -361,6 +386,10 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "sensitive:compliance:view",
   "sensitive:authority-request:view",
   "sensitive:legal-hold:view",
+  "sensitive:security:view",
+  "sensitive:device:view",
+  "sensitive:network:view",
+  "sensitive:evidence:view",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -518,6 +547,7 @@ const AI_ALL_PERMISSIONS: Permission[] = [
   "ai:usage:view",
   "ai:test:run",
   "ai:compliance:use",
+  "ai:risk:use",
 ];
 
 // STEP 23 Add-on — the full compliance permission set; SUPER_ADMIN holds all
@@ -544,6 +574,38 @@ const COMPLIANCE_ALL_PERMISSIONS: Permission[] = [
   "sensitive:compliance:view",
   "sensitive:authority-request:view",
   "sensitive:legal-hold:view",
+];
+
+// STEP 24 — the full risk & safety permission set (additive to the STEP 23
+// risk:view/review/resolve/escalate + duplicates:* strings, which stay as they
+// are). SUPER_ADMIN holds all of it; the manager roles below get scoped
+// subsets, and the sensitive:* ones are never implied by a manager role.
+const RISK_ALL_PERMISSIONS: Permission[] = [
+  "risk:view",
+  "risk:review",
+  "risk:investigate",
+  "risk:resolve",
+  "risk:clear",
+  "risk:escalate",
+  "risk:restrict",
+  "risk:suspend",
+  "risk:rules:view",
+  "risk:rules:manage",
+  "risk:configuration:view",
+  "risk:configuration:manage",
+  "risk:evidence:view",
+  "risk:evidence:manage",
+  "risk:reports:view",
+  "risk:reports:export",
+  "duplicates:merge",
+  "security:events:view",
+  "security:incidents:manage",
+  "user-reports:view",
+  "user-reports:manage",
+  "sensitive:security:view",
+  "sensitive:device:view",
+  "sensitive:network:view",
+  "sensitive:evidence:view",
 ];
 
 const ROLES_ALL_PERMISSIONS: Permission[] = ["roles:view", "roles:create", "roles:edit", "roles:disable", "roles:assign", "roles:delete"];
@@ -783,6 +845,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...FINANCE_ALL_PERMISSIONS,
     ...SYSTEM_ALL_PERMISSIONS,
     ...AI_ALL_PERMISSIONS,
+    ...RISK_ALL_PERMISSIONS,
     ...ROLES_ALL_PERMISSIONS,
     ...TASKS_ALL_PERMISSIONS,
     ...APPROVALS_ALL_PERMISSIONS,
@@ -1048,6 +1111,12 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "verification:policy:view",
     "sensitive:verification:view",
     "sensitive:risk:view",
+    // STEP 24 — reviews/investigates risk cases and verification-related evidence; clearing,
+    // restricting and suspending stay elsewhere (see the deliberate-lacks note below).
+    "risk:investigate",
+    "risk:evidence:view",
+    "user-reports:view",
+    "ai:risk:use",
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
     ...MANAGER_SEARCH_PERMISSIONS,
@@ -1082,6 +1151,16 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "safety_cases:resolve",
     "profile:restrict",
     "profile:suspend",
+    // STEP 24 — owns safety-restriction authority (matches the STEP 23 note above);
+    // every consequential action still goes through the STEP 19 gate.
+    "risk:review",
+    "risk:investigate",
+    "risk:restrict",
+    "risk:suspend",
+    "risk:evidence:view",
+    "user-reports:view",
+    "user-reports:manage",
+    "ai:risk:use",
     "communication:view",
     "communication:send",
     "reports:view",
@@ -1149,6 +1228,18 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "profile:view",
     ...COMPLIANCE_ALL_PERMISSIONS,
     "ai:compliance:use",
+    // STEP 24 — owns risk rules/configuration/reporting and admin-security review.
+    "risk:view",
+    "risk:rules:view",
+    "risk:rules:manage",
+    "risk:configuration:view",
+    "risk:configuration:manage",
+    "risk:evidence:view",
+    "risk:reports:view",
+    "risk:reports:export",
+    "security:events:view",
+    "sensitive:security:view",
+    "ai:risk:use",
     "reports:view",
     "reports:export",
     "audit:view",

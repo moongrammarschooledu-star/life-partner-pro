@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { revokeAllFamilyMemberSessions } from "@/lib/family/family-member-session";
 import { isFamilyAccessRestricted } from "@/lib/compliance/rule-engine";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import type { FamilyRole, FamilySharedRecordType } from "@prisma/client";
 
 // FamilyAccessControlService (STEP 22 plan Decision 5) — the single choke
@@ -46,6 +47,10 @@ export async function getFamilyMembership(familyMemberId: string): Promise<Famil
     },
   });
   if (!member || member.status !== "ACTIVE" || member.familyAccount.status !== "ACTIVE") return null;
+
+  // STEP 24 — risk-driven family-access / full-account restriction on the applicant. This is the single
+  // choke point every family-visibility getter calls first, so it propagates everywhere at once.
+  if ((await hasActiveRestriction(member.familyAccount.applicantId, "FAMILY_ACCESS_RESTRICTED")) || (await hasActiveRestriction(member.familyAccount.applicantId, "FULL_ACCOUNT_RESTRICTED"))) return null;
 
   const now = new Date();
   const jurisdiction = await prisma.jurisdiction.findFirst({

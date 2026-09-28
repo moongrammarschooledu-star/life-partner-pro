@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { confirmOtp } from "@/lib/verification/otp-service";
 import { issueApplicantReauthToken } from "@/lib/privacy/applicant-reauth";
 
@@ -11,10 +11,8 @@ export async function POST(req: Request) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const key = `my-account-reauth-confirm:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "my-account-reauth-confirm", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
 
   const { code } = await req.json();
   if (typeof code !== "string" || !code.trim()) {

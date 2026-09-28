@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK";
 
 export interface CatalogEntry {
   label: string;
@@ -131,6 +131,18 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   LEGAL_HOLD_RELEASE: { label: "Release a legal/compliance hold", domain: "COMPLIANCE", sourceType: "CASE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AUTHORITY_DISCLOSURE_APPROVAL: { label: "Approve disclosure to a law enforcement/regulator request", domain: "COMPLIANCE", sourceType: "CASE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_4", defaultAllowedRoles: ["SUPER_ADMIN"] },
   CROSS_BORDER_TRANSFER_APPROVAL: { label: "Approve a cross-border data transfer flagged for review", domain: "COMPLIANCE", sourceType: "PROFILE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+
+  // ---------- RISK (STEP 24 — Fraud Prevention & Account Safety Intelligence) ----------
+  // Only actions that are actually wired to a gate. Temporary restriction/
+  // suspension reuse the existing PROFILE_RESTRICT / PROFILE_SUSPEND entries;
+  // a contact or verification override reuses CONTACT_SHARE_OVERRIDE /
+  // VERIFICATION_OVERRIDE. The RISK domain has no emergency-override path
+  // (see seedApprovalPolicies) — risk rule/threshold changes and permanent
+  // restrictions always need a real second approver.
+  PERMANENT_RESTRICTION: { label: "Apply a permanent (no end date) account restriction", domain: "RISK", sourceType: "PROFILE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  DUPLICATE_MERGE: { label: "Approve a duplicate-account merge plan", domain: "RISK", sourceType: "PROFILE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPER_ADMIN"] },
+  RISK_RULE_CHANGE: { label: "Change a risk rule or factor", domain: "RISK", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  RISK_THRESHOLD_CHANGE: { label: "Change a risk threshold or rate-limit policy", domain: "RISK", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
 };
 
 export function getCatalogEntry(actionType: string): CatalogEntry | null {

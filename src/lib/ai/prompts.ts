@@ -35,6 +35,10 @@ const TASKS: Record<AiFeatureKey, string> = {
   REPORT_ASSISTANT: "Task: (not used with external providers)",
   DATA_QUALITY: "Task: list missing, inconsistent or unclear items as potential issues requiring admin review.",
   PROFILE_IMPROVEMENT: "Task: suggest neutral, respectful ways the member could complete or clarify their profile.",
+  // Compliance and risk data are never sent to an external provider — both features are
+  // produced by the built-in deterministic builders only (see src/lib/ai/features.ts).
+  COMPLIANCE_SUMMARY: "Task: (not used with external providers)",
+  RISK_CASE_SUMMARY: "Task: (not used with external providers)",
 };
 
 export interface PromptTemplate {

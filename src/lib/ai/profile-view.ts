@@ -181,6 +181,14 @@ export const FIELD_POLICY: Record<AiFeatureKey, FieldPolicy> = {
     optional: ["partnerPreferences"],
     restricted: [...ALWAYS_RESTRICTED, "monthlyIncome"],
   },
+  // Compliance/risk summaries operate on configuration and case metadata, never on
+  // individual profile data, and never leave the system (built-in builders only).
+  COMPLIANCE_SUMMARY: { required: ["complianceConfiguration"], optional: [], restricted: [...ALWAYS_RESTRICTED, "individualProfiles"] },
+  RISK_CASE_SUMMARY: {
+    required: ["riskCaseMetadata"],
+    optional: [],
+    restricted: [...ALWAYS_RESTRICTED, "individualProfiles", "riskScore", "deviceIdentifiers", "networkIdentifiers"],
+  },
 };
 
 export function classificationOf(field: string): DataClassification {

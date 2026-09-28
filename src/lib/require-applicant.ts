@@ -20,7 +20,8 @@ export async function requireApplicantProfileId(): Promise<string | null> {
   // STEP 23 §11/§27 — a LOGIN_RESTRICTED restriction locks the applicant out
   // of every /api/my-*, /api/my-cases/*, /api/my-account/*, and
   // /api/my-privacy/* route that funnels through this one check.
-  if (await hasActiveRestriction(profileId, "LOGIN_RESTRICTED")) return null;
+  // STEP 24 — FULL_ACCOUNT_RESTRICTED is the same lock, applied as a broader risk-driven restriction.
+  if ((await hasActiveRestriction(profileId, "LOGIN_RESTRICTED")) || (await hasActiveRestriction(profileId, "FULL_ACCOUNT_RESTRICTED"))) return null;
 
   // A browser with no session cookie yet (pre-STEP-13) is grandfathered
   // through session-less rather than logged out — the next /api/my-status

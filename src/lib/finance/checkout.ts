@@ -6,6 +6,7 @@ import { resolveCouponForOrder } from "@/lib/finance/coupon";
 import { computeTax, resolveTaxRule } from "@/lib/finance/tax";
 import { getActiveProvider } from "@/lib/finance/providers/registry";
 import { assertPaymentsAvailable, PaymentsUnavailableError } from "@/lib/finance/rollout";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 
 export class CheckoutError extends Error {}
 
@@ -19,6 +20,10 @@ export class CheckoutError extends Error {}
 // its PaymentsUnavailableError is re-thrown as a CheckoutError so existing
 // callers' error handling needs no change.
 export async function startCheckout(params: { profileId: string; packageId: string; couponCode?: string; country: string }) {
+  // STEP 24 — risk-driven payment restriction, enforced server-side. Neutral wording: no reason is given.
+  if ((await hasActiveRestriction(params.profileId, "PAYMENT_RESTRICTED")) || (await hasActiveRestriction(params.profileId, "FULL_ACCOUNT_RESTRICTED"))) {
+    throw new CheckoutError("Checkout is currently unavailable for this account. Please contact support.");
+  }
   try {
     await assertPaymentsAvailable({ id: params.profileId, country: params.country }, params.packageId);
   } catch (error) {

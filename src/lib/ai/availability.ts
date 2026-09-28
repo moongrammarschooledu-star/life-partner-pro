@@ -17,6 +17,7 @@ export const FEATURE_FLAG_FOR: Record<AiFeature, string> = {
   DATA_QUALITY: "ai.profile_summary.enabled",
   PROFILE_IMPROVEMENT: "ai.profile_summary.enabled",
   COMPLIANCE_SUMMARY: "ai.compliance_summary.enabled",
+  RISK_CASE_SUMMARY: "ai.risk_summary.enabled",
 };
 
 export const PERMISSION_FOR: Record<AiFeature, Permission> = {
@@ -34,6 +35,9 @@ export const PERMISSION_FOR: Record<AiFeature, Permission> = {
   // (plan decision 11) — compliance summaries are gated to COMPLIANCE_MANAGER
   // / SUPER_ADMIN via the ai:compliance:use permission.
   COMPLIANCE_SUMMARY: "ai:compliance:use",
+  // STEP 24 — its own permission, never bundled into "ai:use": risk data is
+  // sensitive internal information (spec §48).
+  RISK_CASE_SUMMARY: "ai:risk:use",
 };
 
 export type UnavailableReason = "KILL_SWITCH" | "PHASE_DISABLED" | "NOT_IN_ROLLOUT" | "FLAG_OFF" | "PROVIDER_DISABLED" | "NO_PERMISSION";

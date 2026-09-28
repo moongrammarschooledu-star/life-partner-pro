@@ -6,7 +6,15 @@ import { notifyProfileRestricted } from "@/lib/notifications/events";
 import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 import type { RestrictionType } from "@prisma/client";
 
-const VALID_TYPES: RestrictionType[] = ["CANNOT_MATCH", "CANNOT_RECEIVE_PROPOSAL", "CANNOT_CONTACT_SHARE", "CANNOT_SCHEDULE_MEETING", "CANNOT_UPDATE_FIELDS"];
+// STEP 24 — every enforced restriction type is now manually applicable (previously only 5 of 9 were, which
+// left the STEP 23 types unreachable from the UI). The four broad risk-era types must be time-boxed here;
+// an open-ended one is only possible through an approved PERMANENT_RESTRICTION on a risk case.
+const VALID_TYPES: RestrictionType[] = [
+  "CANNOT_MATCH", "CANNOT_RECEIVE_PROPOSAL", "CANNOT_CONTACT_SHARE", "CANNOT_SCHEDULE_MEETING", "CANNOT_UPDATE_FIELDS",
+  "VERIFICATION_REQUIRED", "NO_NEW_PROPOSALS", "LOGIN_RESTRICTED", "NO_FAMILY_INVITATIONS",
+  "COMMUNICATION_RESTRICTED", "PAYMENT_RESTRICTED", "FAMILY_ACCESS_RESTRICTED", "FULL_ACCOUNT_RESTRICTED",
+];
+const TIME_BOXED_ONLY: RestrictionType[] = ["COMMUNICATION_RESTRICTED", "PAYMENT_RESTRICTED", "FAMILY_ACCESS_RESTRICTED", "FULL_ACCOUNT_RESTRICTED"];
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,6 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     };
     if (!restrictionType || !VALID_TYPES.includes(restrictionType as RestrictionType)) throw new ApiError(400, "A valid restriction type is required.");
     if (!reason?.trim()) throw new ApiError(400, "A reason is required.");
+    if (TIME_BOXED_ONLY.includes(restrictionType as RestrictionType) && !endDate) throw new ApiError(400, "This restriction type needs an end date. Open-ended restrictions require an approved permanent restriction on a risk case.");
 
     // STEP 19 §12 — maker-checker gate for high-risk profile restriction.
     const gate = await enforceApprovalGate({

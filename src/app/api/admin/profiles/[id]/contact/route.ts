@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { assertContactShareAllowed, resolveAdHocContactAccessLevel, ContactShareDeniedError } from "@/lib/privacy/contact-access";
 import { logPrivacyAccess } from "@/lib/privacy/access-log";
 import { redactForAudit } from "@/lib/privacy/audit-redaction";
@@ -73,7 +74,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
       accessResult = await assertContactShareAllowed({ admin, proposalId, profileAId: id, profileBId: otherProfileId });
     } catch (error) {
-      if (error instanceof ContactShareDeniedError) throw new ApiError(403, error.message);
+      if (error instanceof ContactShareDeniedError) {
+        // STEP 24 — a denied contact-share attempt counts toward the admin permission-denial burst rule.
+        await publishSecurityEvent({ eventType: "PERMISSION_DENIED", adminId: admin.id, source: "contact-share", outcome: "CONSENT_NOT_GRANTED" });
+        throw new ApiError(403, error.message);
+      }
       throw error;
     }
     if (accessResult.level === "FAMILY_CONTACT_APPROVED" && !overrideReason?.trim()) {

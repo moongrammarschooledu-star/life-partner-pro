@@ -55,6 +55,15 @@ export const SAFETY_RULES: SafetyRule[] = [
     pattern: /\b(fraud(ulent|ster)?|scam(mer)?|liar|lying|lied|fake (profile|identity|documents?|details)|criminal|cheat(er|ing|ed)|impost(o|e)r|con[- ]?(man|artist))\b/i,
     neutral: NEUTRAL_PHRASES.inconsistency,
   },
+  // STEP 24 — the assistant never decides or recommends an adverse account action; that is a human
+  // (and, for consequential actions, an approver) decision. Also rewrites guilt/intent conclusions.
+  {
+    id: "ADVERSE_DECISION",
+    action: "REWRITE",
+    pattern:
+      /\b((should|must|needs? to|ought to|has to) be (suspended|banned|blocked|removed|rejected|terminated|deleted)|(suspend|ban|block|terminate|reject|deactivate) (this|the|that) (account|profile|user|member|person)|(is|are|was) (guilty|responsible for (the )?(fraud|scam)|a (threat|danger|predator))|intends? to (deceive|defraud|scam|harm|mislead)|deserves? to be (banned|removed|blocked))\b/i,
+    neutral: "Decisions about account action are made only by an authorised human reviewer, after review and any required approval.",
+  },
   {
     id: "COERCIVE_LANGUAGE",
     action: "REWRITE",

@@ -109,6 +109,7 @@ export const communicationInput = z.object({
 });
 export const followUpInput = z.object({ followUpId: id, language: z.enum(LANGUAGES).default("en") });
 export const copilotInput = z.object({ message: z.string().trim().min(2).max(500), profileId: id.optional() });
+export const riskSummaryInput = z.object({ riskCaseId: id });
 export const reportInput = z.object({
   report: z.enum(["registrations", "proposals", "followups", "verification", "support"]),
   days: z.number().int().min(1).max(365).default(30),

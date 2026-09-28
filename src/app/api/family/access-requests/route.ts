@@ -5,6 +5,7 @@ import { getFamilyMembership } from "@/lib/family/access-control";
 import { isKnownFamilyPermission } from "@/lib/family/permissions";
 import { nextSequenceCode } from "@/lib/privacy/codes";
 import { writeAudit } from "@/lib/audit";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { notifyFamilyAccessRequestSubmitted } from "@/lib/notifications/events";
 
 // Spec §13's workflow: Family Member Request -> Applicant Review -> ....
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
   ]);
 
   await writeAudit({ action: "FAMILY_ACCESS_REQUESTED", targetProfileId: membership.applicantId, actorFamilyMemberId: familyMemberId, meta: { requestCode, requestedPermission } });
+  await publishSecurityEvent({ eventType: "FAMILY_ACCESS_REQUESTED", profileId: membership.applicantId, familyMemberId, source: "family-access-request" });
   await notifyFamilyAccessRequestSubmitted(membership.applicantId, member?.fullName ?? "A family member");
 
   return NextResponse.json({ id: request.id, requestCode: request.requestCode });

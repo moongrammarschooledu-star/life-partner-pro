@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import { writeAudit } from "@/lib/audit";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { generateEmailToken, isExpired, expiresInMinutes } from "@/lib/verification/otp";
 import { nextSequenceCode } from "@/lib/privacy/codes";
 import { emailProvider } from "@/lib/notifications/providers/email-provider";
@@ -73,6 +74,7 @@ export async function createInvitation(params: {
   });
 
   await writeAudit({ action: "FAMILY_INVITATION_CREATED", targetProfileId: params.applicantId, meta: { invitationCode, relationship: params.relationship } });
+  await publishSecurityEvent({ eventType: "FAMILY_INVITE_CREATED", profileId: params.applicantId, source: "family-invitation" });
 
   if (params.invitedEmail) {
     const link = `${process.env.NEXTAUTH_URL ?? ""}/family/register?code=${invitationCode}&token=${rawToken}`;

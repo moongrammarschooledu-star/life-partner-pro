@@ -5,6 +5,7 @@ import { notificationService } from "@/lib/notifications";
 import { generateOtpCode, generateEmailToken, maskPhone, maskEmail, expiresInMinutes, isExpired } from "@/lib/verification/otp";
 import { recomputeStoredCompleteness } from "@/lib/verification/status";
 import { sendNotification } from "@/lib/notifications/notification-service";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import type { OtpChannel } from "@prisma/client";
 
 // DB-touching OTP orchestration shared by phone and email verification —
@@ -52,6 +53,7 @@ export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", des
   });
 
   await writeAudit({ action: "OTP_SENT", targetProfileId: profileId, meta: { channel } });
+  await publishSecurityEvent({ eventType: "OTP_REQUESTED", profileId, source: "otp-service", meta: { channel } });
 
   return { otpId: otp.id, destinationMasked };
 }
@@ -82,6 +84,7 @@ export async function confirmOtp(profileId: string, channel: "PHONE" | "EMAIL", 
       data: { attempts, status: attempts >= otp.maxAttempts ? "FAILED" : "PENDING" },
     });
     await writeAudit({ action: "OTP_FAILED", targetProfileId: profileId, meta: { channel } });
+    await publishSecurityEvent({ eventType: "OTP_FAILED", profileId, source: "otp-service", outcome: "WRONG_CODE", meta: { channel } });
     return { ok: false, error: "Incorrect code. Please try again." };
   }
 

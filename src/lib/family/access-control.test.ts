@@ -17,6 +17,8 @@ let sessionRevokeCalls: string[];
 let restrictionResult: { resolved: boolean; value: { restricted: boolean } | null; reviewRequired: boolean; matchedRules: unknown[] };
 let jurisdictionRow: { id: string; countryCode: string } | null;
 
+let activeRestrictions: string[] = [];
+vi.mock("@/lib/profile-restrictions", () => ({ hasActiveRestriction: vi.fn(async (_profileId: string, type: string) => activeRestrictions.includes(type)) }));
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async (call: Record<string, unknown>) => { auditCalls.push(call); }) }));
 vi.mock("@/lib/family/family-member-session", () => ({
   revokeAllFamilyMemberSessions: vi.fn(async (id: string) => { sessionRevokeCalls.push(id); return 1; }),
@@ -103,6 +105,7 @@ beforeEach(() => {
   consents = [];
   auditCalls = [];
   sessionRevokeCalls = [];
+  activeRestrictions = [];
   jurisdictionRow = null;
   restrictionResult = { resolved: false, value: null, reviewRequired: true, matchedRules: [] };
 });
@@ -127,6 +130,16 @@ describe("getFamilyMembership / isFamilyMember / getFamilyRole", () => {
     jurisdictionRow = { id: "j1", countryCode: "Pakistan" };
     restrictionResult = { resolved: true, value: { restricted: true }, reviewRequired: false, matchedRules: [{ id: "r1", ruleCode: "LPP-CRULE-000001", subject: "*" }] };
     expect(await getFamilyMembership("fm1")).toBeNull();
+  });
+
+  it("STEP 24 — a FAMILY_ACCESS_RESTRICTED or FULL_ACCOUNT_RESTRICTED restriction on the applicant denies every family getter at once", async () => {
+    seedMember("fm1", "FAMILY_VIEWER", "app1");
+    activeRestrictions = ["FAMILY_ACCESS_RESTRICTED"];
+    expect(await getFamilyMembership("fm1")).toBeNull();
+    activeRestrictions = ["FULL_ACCOUNT_RESTRICTED"];
+    expect(await getFamilyMembership("fm1")).toBeNull();
+    activeRestrictions = ["COMMUNICATION_RESTRICTED"]; // an unrelated restriction changes nothing here
+    expect(await getFamilyMembership("fm1")).toMatchObject({ applicantId: "app1" });
   });
 
   it("returns null (not an error) for an unknown or non-ACTIVE member — deny by default", async () => {

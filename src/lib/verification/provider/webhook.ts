@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { setVerificationStatus } from "@/lib/verification/status";
 import { getVerificationProvider } from "./index";
 import type { VerificationResultStatus } from "./types";
@@ -73,6 +74,12 @@ export async function processVerificationWebhook(rawBody: string, signatureHeade
       const verification = await prisma.profileVerification.findFirst({ where: { providerSessionId: event.sessionId } });
       if (verification) {
         await prisma.profileVerification.update({ where: { id: verification.id }, data: { providerStatus: event.status } });
+
+        // STEP 24 — only a genuine REJECTION counts toward the verification-review rule; provider errors,
+        // timeouts, expiry and "needs more input" are never risk signals. Replay-safe via the provider event id.
+        if (event.status === "REJECTED") {
+          await publishSecurityEvent({ eventType: "VERIFICATION_FAILED", profileId: verification.profileId, source: "verification-provider", outcome: "REJECTED", idempotencyKey: `verification-failed:${provider.name}:${event.providerEventId}` });
+        }
 
         const nextStatus = mapProviderStatusToInternal(event.status);
         if (nextStatus) {

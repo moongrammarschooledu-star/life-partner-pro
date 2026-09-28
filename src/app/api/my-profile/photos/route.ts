@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { uploadApplicantPhoto, PhotoManagementError } from "@/lib/photo-management";
 import { blockedResponse } from "@/lib/ops/guards";
@@ -14,10 +14,8 @@ export async function POST(req: Request) {
   const blocked = await blockedResponse({ switches: ["uploads"], flags: ["uploads.enabled"] });
   if (blocked) return blocked;
 
-  const key = `my-profile-photo-upload:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many uploads. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "my-profile-photo-upload", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
 
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });

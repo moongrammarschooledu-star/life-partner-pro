@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { setVerificationStatus } from "@/lib/verification/status";
 import { createFromEvent } from "@/lib/workflow/engine";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 
 // Spec §25/§26 — only these identity-adjacent fields ever trigger
 // reverification; ordinary edits (city, hobbies, preferences, etc.) never do
@@ -11,6 +12,11 @@ import { createFromEvent } from "@/lib/workflow/engine";
 const IDENTITY_FIELDS = ["fullName", "dateOfBirth", "mobileNumber", "email"] as const;
 
 export async function checkAndTriggerReverification(profileId: string, changedFields: readonly string[]): Promise<void> {
+  // STEP 24 — every saved profile edit is recorded (field NAMES only, via the bus's redaction) so
+  // repeated identity/contact churn is detectable. Contact-type edits are distinguished.
+  const touchesContact = changedFields.some((f) => f === "mobileNumber" || f === "email");
+  await publishSecurityEvent({ eventType: touchesContact ? "CONTACT_UPDATED" : "PROFILE_UPDATED", profileId, source: "profile-edit", meta: { fieldCount: changedFields.length } });
+
   const touchesIdentityField = changedFields.some((f) => (IDENTITY_FIELDS as readonly string[]).includes(f));
   if (!touchesIdentityField) return;
 

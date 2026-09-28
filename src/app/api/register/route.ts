@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { registrationSchema } from "@/lib/validation/registration";
 import { savePhoto, UploadValidationError } from "@/lib/storage";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { createProfileFromRegistration, ProfileCreationError } from "@/lib/profile-creation";
 import { signProfileToken, signSessionId, APPLICANT_COOKIE, APPLICANT_SESSION_ID_COOKIE } from "@/lib/applicant-session";
 import { createProfileSession } from "@/lib/profile-session";
@@ -14,10 +15,8 @@ const GENERIC_ERROR = "Your profile could not be submitted. Please check the hig
 async function postHandler(req: Request) {
   const blocked = await blockedResponse({ switches: ["registrations", "profileSubmissions"], flags: ["registrations.enabled"] });
   if (blocked) return blocked;
-  const key = `register:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 5, 60_000)) {
-    return NextResponse.json({ error: "Too many submissions. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "register", { limit: 5, windowMs: 60_000 });
+  if (limited) return limited;
 
   try {
     // STEP 15 §57 — a malformed body (wrong content type, broken JSON) is a client

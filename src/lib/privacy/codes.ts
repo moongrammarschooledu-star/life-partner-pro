@@ -35,7 +35,10 @@ export type SequencePrefix =
   | "XFER"
   | "PROC"
   | "AGRMT"
-  | "AUTHREQ";
+  | "AUTHREQ"
+  | "SIGNAL"
+  | "RISK"
+  | "REPORT";
 
 export async function nextSequenceCode(prefix: SequencePrefix): Promise<string> {
   const counter = await prisma.sequenceCounter.upsert({

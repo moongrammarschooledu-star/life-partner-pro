@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { submitProposalResponse, ProposalResponseError } from "@/lib/proposal-response";
 
 // Addressed by proposalCode, never the raw cuid (spec §2 — never expose
@@ -10,10 +10,8 @@ import { submitProposalResponse, ProposalResponseError } from "@/lib/proposal-re
 // Core logic lives in src/lib/proposal-response.ts (STEP 22) — extracted so
 // the family-decision confirmation flow reuses it unchanged.
 export async function POST(req: Request) {
-  const key = `my-proposals-respond:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 20, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "my-proposals-respond", { limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
 
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });

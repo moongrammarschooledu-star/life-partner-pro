@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { writeAudit } from "@/lib/audit";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { createFamilyMemberSession } from "@/lib/family/family-member-session";
 import { signFamilySessionId, FAMILY_SESSION_ID_COOKIE } from "@/lib/family/family-session";
 
@@ -12,10 +14,8 @@ import { signFamilySessionId, FAMILY_SESSION_ID_COOKIE } from "@/lib/family/fami
 // (enumeration guard), and never reveals whether a suspended/revoked account
 // exists either.
 export async function POST(req: Request) {
-  const key = `family-login:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "family-login", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
 
   const { email, password } = await req.json();
   if (typeof email !== "string" || typeof password !== "string") {
@@ -33,6 +33,7 @@ export async function POST(req: Request) {
   const valid = await bcrypt.compare(password, member.passwordHash);
   if (!valid) {
     await writeAudit({ action: "FAMILY_LOGIN_FAILED", actorFamilyMemberId: member.id, meta: { reason: "bad_password" } });
+    await publishSecurityEvent({ eventType: "LOGIN_FAILED", familyMemberId: member.id, ip: clientKeyFromRequest(req), source: "family-login", outcome: "BAD_PASSWORD" });
     return genericError();
   }
   if (member.status !== "ACTIVE") {

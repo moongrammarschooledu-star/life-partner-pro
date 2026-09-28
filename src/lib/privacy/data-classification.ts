@@ -44,6 +44,15 @@ export const DATA_CLASSIFICATION: Record<string, DataClassification> = {
   refund: "HIGHLY_SENSITIVE",
   manualPaymentEvidence: "HIGHLY_SENSITIVE",
   subscriptionStatus: "INTERNAL",
+
+  // STEP 24 — risk data is sensitive internal information (spec §48): never
+  // automatically visible to applicants (not in the privacy export either).
+  riskCase: "RESTRICTED",
+  riskAssessment: "RESTRICTED",
+  riskEvidence: "RESTRICTED",
+  securityEvent: "HIGHLY_SENSITIVE",
+  duplicateCluster: "RESTRICTED",
+  userReport: "HIGHLY_SENSITIVE",
 };
 
 export function classify(field: string): DataClassification {

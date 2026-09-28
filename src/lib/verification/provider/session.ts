@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { getVerificationProvider, isIdentityVerificationEnabled, VerificationProviderNotConfiguredError } from "./index";
 import { assessTransfer } from "@/lib/compliance/transfer";
 import type { VerificationSession } from "./types";
@@ -41,6 +42,7 @@ export async function createProviderSession(profileId: string, documentType: str
   });
 
   await writeAudit({ action: "PROVIDER_SESSION_CREATED", targetProfileId: profileId, meta: { provider: provider.name, documentType, country } });
+  await publishSecurityEvent({ eventType: "VERIFICATION_STARTED", profileId, source: "verification-provider", evaluate: false });
 
   // STEP 23 Add-on §19 — a verification provider is exactly "sending
   // sensitive data to a third country." Best-effort, non-blocking: never

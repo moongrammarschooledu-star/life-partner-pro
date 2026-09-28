@@ -33,6 +33,11 @@ export async function applyRestriction(params: {
   appliedById: string;
   endDate?: Date | null;
   caseId?: string | null;
+  // STEP 24 — optional risk-case metadata; ordinary admin restrictions omit these.
+  source?: string | null;
+  riskCaseId?: string | null;
+  approvalId?: string | null;
+  isPermanent?: boolean;
 }) {
   const restriction = await prisma.profileRestriction.create({
     data: {
@@ -42,6 +47,10 @@ export async function applyRestriction(params: {
       appliedById: params.appliedById,
       endDate: params.endDate ?? null,
       caseId: params.caseId ?? null,
+      source: params.source ?? null,
+      riskCaseId: params.riskCaseId ?? null,
+      approvalId: params.approvalId ?? null,
+      isPermanent: params.isPermanent ?? false,
     },
   });
   await writeAudit({

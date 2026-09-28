@@ -1,16 +1,15 @@
-// STEP 23 — Risk Signal Engine. SecurityFlag already IS the risk-signal
-// store (see the STEP 23 plan's decision 1) — this is a service layer over
-// that existing table, not a parallel model. Detector functions are pure
-// (take pre-computed counts, return a boolean) so they're unit-testable
-// without touching Prisma; the orchestrator does the actual counting and is
-// admin-triggered, matching the existing duplicate-scan route's own explicit
-// "never a background cron" precedent (this codebase has no queue/worker
-// infrastructure).
+// STEP 23 — Risk Signal Engine (STEP 24: thresholds are now versioned RiskRule config with the
+// previous hard-coded values as defaults; signals are created through RiskSignalService; a scan
+// that raises anything requests an assessment).
+// SecurityFlag already IS the risk-signal store (see the STEP 23 plan's decision 1) — this is a
+// service layer over that existing table, not a parallel model. Detector functions are pure
+// (take pre-computed counts, return a boolean) so they're unit-testable without touching Prisma;
+// the orchestrator does the actual counting.
 
 import { prisma } from "@/lib/prisma";
-import { writeAudit } from "@/lib/audit";
-import { createFromEvent } from "@/lib/workflow/engine";
-import { notifySecurityFlagRaised } from "@/lib/notifications/events";
+import { getEffectiveRule } from "@/lib/risk/config";
+import { createRiskSignal, suppressedRelatedProfiles } from "@/lib/risk/signal-service";
+import { assessProfile } from "@/lib/risk/assessment-service";
 import type { SecurityFlagType, SecurityFlagSeverity } from "@prisma/client";
 
 // ---------- Pure detectors ----------
@@ -37,46 +36,15 @@ export function detectPaymentAnomaly(failedPaymentCountInWindow: number, thresho
 
 // ---------- Orchestrator ----------
 
-const WINDOW_24H_MS = 24 * 60 * 60 * 1000;
-const WINDOW_1H_MS = 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 
 interface SignalDefinition {
   flagType: SecurityFlagType;
   severity: SecurityFlagSeverity;
+  ruleKey: string;
+  ruleVersion: number;
   triggered: boolean;
   description: string;
-}
-
-// Creates (or leaves alone, if one is already open) exactly one SecurityFlag
-// per signal type per profile — matching the existing duplicate-scan route's
-// own "skip if an OPEN/INVESTIGATING flag already exists" dedup convention,
-// so re-running the scan never piles up duplicate flags for the same
-// ongoing condition.
-async function raiseSignalIfNew(profileId: string, def: SignalDefinition): Promise<boolean> {
-  if (!def.triggered) return false;
-
-  const existing = await prisma.securityFlag.findFirst({
-    where: { profileId, flagType: def.flagType, status: { in: ["OPEN", "INVESTIGATING"] } },
-  });
-  if (existing) return false;
-
-  const flag = await prisma.securityFlag.create({
-    data: { profileId, flagType: def.flagType, severity: def.severity, description: def.description },
-  });
-
-  await writeAudit({ action: "RISK_SIGNAL_DETECTED", targetProfileId: profileId, meta: { flagType: def.flagType, flagId: flag.id } });
-  await notifySecurityFlagRaised(profileId, false, flag.id);
-  await createFromEvent({
-    eventName: "RISK_SIGNAL_DETECTED",
-    dedupKey: `RISK_SIGNAL_REVIEW:${flag.id}`,
-    resourceType: "PROFILE",
-    resourceId: profileId,
-    taskType: "RISK_SIGNAL_REVIEW",
-    title: `Risk signal: ${def.flagType}`,
-    description: def.description,
-  });
-
-  return true;
 }
 
 export interface RiskSignalScanResult {
@@ -84,63 +52,91 @@ export interface RiskSignalScanResult {
   signalsCreated: number;
 }
 
-// Admin-triggered, single-profile or platform-wide scan (never a cron) —
-// evaluates the 5 new signal types over the last 24 hours. Deliberately
-// conservative, simple counting queries rather than a scoring model: the
-// point is an explainable trigger an admin can immediately understand and
-// verify against the raw data, not a black-box heuristic.
+// Single-profile scan over the batch-evaluated signal families (contact reuse, rapid
+// registration, proposal/contact-request volume, payment failures). Deliberately conservative
+// counting rather than a scoring model: an explainable trigger an admin can verify against raw
+// data. Sharing that a human has already explained (authorized family account, family relation,
+// "not a duplicate") is excluded, so a spouse sharing a phone is not flagged.
 export async function runRiskSignalScan(profileId: string): Promise<RiskSignalScanResult> {
-  const since = new Date(Date.now() - WINDOW_24H_MS);
   const profile = await prisma.profile.findUnique({ where: { id: profileId }, include: { contact: true } });
   if (!profile || !profile.contact) return { profilesScanned: 0, signalsCreated: 0 };
 
-  const sharedContactWhere = { OR: [{ mobileNumber: profile.contact.mobileNumber }, { email: { equals: profile.contact.email, mode: "insensitive" as const } }], profileId: { not: profileId } };
+  const [rapid, reuse, proposals, contactRequests, payments] = await Promise.all([
+    getEffectiveRule("rapid_registration"),
+    getEffectiveRule("contact_reuse"),
+    getEffectiveRule("excessive_proposals"),
+    getEffectiveRule("abnormal_contact_requests"),
+    getEffectiveRule("payment_anomaly"),
+  ]);
+  const hoursAgo = (config: Record<string, number | boolean>, key: string) => new Date(Date.now() - Number(config[key]) * HOUR_MS);
 
-  const [sharedContactCount, recentSharedContactCount, proposalCount, contactRequestCount, failedPaymentCount] = await Promise.all([
-    prisma.contactInfo.count({ where: sharedContactWhere }),
-    prisma.contactInfo.count({ where: { ...sharedContactWhere, profile: { createdAt: { gte: new Date(Date.now() - WINDOW_1H_MS) } } } }),
-    prisma.proposal.count({ where: { OR: [{ profileAId: profileId }, { profileBId: profileId }], createdAt: { gte: since } } }),
-    prisma.contactPermission.count({ where: { profileId, requestedAt: { gte: since } } }),
-    prisma.payment.count({ where: { profileId, status: "FAILED", createdAt: { gte: since } } }),
+  const sharedContactWhere = {
+    OR: [{ mobileNumber: profile.contact.mobileNumber }, { email: { equals: profile.contact.email, mode: "insensitive" as const } }],
+    profileId: { not: profileId },
+  };
+  const sharing = await prisma.contactInfo.findMany({ where: sharedContactWhere, select: { profileId: true, profile: { select: { createdAt: true } } } });
+  const explained = await suppressedRelatedProfiles(profileId, sharing.map((s) => s.profileId));
+  const effective = sharing.filter((s) => !explained.has(s.profileId));
+  const sharedContactCount = effective.length;
+  const rapidSince = Date.now() - Number(rapid.config.windowMinutes) * 60_000;
+  const recentSharedContactCount = effective.filter((s) => s.profile.createdAt.getTime() >= rapidSince).length;
+
+  const [proposalCount, contactRequestCount, failedPaymentCount] = await Promise.all([
+    prisma.proposal.count({ where: { OR: [{ profileAId: profileId }, { profileBId: profileId }], createdAt: { gte: hoursAgo(proposals.config, "windowHours") } } }),
+    prisma.contactPermission.count({ where: { profileId, requestedAt: { gte: hoursAgo(contactRequests.config, "windowHours") } } }),
+    prisma.payment.count({ where: { profileId, status: "FAILED", createdAt: { gte: hoursAgo(payments.config, "windowHours") } } }),
   ]);
 
   const definitions: SignalDefinition[] = [
     {
       flagType: "RAPID_REGISTRATION_SIGNAL",
       severity: "MEDIUM",
-      triggered: detectRapidRegistration(recentSharedContactCount + 1),
-      description: `${recentSharedContactCount} other profile(s) sharing this profile's mobile number or email were registered within the last hour.`,
+      ruleKey: "rapid_registration",
+      ruleVersion: rapid.version,
+      triggered: detectRapidRegistration(recentSharedContactCount + 1, Number(rapid.config.threshold)),
+      description: `${recentSharedContactCount} other profile(s) sharing this profile's mobile number or email were registered within the last ${Number(rapid.config.windowMinutes)} minutes.`,
     },
     {
       flagType: "CONTACT_REUSE_SIGNAL",
       severity: "MEDIUM",
-      triggered: detectContactReuse(sharedContactCount + 1),
+      ruleKey: "contact_reuse",
+      ruleVersion: reuse.version,
+      triggered: detectContactReuse(sharedContactCount + 1, Number(reuse.config.threshold)),
       description: `This profile's mobile number or email is shared with ${sharedContactCount} other profile(s).`,
     },
     {
       flagType: "EXCESSIVE_PROPOSAL_ACTIVITY",
       severity: "LOW",
-      triggered: detectExcessiveProposalActivity(proposalCount),
-      description: `${proposalCount} proposal(s) involving this profile in the last 24 hours.`,
+      ruleKey: "excessive_proposals",
+      ruleVersion: proposals.version,
+      triggered: detectExcessiveProposalActivity(proposalCount, Number(proposals.config.threshold)),
+      description: `${proposalCount} proposal(s) involving this profile in the last ${Number(proposals.config.windowHours)} hours.`,
     },
     {
       flagType: "ABNORMAL_CONTACT_REQUEST_ACTIVITY",
       severity: "MEDIUM",
-      triggered: detectAbnormalContactRequestActivity(contactRequestCount),
-      description: `${contactRequestCount} contact-sharing request(s) from this profile in the last 24 hours.`,
+      ruleKey: "abnormal_contact_requests",
+      ruleVersion: contactRequests.version,
+      triggered: detectAbnormalContactRequestActivity(contactRequestCount, Number(contactRequests.config.threshold)),
+      description: `${contactRequestCount} contact-sharing request(s) from this profile in the last ${Number(contactRequests.config.windowHours)} hours.`,
     },
     {
       flagType: "PAYMENT_ANOMALY_SIGNAL",
       severity: "MEDIUM",
-      triggered: detectPaymentAnomaly(failedPaymentCount),
-      description: `${failedPaymentCount} failed payment attempt(s) from this profile in the last 24 hours.`,
+      ruleKey: "payment_anomaly",
+      ruleVersion: payments.version,
+      triggered: detectPaymentAnomaly(failedPaymentCount, Number(payments.config.threshold)),
+      description: `${failedPaymentCount} failed payment attempt(s) from this profile in the last ${Number(payments.config.windowHours)} hours.`,
     },
   ];
 
   let signalsCreated = 0;
   for (const def of definitions) {
-    if (await raiseSignalIfNew(profileId, def)) signalsCreated++;
+    if (!def.triggered) continue;
+    const result = await createRiskSignal({ profileId, flagType: def.flagType, severity: def.severity, ruleKey: def.ruleKey, ruleVersion: def.ruleVersion, description: def.description });
+    if (result.created) signalsCreated++;
   }
+  if (signalsCreated > 0) await assessProfile(profileId);
 
   return { profilesScanned: 1, signalsCreated };
 }

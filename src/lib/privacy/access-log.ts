@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { classify } from "@/lib/privacy/data-classification";
 import type { DataProcessingPurpose } from "@prisma/client";
 
@@ -20,6 +21,11 @@ export async function logPrivacyAccess(params: {
   // function's existing, non-gating behavior.
   purpose?: DataProcessingPurpose | null;
 }) {
+  // STEP 24 — the single choke point for admin sensitive access also feeds the privileged-access
+  // volume rule (distinct sensitive records per admin per window). Fail-open; admin-attributed only.
+  if (params.actorAdminId && params.targetProfileId) {
+    await publishSecurityEvent({ eventType: "ADMIN_SENSITIVE_ACCESS", adminId: params.actorAdminId, profileId: params.targetProfileId, source: "privacy-access-log", meta: { field: params.field } });
+  }
   await prisma.privacyAccessLog.create({
     data: {
       actorAdminId: params.actorAdminId ?? null,

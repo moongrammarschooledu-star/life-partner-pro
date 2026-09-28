@@ -30,6 +30,7 @@ const SPOKES = [
   { href: "/account-settings", label: "Account & Security", desc: "Sessions, deactivation, deletion" },
   { href: "/my-billing", label: "Payment Center", desc: "Packages, subscription, invoices" },
   { href: "/my-cases", label: "Support Center", desc: "Help requests and complaints" },
+  { href: "/report-concern", label: "Report a Concern", desc: "Tell us if something feels wrong" },
   { href: "/dashboard/activity", label: "Activity Timeline", desc: "Everything that's happened on your account" },
   { href: "/dashboard/ai-assistant", label: "Profile Assistant", desc: "AI-assisted profile improvement suggestions" },
 ];

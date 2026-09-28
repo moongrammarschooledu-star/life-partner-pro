@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { hasEntitlement, consumeUsage } from "@/lib/finance/entitlements";
 import { nextCaseNumber } from "@/lib/case-code";
 import { computeSlaDueDates } from "@/lib/case-sla";
@@ -17,10 +17,8 @@ export async function POST(req: Request) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const key = `assisted-matchmaking:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 5, 60_000)) {
-    return NextResponse.json({ error: "Too many requests. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "assisted-matchmaking", { limit: 5, windowMs: 60_000 });
+  if (limited) return limited;
 
   if (!(await hasEntitlement(profileId, FEATURE_KEY))) {
     return NextResponse.json({ error: "Assisted matchmaking requires an active subscription that includes this feature." }, { status: 403 });

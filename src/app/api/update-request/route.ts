@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { notifyAdminProfileUpdatePending } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
@@ -31,10 +31,8 @@ async function findProfileBySessionCookie() {
 export async function POST(req: Request) {
   const blocked = await blockedResponse({ switches: ["profileSubmissions"] });
   if (blocked) return blocked;
-  const key = `update-request:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many requests. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "update-request", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
 
   try {
     const body = await req.json();

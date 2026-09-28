@@ -14,6 +14,7 @@ let verifications: Map<string, { profileId: string; status: string; providerRefe
 let flags: { profileId: string; status: string; severity: string }[];
 
 vi.mock("@/lib/family/family-member-session", () => ({ revokeAllFamilyMemberSessions: vi.fn(async () => 0) }));
+vi.mock("@/lib/profile-restrictions", () => ({ hasActiveRestriction: vi.fn(async () => false) }));
 vi.mock("@/lib/audit", () => ({ writeAudit: vi.fn(async () => {}) }));
 
 vi.mock("@/lib/visibility/proposal-visibility", async () => {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { saveVerificationDocument, DocumentUploadError } from "@/lib/verification/document-storage";
 import { writeAudit } from "@/lib/audit";
 import type { DocumentType } from "@prisma/client";
@@ -27,10 +27,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const blocked = await blockedResponse({ switches: ["uploads"], flags: ["uploads.enabled", "verification.enabled"] });
   if (blocked) return blocked;
-  const key = `verification-doc-upload:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 5, 60_000)) {
-    return NextResponse.json({ error: "Too many uploads. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "verification-doc-upload", { limit: 5, windowMs: 60_000 });
+  if (limited) return limited;
 
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });

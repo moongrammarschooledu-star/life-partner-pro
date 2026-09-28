@@ -69,6 +69,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/security-flags", label: "Security Flags", icon: Flag, permission: "verification:flag:manage" },
   { href: "/admin/verification/duplicates", label: "Duplicate Detection", icon: Copy, permission: "duplicates:view" },
   { href: "/admin/risk", label: "Risk Signals", icon: ShieldQuestion, permission: "risk:view" },
+  { href: "/admin/risk-center", label: "Risk & Safety Center", icon: ShieldAlert, permission: "risk:view" },
   { href: "/admin/verification/policies", label: "Verification Policies", icon: Settings2, permission: "verification:policy:view" },
   { href: "/admin/matching", label: "Matching Center", icon: Sparkles, permission: "match:run" },
   { href: "/admin/candidate-discovery", label: "Candidate Discovery", icon: SearchCheck, permission: "search:view" },

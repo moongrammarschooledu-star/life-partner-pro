@@ -15,6 +15,8 @@ vi.mock("@/lib/notifications/events", () => ({
   notifyProfileRegistered: vi.fn(async (id: string) => { notifyRegisteredCalls.push(id); }),
   notifyProfileSubmitted: vi.fn(async (id: string) => { notifySubmittedCalls.push(id); }),
 }));
+vi.mock("@/lib/security/event-bus", () => ({ publishSecurityEvent: vi.fn(async () => ({ recorded: true })) }));
+vi.mock("@/lib/risk/fraud-prevention-service", () => ({ evaluateNewAccountSafety: vi.fn(async () => undefined) }));
 vi.mock("@/lib/profile-code", () => ({ nextProfileCode: vi.fn(async () => "LPP-000001") }));
 vi.mock("@/lib/verification/checklist-catalog", () => ({ CHECKLIST_KEYS: ["PHOTO", "EDUCATION"] }));
 vi.mock("@/lib/verification/completeness", () => ({ computeProfileCompleteness: vi.fn(() => ({ percent: 42 })) }));

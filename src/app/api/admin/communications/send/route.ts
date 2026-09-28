@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
+import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { assertCommunicationAccess } from "@/lib/communication-access";
 import { sendAdminComposedMessage } from "@/lib/notifications/notification-service";
 import type { NotificationChannel } from "@prisma/client";
@@ -31,6 +32,11 @@ export async function POST(req: Request) {
 
     const profile = await prisma.profile.findUnique({ where: { id: profileId }, select: { id: true, softDeleted: true } });
     if (!profile || profile.softDeleted) throw new ApiError(404, "Profile not found");
+
+    // STEP 24 — real backend enforcement of the risk-driven communication restrictions.
+    if ((await hasActiveRestriction(profileId, "COMMUNICATION_RESTRICTED")) || (await hasActiveRestriction(profileId, "FULL_ACCOUNT_RESTRICTED"))) {
+      throw new ApiError(403, "This profile is currently restricted from admin-initiated communication.");
+    }
 
     const result = await sendAdminComposedMessage({
       profileId,

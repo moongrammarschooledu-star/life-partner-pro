@@ -100,7 +100,7 @@ describe("API route authorization coverage", () => {
   });
 
   it("public state-changing routes are rate-limited or secret/signature protected", () => {
-    const protectedBy = /rateLimit\(|enforcePersistentLimit\(|rateLimitPersistent\(|verifyWebhook\(|CRON_SECRET|NOTIFICATION_WEBHOOK_SECRET|CI_EVIDENCE_TOKEN|handlers\.POST/;
+    const protectedBy = /rateLimit\(|enforceConfiguredLimit\(|enforcePersistentLimit\(|rateLimitPersistent\(|verifyWebhook\(|CRON_SECRET|NOTIFICATION_WEBHOOK_SECRET|CI_EVIDENCE_TOKEN|handlers\.POST/;
     const unprotected = routes
       .filter((r) => PUBLIC_ROUTES.has(r.path) && /export (async function|const) POST|export const \{[^}]*POST/.test(r.source))
       .filter((r) => !protectedBy.test(r.source))
@@ -132,7 +132,7 @@ describe("AI API routes", () => {
   });
 
   it("feature routes use the pipeline; admin/ops routes require an explicit ai:* permission", () => {
-    const featureRoutes = new Set(["profile-summary", "data-quality", "match-explanation", "compare", "proposal-assistance", "communication-draft", "followup-draft", "report-summary", "copilot"]);
+    const featureRoutes = new Set(["profile-summary", "data-quality", "match-explanation", "compare", "proposal-assistance", "communication-draft", "followup-draft", "report-summary", "risk-summary", "copilot"]);
     for (const r of aiRoutes) {
       const name = r.path.split("/").pop()!;
       if (featureRoutes.has(name)) expect(r.source, r.path).toMatch(/@\/lib\/ai\/(features|copilot\/copilot)"/);

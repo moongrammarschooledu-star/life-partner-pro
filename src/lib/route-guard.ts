@@ -6,6 +6,7 @@ import { getActiveViewAs } from "@/lib/view-as";
 import type { Permission, AdminRole } from "@/lib/permissions";
 import { ServiceUnavailableError } from "@/lib/ops/system-control";
 import { HttpError } from "@/lib/http-error";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 
 export class ApiError extends HttpError {}
 
@@ -73,6 +74,9 @@ export async function requireAdmin(permission?: Permission, options?: RequireAdm
   }
 
   if (permission && !effective.permissions.includes(permission)) {
+    // STEP 24 — a permission denial is a security event (burst detection). Awaited so a serverless
+    // instance cannot drop it, but fail-open: publishing never changes the 403 the caller gets.
+    await publishSecurityEvent({ eventType: "PERMISSION_DENIED", adminId: effective.id, source: "route-guard", outcome: "DENIED", evaluate: true });
     throw new ApiError(403, "Forbidden: insufficient permissions");
   }
   return effective;

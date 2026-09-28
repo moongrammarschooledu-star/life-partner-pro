@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { createProviderSession, ProviderSessionError } from "@/lib/verification/provider/session";
 import { writeAudit } from "@/lib/audit";
 
@@ -10,10 +10,8 @@ export async function POST(req: Request) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const key = `verification-session:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 5, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "verification-session", { limit: 5, windowMs: 60_000 });
+  if (limited) return limited;
 
   const { documentType, country } = (await req.json().catch(() => ({}))) as { documentType?: string; country?: string };
   if (!documentType || !VALID_DOCUMENT_TYPES.includes(documentType) || !country?.trim()) {

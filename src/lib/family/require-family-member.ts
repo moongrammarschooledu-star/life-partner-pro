@@ -28,7 +28,7 @@ export async function requireFamilyMemberId(): Promise<string | null> {
   // profile locks out the whole family account, not just the applicant's
   // own session; a restricted applicant is not a channel to route around via
   // a delegated family login.
-  if (await hasActiveRestriction(member.familyAccount.applicantId, "LOGIN_RESTRICTED")) return null;
+  if ((await hasActiveRestriction(member.familyAccount.applicantId, "LOGIN_RESTRICTED")) || (await hasActiveRestriction(member.familyAccount.applicantId, "FULL_ACCOUNT_RESTRICTED"))) return null;
 
   return familyMemberId;
 }

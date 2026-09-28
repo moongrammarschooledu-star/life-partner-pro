@@ -166,6 +166,9 @@ enum AdminTaskType {
   JURISDICTION_REVIEW // PROFILE — jurisdiction could not be resolved, needs manual determination
   AUTHORITY_REQUEST_REVIEW // PROFILE — an authority/regulator request needs verification and legal review
   TRANSFER_REVIEW // PROFILE — a cross-border transfer assessment needs review
+  // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
+  RISK_REVIEW // CASE — a RiskCase needs human review (never an automatic decision)
+  ADMIN_SECURITY_REVIEW // CASE — privileged-access anomaly; investigation task, not an accusation
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -361,6 +364,16 @@ enum RestrictionType {
   NO_NEW_PROPOSALS // distinct from CANNOT_MATCH — blocks new proposal creation, not matching/discovery
   LOGIN_RESTRICTED // checked in requireApplicantProfileId/requireFamilyMemberId session validation
   NO_FAMILY_INVITATIONS // checked in src/lib/family/invitation.ts's createInvitation
+
+  // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
+  // The spec's other restriction names map onto existing values: MATCHING=CANNOT_MATCH,
+  // PROPOSALS=CANNOT_RECEIVE_PROPOSAL/NO_NEW_PROPOSALS, CONTACT=CANNOT_CONTACT_SHARE
+  // (see RESTRICTION_LABELS in src/lib/risk/restriction-service.ts). Only the four
+  // genuinely missing types are added, each with a real enforcement point.
+  COMMUNICATION_RESTRICTED // checked before an admin-initiated message is sent to the profile
+  PAYMENT_RESTRICTED // checked in src/lib/finance/checkout.ts startCheckout
+  FAMILY_ACCESS_RESTRICTED // checked in src/lib/family/access-control.ts getFamilyMembership
+  FULL_ACCOUNT_RESTRICTED // checked in requireApplicantProfileId / requireFamilyMemberId
 }
 
 enum ResolutionCategory {
@@ -486,6 +499,21 @@ enum SecurityFlagType {
   EXCESSIVE_PROPOSAL_ACTIVITY
   ABNORMAL_CONTACT_REQUEST_ACTIVITY
   PAYMENT_ANOMALY_SIGNAL
+
+  // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
+  // Neutral, operational names — a signal is never an accusation.
+  LOGIN_ABUSE_SIGNAL
+  OTP_ABUSE_SIGNAL
+  CONTACT_BYPASS_ATTEMPT
+  UNUSUAL_PRIVILEGED_ACCESS
+  FAMILY_ACCESS_ABUSE_SIGNAL
+  SHARED_DEVICE_SIGNAL
+  UNUSUAL_NETWORK_ACTIVITY
+  PROFILE_CHURN_SIGNAL
+  IDENTITY_VERIFICATION_REVIEW
+  SAFETY_REPORT_SIGNAL
+  REPEATED_PAYMENT_FAILURE
+  UNAUTHORIZED_ACCESS_ATTEMPT
 }
 
 enum SecurityFlagSeverity {
@@ -496,18 +524,28 @@ enum SecurityFlagSeverity {
 }
 
 enum SecurityFlagStatus {
-  OPEN
-  INVESTIGATING
+  OPEN // == spec "NEW"
+  INVESTIGATING // == spec "UNDER_REVIEW"
   RESOLVED
   DISMISSED
+  // STEP 24 — remaining spec signal statuses
+  ACKNOWLEDGED
+  CONFIRMED
+  FALSE_POSITIVE
+  ESCALATED
+  ARCHIVED
 }
 
 // ---------- STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety Intelligence ----------
 
 enum DuplicateConfidenceBand {
-  STRONG
+  STRONG // legacy STEP 23 band, kept for existing rows
   MEDIUM
   LOW
+  // STEP 24 — spec confidence levels (EXACT/VERY_HIGH/HIGH/MEDIUM/LOW)
+  EXACT
+  VERY_HIGH
+  HIGH
 }
 
 enum DuplicateCandidateStatus {
@@ -526,6 +564,8 @@ enum AccountRelationshipType {
   SHARED_CONTACT_SIGNAL
   SHARED_VERIFICATION_SIGNAL
   UNKNOWN_RELATIONSHIP
+  LIKELY_DUPLICATE // STEP 24
+  RELATED_ACCOUNT // STEP 24
 }
 
 enum AccountRelationshipStatus {
@@ -1053,6 +1093,23 @@ enum AuditAction {
   COMPLIANCE_INCIDENT_CREATED
   LEGAL_DOCUMENT_VERSION_PUBLISHED
   AGE_VERIFICATION_BLOCKED
+
+  // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
+  RISK_CASE_OPENED
+  RISK_CASE_ACTION
+  RISK_ASSESSMENT_RECORDED
+  RISK_RULE_CHANGED
+  RISK_CONFIGURATION_CHANGED
+  RISK_EVIDENCE_ADDED
+  RISK_EVIDENCE_VIEWED
+  RISK_RESTRICTION_APPLIED
+  RISK_DUPLICATE_CLUSTER_REBUILT
+  RISK_TECHNICAL_CONTROL_APPLIED
+  RISK_ADMIN_ACCESS_ANOMALY
+  USER_REPORT_SUBMITTED
+  USER_REPORT_REVIEWED
+  RATE_LIMIT_POLICY_CHANGED
+  AI_RISK_SUMMARY_GENERATED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1252,6 +1309,23 @@ enum NotificationType {
   COMPLIANCE_LEGAL_HOLD_ACTIVE
   COMPLIANCE_POLICY_CONFLICT
   COMPLIANCE_AUTHORITY_REQUEST_DUE
+
+  // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
+  // Admin-internal (IN_APP only, roles targeted via notifyAdmins).
+  HIGH_RISK_DETECTED
+  CRITICAL_RISK_DETECTED
+  DUPLICATE_REVIEW_REQUIRED
+  VERIFICATION_RISK
+  ACCOUNT_SECURITY_ALERT
+  CONTACT_BYPASS_DETECTED
+  ADMIN_ACCESS_ANOMALY
+  SAFETY_REPORT_RECEIVED
+  RISK_REVIEW_DUE
+  RISK_CASE_ESCALATED
+  // Applicant-facing — deliberately neutral wording, never exposes detection logic.
+  RISK_INFORMATION_REQUESTED
+  SECURITY_NOTICE
+  SAFETY_REPORT_ACKNOWLEDGED
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1327,6 +1401,7 @@ enum DataCategory {
   FINANCIAL_RECORDS // stored but inapplicable — no payment/financial system exists in this app
   WORKFLOW_TASK_DATA
   GOVERNANCE_APPROVAL_DATA
+  RISK_EVIDENCE // STEP 24 — risk cases, assessments and evidence; never auto-deleted while a case is open or a hold is active
 }
 
 enum RetentionAction {
@@ -2372,11 +2447,31 @@ model SecurityFlag {
   resolvedAt       DateTime?
   createdAt        DateTime             @default(now())
 
+  // ---------- STEP 24 — risk_signals extension (this model IS the signal store) ----------
+  // All nullable/defaulted so every existing reader and row keeps working.
+  signalCode          String?              @unique // LPP-SIGNAL-###### via nextSequenceCode("SIGNAL")
+  category            RiskSignalCategory?
+  confidence          RiskConfidence?
+  source              String? // e.g. "rule-engine", "security-event-bus", "user-report", "admin-manual"
+  evidenceRef         String? // loose pointer to a RiskEvidence.id / SecurityEvent.id — no FK (evidence outlives profiles)
+  reviewRequired      Boolean              @default(true)
+  ruleVersion         Int?
+  // Idempotency: ruleKey:subject:windowBucket. A unique constraint (not a
+  // check-then-insert) so concurrent detections can never double-create.
+  dedupKey            String?              @unique
+  riskCase            RiskCase?            @relation(fields: [riskCaseId], references: [id])
+  riskCaseId          String?
+  falsePositiveReason FalsePositiveReason?
+  updatedAt           DateTime             @default(now()) @updatedAt
+
   // STEP 23 — the richer evidence companion, when this flag is a duplicate signal.
   duplicateCandidate DuplicateCandidate?
 
   @@index([profileId])
   @@index([status])
+  @@index([riskCaseId])
+  @@index([category, status])
+  @@index([flagType, createdAt])
 }
 
 // ---------- STEP 23 — KYC, Identity Verification, Duplicate Detection & Safety Intelligence ----------
@@ -2387,24 +2482,27 @@ model SecurityFlag {
 // this carries the weighted confidence band, raw matching signals, and its
 // own richer review lifecycle for the new Duplicate Detection workspace.
 model DuplicateCandidate {
-  id                 String                   @id @default(cuid())
-  candidateCode      String                   @unique // LPP-DUPC-###### via src/lib/privacy/codes.ts
-  profile            Profile                  @relation("DuplicateCandidateProfile", fields: [profileId], references: [id], onDelete: Cascade)
-  profileId          String
-  candidateProfile   Profile                  @relation("DuplicateCandidateCandidateProfile", fields: [candidateProfileId], references: [id], onDelete: Cascade)
-  candidateProfileId String
-  securityFlag       SecurityFlag?            @relation(fields: [securityFlagId], references: [id])
-  securityFlagId     String?                  @unique
-  confidenceBand     DuplicateConfidenceBand
-  confidenceScore    Int // 0-100, normalized weighted score — see computeDuplicateConfidence()
-  matchingSignals    String // JSON array of signal names, e.g. ["MOBILE","EMAIL"]
-  status             DuplicateCandidateStatus @default(POTENTIAL_DUPLICATE)
-  reviewer           AdminUser?               @relation("DuplicateCandidateReviewer", fields: [reviewerId], references: [id])
-  reviewerId         String?
-  reviewedAt         DateTime?
-  resolution         String?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  id                  String                   @id @default(cuid())
+  candidateCode       String                   @unique // LPP-DUPC-###### via src/lib/privacy/codes.ts
+  profile             Profile                  @relation("DuplicateCandidateProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  profileId           String
+  candidateProfile    Profile                  @relation("DuplicateCandidateCandidateProfile", fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  candidateProfileId  String
+  securityFlag        SecurityFlag?            @relation(fields: [securityFlagId], references: [id])
+  securityFlagId      String?                  @unique
+  confidenceBand      DuplicateConfidenceBand
+  confidenceScore     Int // 0-100, normalized weighted score — see computeDuplicateConfidence()
+  matchingSignals     String // JSON array of signal names, e.g. ["MOBILE","EMAIL"]
+  status              DuplicateCandidateStatus @default(POTENTIAL_DUPLICATE)
+  reviewer            AdminUser?               @relation("DuplicateCandidateReviewer", fields: [reviewerId], references: [id])
+  reviewerId          String?
+  reviewedAt          DateTime?
+  resolution          String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  // STEP 24 — structured reason when a reviewer marks the pair NOT_DUPLICATE
+  // (feeds rule tuning in aggregate, never used to single out a user).
+  falsePositiveReason FalsePositiveReason?
 
   @@unique([profileId, candidateProfileId])
   @@index([profileId])
@@ -3627,7 +3725,14 @@ model ProfileRestriction {
   liftedAt        DateTime?
   createdAt       DateTime        @default(now())
 
+  // ---------- STEP 24 — risk-driven restriction metadata (all optional) ----------
+  source      String? // "admin_manual" | "risk_case" — how this restriction originated
+  riskCaseId  String? // loose pointer to RiskCase.id
+  approvalId  String? // loose pointer to the STEP 19 ApprovalRequest.id when a gate was involved
+  isPermanent Boolean @default(false) // only ever true after a PERMANENT_RESTRICTION approval; otherwise endDate is required
+
   @@index([profileId, active])
+  @@index([riskCaseId])
 }
 
 // Rows keyed by prefix ("SUP","CMP","CASE") — mirrors ProposalCodeCounter's
@@ -4927,6 +5032,466 @@ model RateLimitBucket {
   @@index([windowStartedAt])
 }
 
+// ---------- STEP 24 — Fraud Prevention, Risk Scoring & Account Safety Intelligence ----------
+// Design notes (see the approved STEP 24 plan):
+//  - SecurityFlag (above) IS the risk-signal store; these models add the
+//    case/assessment/evidence/config layers around it.
+//  - Risk records reference profiles/admins by LOOSE string ids (this
+//    codebase's polymorphic-reference convention), not cascading FKs: risk
+//    evidence must survive profile/admin deletion for retention, legal holds
+//    and disputes, and must never be silently removed by a cascade.
+//  - Signal ≠ assessment ≠ case ≠ report ≠ verification result ≠ decision:
+//    nothing here ever concludes fraud or applies an adverse action by itself.
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskState {
+  NOT_ASSESSED
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  UNDER_REVIEW
+  CLEARED
+  RESTRICTED
+  SUSPENDED
+}
+
+enum RiskConfidence {
+  EXACT
+  VERY_HIGH
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RiskSignalCategory {
+  IDENTITY
+  CONTACT
+  ACCOUNT
+  DUPLICATE
+  DOCUMENT
+  LOGIN_SECURITY
+  PROFILE_ACTIVITY
+  COMMUNICATION
+  PROPOSAL_ACTIVITY
+  MEETING_ACTIVITY
+  PAYMENT
+  PRIVACY
+  FAMILY_ACCESS
+  ADMIN_ACCESS
+  DEVICE
+  NETWORK
+  AUTOMATION
+  ABUSE
+  SAFETY
+}
+
+enum RiskCaseStatus {
+  OPEN
+  ACKNOWLEDGED
+  UNDER_INVESTIGATION
+  INFORMATION_REQUESTED
+  ESCALATED
+  CLEARED
+  RESTRICTED
+  SUSPENDED
+  DISMISSED
+  FALSE_POSITIVE
+  CLOSED
+}
+
+enum RiskReviewDecisionType {
+  ACKNOWLEDGE
+  INVESTIGATE
+  REQUEST_INFORMATION
+  REQUEST_REVERIFICATION
+  DISMISS
+  MARK_FALSE_POSITIVE
+  CLEAR
+  RESTRICT
+  SUSPEND
+  ESCALATE
+  CLOSE
+}
+
+enum RiskEvidenceType {
+  VERIFICATION_RESULT
+  AUDIT_EVENT
+  LOGIN_EVENT
+  SECURITY_EVENT
+  PROFILE_CHANGE
+  CONTACT_CHANGE
+  API_EVENT
+  PAYMENT_EVENT
+  SUPPORT_CASE
+  USER_REPORT
+  ADMIN_NOTE
+  PROVIDER_RESULT
+}
+
+enum FalsePositiveReason {
+  SHARED_FAMILY_DEVICE
+  SHARED_FAMILY_PHONE
+  SHARED_HOME_NETWORK
+  DATA_ENTRY_ERROR
+  PROVIDER_ERROR
+  LEGITIMATE_DUPLICATE_CONTEXT
+  INCORRECT_SIGNAL
+  OTHER
+}
+
+enum RiskConfigStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
+enum SecurityEventType {
+  ACCOUNT_CREATED
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  OTP_REQUESTED
+  OTP_FAILED
+  PASSWORD_RESET
+  PROFILE_UPDATED
+  CONTACT_UPDATED
+  VERIFICATION_STARTED
+  VERIFICATION_FAILED
+  DOCUMENT_UPLOADED
+  PROPOSAL_CREATED
+  CONTACT_REQUESTED
+  FAMILY_INVITE_CREATED
+  FAMILY_ACCESS_REQUESTED
+  PAYMENT_FAILED
+  ADMIN_SENSITIVE_ACCESS
+  API_AUTH_FAILURE
+  PERMISSION_DENIED
+  CONTACT_BYPASS_ATTEMPT
+  NEW_DEVICE_SESSION
+}
+
+enum SecurityIncidentControl {
+  SESSION_REVOCATION
+  SUBJECT_THROTTLE
+  IP_BLOCK
+  OTP_THROTTLE
+  LOGIN_PROTECTION
+}
+
+enum SecurityIncidentStatus {
+  ACTIVE
+  EXPIRED
+  LIFTED
+}
+
+enum DuplicateClusterStatus {
+  UNRESOLVED
+  CONFIRMED
+  FALSE_POSITIVE
+  RESOLVED
+  SUPERSEDED
+}
+
+enum UserReportType {
+  SUSPICIOUS_PROFILE
+  INAPPROPRIATE_COMMUNICATION
+  IDENTITY_CONCERN
+  CONTACT_ABUSE
+  HARASSMENT
+  IMPERSONATION
+  OTHER
+}
+
+enum UserReportStatus {
+  RECEIVED
+  UNDER_REVIEW
+  ACTION_TAKEN
+  NO_ACTION_NEEDED
+  CLOSED
+}
+
+// A human-reviewed safety case. Opened by a signal/assessment/user report/
+// admin; only a human moves it to a decision state, and every consequential
+// action goes through the STEP 19 gate (see src/lib/risk/case-service.ts).
+model RiskCase {
+  id               String             @id @default(cuid())
+  riskCode         String             @unique // LPP-RISK-###### via nextSequenceCode("RISK")
+  subjectProfileId String? // loose reference — see the header note
+  subjectAdminId   String? // set for ADMIN_SECURITY_REVIEW cases; that admin can never view/act on it
+  category         RiskSignalCategory
+  title            String
+  status           RiskCaseStatus     @default(OPEN)
+  riskLevel        RiskLevel
+  riskState        RiskState          @default(UNDER_REVIEW)
+  reviewRequired   Boolean            @default(true)
+  assignedToId     String?
+  jurisdictionId   String?
+  caseId           String? // loose pointer to a STEP 12 Case (LPP-CASE-######) for safety-report-originated cases
+  userReportId     String? // loose pointer to UserReport.id
+  openedBy         String // "signal:<id>" | "assessment" | "user_report" | "admin_manual"
+  dueAt            DateTime?
+  outcome          String?
+  closedAt         DateTime?
+  closedById       String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  signals     SecurityFlag[]
+  assessments RiskAssessment[]
+  events      RiskCaseEvent[]
+  evidence    RiskEvidence[]
+  reviews     RiskReview[]
+
+  @@index([subjectProfileId, status])
+  @@index([subjectAdminId])
+  @@index([status, riskLevel])
+  @@index([category, status])
+  @@index([jurisdictionId])
+  @@index([createdAt])
+}
+
+// Chronological, append-only timeline. A dismissed signal or cleared case
+// never deletes history (spec §28).
+model RiskCaseEvent {
+  id           String   @id @default(cuid())
+  riskCase     RiskCase @relation(fields: [riskCaseId], references: [id])
+  riskCaseId   String
+  eventType    String // CASE_OPENED | SIGNAL_LINKED | ASSESSMENT_RECORDED | REVIEW_ACTION | NOTE | EVIDENCE_ADDED | RESTRICTION_APPLIED | ...
+  actorAdminId String?
+  summary      String
+  payload      String? // JSON, redacted at write time
+  createdAt    DateTime @default(now())
+
+  @@index([riskCaseId, createdAt])
+}
+
+// Persisted, explainable assessment: "why was this account flagged?" is always
+// answerable from this row (top signals, rules triggered, versions).
+model RiskAssessment {
+  id                   String         @id @default(cuid())
+  riskCase             RiskCase?      @relation(fields: [riskCaseId], references: [id])
+  riskCaseId           String?
+  subjectProfileId     String?
+  riskLevel            RiskLevel
+  score                Int? // internal 0-100; null when scoring is disabled. NEVER shown to applicants, NEVER a probability of wrongdoing
+  topSignals           String // JSON: [{signalId, type, severity, confidence}]
+  evidence             String // JSON: evidence reference ids
+  rulesTriggered       String // JSON: [{ruleKey, version}]
+  ruleVersion          Int // highest rule version used — makes historical evaluations reproducible
+  configurationVersion Int
+  confidence           RiskConfidence
+  cappedBySingleSignal Boolean        @default(false) // the no-single-low-confidence-signal rule lowered the level
+  reviewStatus         String         @default("PENDING")
+  reviewerId           String?
+  decision             String?
+  createdAt            DateTime       @default(now())
+
+  @@index([subjectProfileId, createdAt])
+  @@index([riskCaseId])
+  @@index([riskLevel, createdAt])
+}
+
+// Integrity-protected evidence record: contentHash covers source + summary +
+// occurredAt + canonical payload, so later tampering is detectable.
+model RiskEvidence {
+  id             String           @id @default(cuid())
+  riskCase       RiskCase?        @relation(fields: [riskCaseId], references: [id])
+  riskCaseId     String?
+  evidenceType   RiskEvidenceType
+  source         String
+  summary        String
+  payload        String? // JSON, redacted (never raw contact details / documents)
+  contentHash    String // sha256 hex
+  retentionClass String           @default("RISK_EVIDENCE") // DataCategory.RISK_EVIDENCE
+  createdById    String?
+  occurredAt     DateTime
+  createdAt      DateTime         @default(now())
+
+  @@index([riskCaseId])
+  @@index([evidenceType, createdAt])
+}
+
+// One review pass on a case (folds the spec's risk_review_decisions table).
+model RiskReview {
+  id         String                 @id @default(cuid())
+  riskCase   RiskCase               @relation(fields: [riskCaseId], references: [id])
+  riskCaseId String
+  reviewerId String
+  decision   RiskReviewDecisionType
+  notes      String?
+  checklist  String? // JSON — the required review checklist and its completion
+  approvalId String? // loose pointer to the STEP 19 ApprovalRequest.id when gated
+  createdAt  DateTime               @default(now())
+
+  @@index([riskCaseId, createdAt])
+}
+
+// Versioned risk rule configuration — never overwritten in place: a change
+// creates version+1 and supersedes the previous row (same pattern as
+// VerificationPolicy / ComplianceRule; folds the spec's *_versions tables).
+model RiskRule {
+  id                String              @id @default(cuid())
+  ruleKey           String
+  version           Int
+  name              String
+  category          RiskSignalCategory?
+  description       String?
+  configuration     String // JSON — thresholds, windows, enable flags
+  status            RiskConfigStatus    @default(ACTIVE)
+  jurisdictionScope String              @default("GLOBAL") // jurisdiction code or GLOBAL
+  effectiveFrom     DateTime            @default(now())
+  effectiveTo       DateTime?
+  createdById       String?
+  createdAt         DateTime            @default(now())
+
+  @@unique([ruleKey, jurisdictionScope, version])
+  @@index([ruleKey, status])
+}
+
+model RiskFactor {
+  id                String               @id @default(cuid())
+  factorKey         String
+  version           Int
+  name              String
+  category          RiskSignalCategory
+  description       String?
+  weight            Int // contribution to the internal 0-100 score
+  severity          SecurityFlagSeverity @default(MEDIUM)
+  enabled           Boolean              @default(true)
+  immediateControl  Boolean              @default(false) // only such a factor may raise the level from a single low-confidence signal
+  status            RiskConfigStatus     @default(ACTIVE)
+  jurisdictionScope String               @default("GLOBAL")
+  effectiveFrom     DateTime             @default(now())
+  effectiveTo       DateTime?
+  createdById       String?
+  createdAt         DateTime             @default(now())
+
+  @@unique([factorKey, jurisdictionScope, version])
+  @@index([factorKey, status])
+}
+
+// Central security-event ledger (SecurityEventBus). Stores only what rule
+// evaluation needs: IP/user-agent are salted hashes, never raw values, and
+// payloads are size-capped and redacted.
+model SecurityEvent {
+  id             String            @id @default(cuid())
+  eventType      SecurityEventType
+  source         String            @default("app")
+  profileId      String?
+  adminId        String?
+  familyMemberId String?
+  subjectKey     String? // salted hash of a pre-auth subject (e.g. a phone/email) for failed-login/OTP events with no session
+  ipHash         String?
+  userAgentHash  String?
+  outcome        String?
+  meta           String? // JSON, capped + redacted
+  idempotencyKey String?           @unique // replayed events (webhooks, retries) can never double-count
+  createdAt      DateTime          @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([profileId, eventType, createdAt])
+  @@index([adminId, eventType, createdAt])
+  @@index([subjectKey, eventType, createdAt])
+  @@index([ipHash, eventType, createdAt])
+}
+
+// Emergency TECHNICAL controls against an active attack (session revocation,
+// temporary throttle, IP-hash block). Always expiring, never a decision about
+// the person — the distinction the spec requires (§33) is the model itself.
+model SecurityIncident {
+  id          String                  @id @default(cuid())
+  controlType SecurityIncidentControl
+  status      SecurityIncidentStatus  @default(ACTIVE)
+  subjectType String // PROFILE | ADMIN | IP_HASH | SUBJECT_KEY
+  subjectRef  String
+  reason      String
+  riskCaseId  String?
+  createdById String?
+  expiresAt   DateTime
+  liftedAt    DateTime?
+  liftedById  String?
+  createdAt   DateTime                @default(now())
+
+  @@index([status, expiresAt])
+  @@index([subjectType, subjectRef, status])
+}
+
+// Versioned, configurable rate-limit thresholds (defaults live in code so an
+// empty table changes nothing — see src/lib/security/rate-limit-policy.ts).
+model RateLimitPolicy {
+  id            String           @id @default(cuid())
+  policyKey     String
+  version       Int
+  limit         Int
+  windowSeconds Int
+  enabled       Boolean          @default(true)
+  status        RiskConfigStatus @default(ACTIVE)
+  effectiveFrom DateTime         @default(now())
+  createdById   String?
+  createdAt     DateTime         @default(now())
+
+  @@unique([policyKey, version])
+  @@index([policyKey, status])
+}
+
+// A cluster is a connected component over open duplicate candidates and
+// duplicate-type relationships. fingerprint = sha256(sorted member ids), so a
+// rebuild is idempotent. "CONFIRMED" is only ever a human-reviewed state.
+model DuplicateCluster {
+  id             String                  @id @default(cuid())
+  fingerprint    String                  @unique
+  status         DuplicateClusterStatus  @default(UNRESOLVED)
+  confidenceBand DuplicateConfidenceBand
+  memberCount    Int
+  resolvedAt     DateTime?
+  resolvedById   String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  members DuplicateClusterMember[]
+
+  @@index([status])
+}
+
+model DuplicateClusterMember {
+  id        String           @id @default(cuid())
+  cluster   DuplicateCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  clusterId String
+  profileId String // loose reference
+  addedAt   DateTime         @default(now())
+
+  @@unique([clusterId, profileId])
+  @@index([profileId])
+}
+
+// A structured allegation from an applicant — an allegation, never proof.
+// Wraps a STEP 12 Case (SAFETY_REPORT) so it flows through existing case
+// management, and raises a deduped risk signal for human review.
+model UserReport {
+  id                String           @id @default(cuid())
+  reportCode        String           @unique // LPP-REPORT-###### via nextSequenceCode("REPORT")
+  reportType        UserReportType
+  reporterProfileId String
+  reportedProfileId String?
+  description       String
+  status            UserReportStatus @default(RECEIVED)
+  caseId            String? // loose pointer to the STEP 12 Case
+  riskCaseId        String? // loose pointer to the RiskCase, when one was opened
+  resolutionNote    String? // neutral, reporter-visible
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([reporterProfileId, createdAt])
+  @@index([reportedProfileId, createdAt])
+  @@index([status])
+}
+
 model BackgroundJob {
   id            String    @id @default(cuid())
   type          String
@@ -5171,6 +5736,9 @@ enum AiFeature {
   // STEP 23 Add-on — read-only; summarizes configured compliance rules/
   // jurisdictions, cannot write to any compliance table (spec §35).
   COMPLIANCE_SUMMARY
+  // STEP 24 — read-only summary of a RiskCase; never concludes guilt, never
+  // decides an adverse action (see src/lib/ai/safety.ts ADVERSE_DECISION).
+  RISK_CASE_SUMMARY
 }
 
 enum AiRequestStatus {

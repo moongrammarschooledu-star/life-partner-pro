@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { rateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
+import { clientKeyFromRequest } from "@/lib/rate-limit";
+import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { signProfileToken, signSessionId, APPLICANT_COOKIE, APPLICANT_SESSION_ID_COOKIE } from "@/lib/applicant-session";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { createProfileSession } from "@/lib/profile-session";
+import { publishSecurityEvent } from "@/lib/security/event-bus";
 
 // Deliberately narrow: status/verification/completion only, never contact,
 // income, family, photo, or partner-preference data (spec §18/§34) — this is
@@ -33,10 +35,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const key = `my-status:${clientKeyFromRequest(req)}`;
-  if (!rateLimit(key, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
-  }
+  const limited = await enforceConfiguredLimit(req, "my-status", { limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
 
   try {
     const { profileCode, email } = await req.json();
@@ -49,6 +49,9 @@ export async function POST(req: Request) {
       include: { contact: true },
     });
     if (!profile || profile.softDeleted || !profile.contact || profile.contact.email.toLowerCase() !== email.trim().toLowerCase()) {
+      // STEP 24 — a failed sign-in attempt. Attributed to the profile when the code exists (so repeated
+      // guessing against ONE account is visible), never revealing to the caller whether it does.
+      await publishSecurityEvent({ eventType: "LOGIN_FAILED", profileId: profile && !profile.softDeleted ? profile.id : null, subject: profileCode.trim().toUpperCase(), ip: clientKeyFromRequest(req), source: "applicant-login", outcome: "NO_MATCH" });
       return NextResponse.json({ error: "We could not find a profile matching that Profile ID and email." }, { status: 404 });
     }
 

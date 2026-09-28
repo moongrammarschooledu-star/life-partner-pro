@@ -31,6 +31,8 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "ai.followup_assistant.enabled", description: "AI follow-up suggestions and drafts (never sends)", sensitive: true },
   { key: "ai.copilot.enabled", description: "Admin Copilot", sensitive: true },
   { key: "ai.report_assistant.enabled", description: "AI report summaries (numbers come from existing reports only)", sensitive: true },
+  { key: "ai.compliance_summary.enabled", description: "AI compliance configuration summary (read-only; human legal review required)", sensitive: true },
+  { key: "ai.risk_summary.enabled", description: "AI risk-case summary (read-only; never concludes guilt or decides an action; human review required)", sensitive: true },
 ];
 
 // AI flags default to OFF: a database hiccup or a fresh install must never switch AI on.
