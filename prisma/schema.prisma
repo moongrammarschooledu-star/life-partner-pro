@@ -1110,6 +1110,33 @@ enum AuditAction {
   USER_REPORT_REVIEWED
   RATE_LIMIT_POLICY_CHANGED
   AI_RISK_SUMMARY_GENERATED
+  // STEP 25 - communication
+  COMMUNICATION_SENT
+  COMMUNICATION_BLOCKED
+  COMMUNICATION_RETRIED
+  COMMUNICATION_DEAD_LETTERED
+  COMMUNICATION_TEMPLATE_CREATED
+  COMMUNICATION_TEMPLATE_VERSIONED
+  COMMUNICATION_TEMPLATE_SUBMITTED
+  COMMUNICATION_TEMPLATE_APPROVED
+  COMMUNICATION_TEMPLATE_ACTIVATED
+  COMMUNICATION_TEMPLATE_DISABLED
+  COMMUNICATION_CAMPAIGN_CREATED
+  COMMUNICATION_CAMPAIGN_SUBMITTED
+  COMMUNICATION_CAMPAIGN_APPROVED
+  COMMUNICATION_CAMPAIGN_STARTED
+  COMMUNICATION_CAMPAIGN_PAUSED
+  COMMUNICATION_CAMPAIGN_CANCELLED
+  COMMUNICATION_CAMPAIGN_COMPLETED
+  COMMUNICATION_PROVIDER_CHANGED
+  COMMUNICATION_SUPPRESSION_ADDED
+  COMMUNICATION_SUPPRESSION_LIFTED
+  COMMUNICATION_POLICY_CHANGED
+  COMMUNICATION_THREAD_CREATED
+  COMMUNICATION_THREAD_MESSAGE
+  COMMUNICATION_WEBHOOK_REJECTED
+  COMMUNICATION_LOG_VIEWED
+  COMMUNICATION_QUEUE_PROCESSED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1134,6 +1161,10 @@ enum DeliveryStatus {
   READ
   FAILED
   CANCELLED
+  // STEP 25 - only ever set from a provider webhook or a definitive provider answer (never fabricated)
+  BOUNCED
+  REJECTED
+  EXPIRED
 }
 
 enum ConsentStatus {
@@ -1326,6 +1357,10 @@ enum NotificationType {
   RISK_INFORMATION_REQUESTED
   SECURITY_NOTICE
   SAFETY_REPORT_ACKNOWLEDGED
+
+  // STEP 25 - admin-only operational alerts
+  COMMUNICATION_PROVIDER_ALERT
+  COMMUNICATION_REVIEW_REQUIRED
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -2804,6 +2839,10 @@ model Notification {
   actionUrl               String?
   readAt                  DateTime?
   createdAt               DateTime         @default(now())
+  // STEP 25 - notification center metadata (optional / defaulted)
+  priority                String           @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  category                String? // PROPOSAL | MEETING | VERIFICATION | SUPPORT | PRIVACY | SECURITY | FAMILY | PAYMENT | SYSTEM
+  archivedAt              DateTime?
 
   recipientProfile      Profile?      @relation("NotificationRecipientProfile", fields: [recipientProfileId], references: [id], onDelete: Cascade)
   recipientAdmin        AdminUser?    @relation("NotificationRecipientAdmin", fields: [recipientAdminId], references: [id])
@@ -2842,6 +2881,29 @@ model CommunicationLog {
   isTest             Boolean             @default(false) // spec §32 — excluded from analytics totals
   createdAt          DateTime            @default(now())
 
+  // ---------- STEP 25 - this row is also the queue entry and the dead-letter record ----------
+  communicationId String? // correlation id shared by every channel of one logical message
+  purpose         CommunicationPurpose?
+  messageType     CommunicationMessageType?
+  recipientType   CommunicationRecipientType @default(PROFILE)
+  templateId      String?
+  templateVersion Int?
+  provider        String? // CommunicationProvider.providerKey used for the last attempt
+  queuedAt        DateTime?
+  failedAt        DateTime?
+  attempts        Int                        @default(0)
+  nextAttemptAt   DateTime? // set for QUEUED rows waiting on backoff / quiet hours
+  lockedUntil     DateTime? // claim marker so two drains never send the same row
+  failureClass    CommunicationFailureClass?
+  deadLetteredAt  DateTime?
+  blockedReason   String? // BLOCKED_* code when the policy engine refused to send
+  bodyEncrypted   Boolean                    @default(false)
+  bodyRedactedAt  DateTime?
+  threadId        String?
+  campaignId      String?
+
+  deliveryEvents CommunicationDeliveryEvent[]
+
   profile   Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
   proposal  Proposal?  @relation(fields: [proposalId], references: [id], onDelete: SetNull)
   createdBy AdminUser? @relation(fields: [createdById], references: [id])
@@ -2850,6 +2912,10 @@ model CommunicationLog {
   @@index([proposalId])
   @@index([deliveryStatus])
   @@index([providerMessageId])
+  @@index([deliveryStatus, nextAttemptAt])
+  @@index([campaignId])
+  @@index([communicationId])
+  @@index([deadLetteredAt])
 }
 
 // One row per profile (spec §10) — non-essential notification opt-in/out per
@@ -2926,14 +2992,25 @@ model NotificationTemplate {
 // Idempotent webhook intake log (spec §28) — no real provider exists in this
 // environment; the admin "Simulate Webhook" action exercises this same path.
 model WebhookEvent {
-  id                String    @id @default(cuid())
+  id                String               @id @default(cuid())
   provider          String
   eventType         String // DELIVERED | READ | FAILED | BOUNCED
   providerMessageId String?
-  idempotencyKey    String    @unique
+  idempotencyKey    String               @unique
   payload           Json?
   processedAt       DateTime?
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime             @default(now())
+  // STEP 25 - replay protection / audit of inbound provider events (all optional)
+  providerEventId   String?
+  payloadHash       String?
+  status            String               @default("PROCESSED") // RECEIVED | PROCESSED | REJECTED | FAILED
+  attempts          Int                  @default(0)
+  signatureValid    Boolean              @default(true)
+  channel           NotificationChannel?
+  failureReason     String?
+
+  @@index([provider, providerEventId])
+  @@index([createdAt])
 }
 
 // ---------- Reports & Analytics (STEP 10) ----------
@@ -6732,4 +6809,386 @@ model FamilyComment {
 
   @@index([familyMemberId])
   @@index([targetType, targetId])
+}
+
+// ---------- STEP 25 — Communication, WhatsApp, SMS, Email Automation & Conversation Management ----------
+// Design notes (see the approved STEP 25 plan):
+//  - CommunicationLog (above) IS the message record, the queue entry and the dead-letter record. A QUEUED row with
+//    nextAttemptAt is a job; a FAILED row with deadLetteredAt set is a dead letter. WebhookEvent is the webhook ledger.
+//  - Provider SECRETS are never stored: CommunicationProvider only keeps the NAMES of the environment variables that hold them.
+//  - Threads are controlled, admin-mediated conversations. There is deliberately NO applicant-to-applicant thread type.
+
+enum CommunicationMessageType {
+  TRANSACTIONAL
+  SECURITY
+  VERIFICATION
+  PROPOSAL
+  MATCHING
+  MEETING
+  SUPPORT
+  FAMILY
+  PAYMENT
+  PRIVACY
+  SYSTEM
+  ADMIN_INTERNAL
+  MARKETING
+}
+
+enum CommunicationPurpose {
+  ACCOUNT
+  OTP
+  VERIFICATION
+  PROFILE
+  MATCH
+  PROPOSAL
+  CONTACT_PERMISSION
+  MEETING
+  FOLLOWUP
+  SUPPORT
+  PAYMENT
+  PRIVACY
+  SECURITY
+  FAMILY_ACCESS
+  MARKETING
+  ADMIN_INTERNAL
+}
+
+enum CommunicationRecipientType {
+  PROFILE
+  FAMILY_MEMBER
+  ADMIN
+}
+
+enum CommunicationEnvironment {
+  DEVELOPMENT
+  STAGING
+  SANDBOX
+  PRODUCTION
+}
+
+enum CommunicationFailureClass {
+  RETRYABLE
+  PERMANENT
+  POLICY_BLOCKED
+}
+
+enum CommunicationTemplateStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  ACTIVE
+  DISABLED
+  ARCHIVED
+}
+
+enum CommunicationSuppressionReason {
+  USER_REQUEST
+  BOUNCE
+  COMPLAINT
+  UNSUBSCRIBED
+  SECURITY_RESTRICTION
+  ADMIN_RESTRICTION
+  JURISDICTION_RULE
+  PROVIDER_BLOCK
+  TEMPORARY_LIMIT
+}
+
+enum CommunicationSuppressionStatus {
+  ACTIVE
+  LIFTED
+  EXPIRED
+}
+
+enum CommunicationPolicyKind {
+  FREQUENCY
+  QUIET_HOURS
+  JURISDICTION_DEFAULTS
+  FOLLOWUP_RULE
+  ENVIRONMENT
+}
+
+enum CommunicationThreadType {
+  SUPPORT_THREAD
+  PROPOSAL_COORDINATION
+  MEETING_COORDINATION
+  FAMILY_COORDINATION
+  VERIFICATION_THREAD
+  INTERNAL_ADMIN_THREAD
+}
+
+enum CommunicationThreadStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum CommunicationVisibility {
+  PUBLIC_TO_USER
+  INTERNAL_ONLY
+  STAFF_SHARED
+  MANAGER_ONLY
+}
+
+enum CommunicationCampaignStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum CommunicationCampaignRecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  SKIPPED
+  FAILED
+}
+
+// Non-secret provider configuration + health. `secretRefs` is a JSON array of environment-variable NAMES.
+model CommunicationProvider {
+  id                  String                   @id @default(cuid())
+  providerKey         String                   @unique // e.g. smtp-email, twilio-sms, meta-whatsapp, sandbox-sms
+  name                String
+  channel             NotificationChannel
+  adapter             String // EMAIL_SMTP | SMS_TWILIO | WHATSAPP_META | SANDBOX | INAPP
+  environment         CommunicationEnvironment @default(PRODUCTION)
+  active              Boolean                  @default(false)
+  priority            Int                      @default(100) // lower = tried first; later rows are failover candidates
+  senderIdentity      String? // display sender / from-number / phone-number-id label (not a secret)
+  supportedCountries  String                   @default("[]") // JSON array of country names; empty = any
+  supportedLanguages  String                   @default("[]") // JSON array of EN | UR; empty = any
+  rateLimitPerMinute  Int                      @default(60)
+  retryMaxAttempts    Int                      @default(4)
+  retryBaseSeconds    Int                      @default(60)
+  secretRefs          String                   @default("[]")
+  processorId         String? // loose pointer to ComplianceProcessor.id (STEP 23) for provider eligibility
+  failoverAllowed     Boolean                  @default(false) // may sensitive traffic fail over TO this provider
+  healthStatus        String                   @default("UNKNOWN") // HEALTHY | DEGRADED | DOWN | UNKNOWN
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  lastError           String?
+  consecutiveFailures Int                      @default(0)
+  lastWebhookAt       DateTime?
+  updatedById         String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  @@index([channel, active])
+}
+
+// Admin-authored template. Never edited in place once ACTIVE: a change creates a CommunicationTemplateVersion.
+model CommunicationTemplate {
+  id                   String                      @id @default(cuid())
+  templateCode         String                      @unique // LPP-CTPL-######
+  name                 String
+  channel              NotificationChannel
+  messageType          CommunicationMessageType
+  purpose              CommunicationPurpose
+  language             Locale
+  eventKey             String? // NotificationType this template overrides for system notifications, when bound
+  subject              String?
+  body                 String
+  variables            String                      @default("[]") // JSON: allow-listed variable names this template uses
+  status               CommunicationTemplateStatus @default(DRAFT)
+  currentVersion       Int                         @default(1)
+  activeVersion        Int?
+  providerTemplateName String? // WhatsApp / SMS provider-side template
+  providerTemplateId   String?
+  providerCategory     String?
+  providerStatus       String? // DRAFT | SUBMITTED | APPROVED | REJECTED | ACTIVE | DISABLED
+  providerSyncedAt     DateTime?
+  createdById          String?
+  approvedById         String?
+  approvalId           String? // loose pointer to the STEP 19 ApprovalRequest.id
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  versions CommunicationTemplateVersion[]
+
+  @@index([channel, language, status])
+  @@index([eventKey, channel, language, status])
+  @@index([messageType, status])
+}
+
+model CommunicationTemplateVersion {
+  id              String                      @id @default(cuid())
+  template        CommunicationTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId      String
+  version         Int
+  previousVersion Int?
+  subject         String?
+  body            String
+  variables       String                      @default("[]")
+  status          CommunicationTemplateStatus @default(DRAFT)
+  changeReason    String
+  changedById     String?
+  approvalId      String?
+  effectiveAt     DateTime?
+  createdAt       DateTime                    @default(now())
+
+  @@unique([templateId, version])
+}
+
+// Every change is audited; a suppression is never silently removed (lifting records who and why).
+model CommunicationSuppression {
+  id              String                         @id @default(cuid())
+  profileId       String? // loose reference, survives profile deletion for compliance
+  familyMemberId  String?
+  channel         NotificationChannel
+  destinationHash String? // salted hash of an external address (never the address itself)
+  scope           String                         @default("ALL") // ALL | MARKETING | TRANSACTIONAL
+  reason          CommunicationSuppressionReason
+  status          CommunicationSuppressionStatus @default(ACTIVE)
+  expiresAt       DateTime?
+  note            String?
+  createdById     String?
+  liftedById      String?
+  liftedAt        DateTime?
+  liftReason      String?
+  createdAt       DateTime                       @default(now())
+
+  @@index([profileId, channel, status])
+  @@index([destinationHash, channel, status])
+  @@index([status, expiresAt])
+}
+
+// Versioned communication configuration (same pattern as RiskRule / ComplianceRule): a change is a new row.
+model CommunicationPolicy {
+  id                String                  @id @default(cuid())
+  kind              CommunicationPolicyKind
+  policyKey         String // "default", or a follow-up rule key
+  version           Int
+  configuration     String // JSON
+  status            RiskConfigStatus        @default(ACTIVE)
+  jurisdictionScope String                  @default("GLOBAL")
+  effectiveFrom     DateTime                @default(now())
+  createdById       String?
+  createdAt         DateTime                @default(now())
+
+  @@unique([kind, policyKey, jurisdictionScope, version])
+  @@index([kind, status])
+}
+
+// Status timeline of one message. Rows are only written from a real provider answer or webhook - never inferred.
+model CommunicationDeliveryEvent {
+  id              String           @id @default(cuid())
+  log             CommunicationLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  logId           String
+  provider        String?
+  eventType       String // QUEUED | SENDING | SENT | DELIVERED | READ | FAILED | BOUNCED | REJECTED | CANCELLED | EXPIRED | BLOCKED
+  providerEventId String?
+  source          String           @default("SYSTEM") // SYSTEM | WEBHOOK | ADMIN
+  detail          String?
+  occurredAt      DateTime         @default(now())
+  createdAt       DateTime         @default(now())
+
+  @@index([logId, occurredAt])
+  @@index([eventType, createdAt])
+}
+
+// Controlled, admin-mediated conversation attached to an authorised record. No applicant-to-applicant threads exist.
+model CommunicationThread {
+  id           String                    @id @default(cuid())
+  threadCode   String                    @unique // LPP-THR-######
+  type         CommunicationThreadType
+  subject      String
+  status       CommunicationThreadStatus @default(OPEN)
+  resourceType String? // PROPOSAL | CASE | MEETING | PROFILE | VERIFICATION | RISK_CASE | TASK | PAYMENT | PRIVACY_REQUEST
+  resourceId   String?
+  profileId    String? // the applicant this thread concerns (loose reference)
+  createdById  String?
+  closedAt     DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  members  CommunicationThreadMember[]
+  messages CommunicationThreadMessage[]
+
+  @@index([resourceType, resourceId])
+  @@index([profileId, status])
+  @@index([type, status])
+}
+
+model CommunicationThreadMember {
+  id             String              @id @default(cuid())
+  thread         CommunicationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId       String
+  memberType     String // PROFILE | FAMILY_MEMBER | ADMIN
+  profileId      String?
+  familyMemberId String?
+  adminId        String?
+  canReply       Boolean             @default(true)
+  addedById      String?
+  createdAt      DateTime            @default(now())
+
+  @@index([threadId])
+  @@index([profileId])
+  @@index([familyMemberId])
+  @@index([adminId])
+}
+
+model CommunicationThreadMessage {
+  id            String                  @id @default(cuid())
+  thread        CommunicationThread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId      String
+  authorType    String // ADMIN | PROFILE | FAMILY_MEMBER | SYSTEM
+  authorId      String?
+  visibility    CommunicationVisibility @default(INTERNAL_ONLY)
+  body          String // AES-256-GCM ciphertext (see src/lib/communications/crypto.ts)
+  bodyEncrypted Boolean                 @default(true)
+  createdAt     DateTime                @default(now())
+
+  @@index([threadId, createdAt])
+  @@index([visibility])
+}
+
+model CommunicationCampaign {
+  id                  String                      @id @default(cuid())
+  campaignCode        String                      @unique // LPP-CAMP-######
+  name                String
+  purpose             CommunicationPurpose
+  messageType         CommunicationMessageType
+  channel             NotificationChannel
+  templateId          String
+  audienceFilter      String // JSON of allow-listed filters (never SQL)
+  status              CommunicationCampaignStatus @default(DRAFT)
+  scheduledAt         DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  pausedAt            DateTime?
+  cancelledAt         DateTime?
+  estimatedRecipients Int?
+  eligibleCount       Int                         @default(0)
+  queuedCount         Int                         @default(0)
+  sentCount           Int                         @default(0)
+  skippedCount        Int                         @default(0)
+  failedCount         Int                         @default(0)
+  createdById         String?
+  approvedById        String?
+  approvalId          String?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  recipients CommunicationCampaignRecipient[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CommunicationCampaignRecipient {
+  id         String                               @id @default(cuid())
+  campaign   CommunicationCampaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  profileId  String // loose reference
+  status     CommunicationCampaignRecipientStatus @default(PENDING)
+  skipReason String?
+  logId      String?
+  createdAt  DateTime                             @default(now())
+
+  @@unique([campaignId, profileId])
+  @@index([campaignId, status])
 }

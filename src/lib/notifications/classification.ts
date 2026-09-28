@@ -209,6 +209,9 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   RISK_INFORMATION_REQUESTED: ESSENTIAL,
   SECURITY_NOTICE: ESSENTIAL,
   SAFETY_REPORT_ACKNOWLEDGED: ESSENTIAL,
+  // STEP 25 - admin-only operational alerts
+  COMMUNICATION_PROVIDER_ALERT: ESSENTIAL,
+  COMMUNICATION_REVIEW_REQUIRED: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

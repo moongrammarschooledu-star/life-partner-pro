@@ -148,7 +148,6 @@ const UNAUTOMATED_CATEGORIES: DataCategory[] = [
   "CONSENT_RECORDS",
   "PROPOSAL_RECORDS",
   "MEETING_RECORDS",
-  "COMMUNICATION_RECORDS",
   "SUPPORT_CASES",
   "SAFETY_CASES",
   "SECURITY_LOGS",
@@ -178,6 +177,7 @@ export async function runDueRetentionActions() {
   await expireDataExports().catch(() => {});
   await (await import("@/lib/ai/retention")).safeSweepAiData(); // STEP 16 §67 — expired AI results
   await runTaskRetentionActions().catch(() => {}); // STEP 18 §60 — archive stale completed/cancelled/expired tasks
+  await (await import("@/lib/communications/retention")).safeSweepCommunicationData(); // STEP 25 §39 — redact old message bodies (hold/case aware)
   await flagUnautomatedCategories().catch(() => {});
   return { deletionsProcessed: dueDeletions.length };
 }

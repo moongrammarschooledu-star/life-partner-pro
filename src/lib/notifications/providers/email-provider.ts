@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import nodemailer, { type Transporter } from "nodemailer";
 import type { NotificationProvider, ProviderSendResult } from "@/lib/notifications/providers/types";
+import { redactForLog } from "@/lib/communications/providers/shared";
 
 // Real delivery goes through SMTP (Gmail by default). It is "configured" only
 // when SMTP_USER and SMTP_PASS are both set — see isEmailConfigured(). Without
@@ -16,7 +17,8 @@ export function isEmailConfigured(env: Env = process.env): boolean {
 
 class ConsoleEmailProvider implements NotificationProvider {
   async send(to: string, body: string, subject?: string): Promise<ProviderSendResult> {
-    console.log(`[notification:EMAIL] to=${to} :: ${subject ?? ""} :: ${body}`);
+    // STEP 25 - console fallback never prints a raw one-time code in production (see redactForLog).
+    console.log(`[notification:EMAIL] to=${to} :: ${subject ?? ""} :: ${redactForLog(body, /verif|code|otp|token/i.test(`${subject ?? ""} ${body}`) ? "OTP" : undefined)}`);
     return { providerMessageId: `console-email-${randomUUID()}` };
   }
 }
@@ -42,9 +44,9 @@ class SmtpEmailProvider implements NotificationProvider {
 
   // Throws on a genuine transport failure — dispatch.ts records that on the
   // CommunicationLog row, so a failed delivery is never reported as sent.
-  async send(to: string, body: string, subject?: string): Promise<ProviderSendResult> {
+  async send(to: string, body: string, subject?: string, html?: string): Promise<ProviderSendResult> {
     const from = process.env.EMAIL_FROM?.trim() || `Life Partner Pro <${process.env.SMTP_USER!.trim()}>`;
-    const info = await this.getTransporter().sendMail({ from, to, subject: subject ?? "Life Partner Pro", text: body });
+    const info = await this.getTransporter().sendMail({ from, to, subject: subject ?? "Life Partner Pro", text: body, ...(html ? { html } : {}) });
     return { providerMessageId: info.messageId };
   }
 }
@@ -54,5 +56,5 @@ const smtp = new SmtpEmailProvider();
 
 // Chosen per call so configuring the variables takes effect without code changes.
 export const emailProvider: NotificationProvider = {
-  send: (to, body, subject) => (isEmailConfigured() ? smtp : fallback).send(to, body, subject),
+  send: (to, body, subject, html) => (isEmailConfigured() ? smtp : fallback).send(to, body, subject, html),
 };

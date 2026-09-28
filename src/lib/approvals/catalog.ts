@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION";
 
 export interface CatalogEntry {
   label: string;
@@ -143,6 +143,11 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   DUPLICATE_MERGE: { label: "Approve a duplicate-account merge plan", domain: "RISK", sourceType: "PROFILE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPER_ADMIN"] },
   RISK_RULE_CHANGE: { label: "Change a risk rule or factor", domain: "RISK", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   RISK_THRESHOLD_CHANGE: { label: "Change a risk threshold or rate-limit policy", domain: "RISK", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  // STEP 25 - communication. sourceId is the template / campaign / provider id (loose reference, like the compliance entries).
+  COMMUNICATION_TEMPLATE_ACTIVATION: { label: "Activate a communication template", domain: "COMMUNICATION", sourceType: "CASE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  BULK_COMMUNICATION_CAMPAIGN: { label: "Approve a bulk communication campaign", domain: "COMMUNICATION", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  COMMUNICATION_PROVIDER_CHANGE: { label: "Change or activate a communication provider", domain: "COMMUNICATION", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  SENSITIVE_COMMUNICATION_SEND: { label: "Send a sensitive communication", domain: "COMMUNICATION", sourceType: "PROFILE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
 };
 
 export function getCatalogEntry(actionType: string): CatalogEntry | null {

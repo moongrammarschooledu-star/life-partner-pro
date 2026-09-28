@@ -41,6 +41,7 @@ const PUBLIC_ROUTES = new Set([
   "/api/verify/email/send", "/api/verify/email/confirm", "/api/verify/phone/send", "/api/verify/phone/confirm",
   "/api/health", "/api/health/live", "/api/health/ready", "/api/system-state", "/api/client-errors",
   "/api/webhooks/payments/[provider]", "/api/webhooks/notifications", "/api/webhooks/verification/[provider]",
+  "/api/webhooks/email", "/api/webhooks/sms", "/api/webhooks/whatsapp", // STEP 25 - signed provider delivery webhooks
   "/api/cron/notifications", "/api/internal/ci-evidence",
   "/api/auth/[...nextauth]",
   "/api/my-billing/packages", // public package catalogue (no personal data)

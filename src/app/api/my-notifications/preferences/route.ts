@@ -54,6 +54,18 @@ export async function PATCH(req: Request) {
       create: { profileId, ...data },
     });
     await writeAudit({ action: "NOTIFICATION_PREFERENCE_CHANGED", targetProfileId: profileId, meta: data });
+
+    // Marketing is opt-in on BOTH the preference and the channel consent (the policy engine requires both). Switching a marketing
+    // toggle on is the explicit act of opting in, so it records the matching channel consent; registering never does.
+    for (const channel of CONSENT_CHANNELS) {
+      if (data[`${channel.toLowerCase()}Marketing`] !== true) continue;
+      await prisma.communicationConsent.upsert({
+        where: { profileId_channel: { profileId, channel } },
+        update: { status: "GRANTED", revokedAt: null, consentedAt: new Date() },
+        create: { profileId, channel, status: "GRANTED", consentSource: "marketing_opt_in" },
+      });
+      await writeAudit({ action: "COMMUNICATION_CONSENT_CHANGED", targetProfileId: profileId, meta: { channel, status: "GRANTED", marketingOptIn: true } });
+    }
   }
 
   if (Array.isArray(consent)) {

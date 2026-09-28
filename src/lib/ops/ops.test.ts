@@ -198,7 +198,8 @@ describe("feature flag registry", () => {
     expect(Object.keys(FEATURE_FLAG_DEFAULTS)).toContain("matching.enabled");
     expect(Object.keys(FEATURE_FLAG_DEFAULTS)).not.toContain("ai_matching.enabled");
     for (const [key, value] of Object.entries(FEATURE_FLAG_DEFAULTS)) {
-      expect(value, key).toBe(!key.startsWith("ai."));
+      // STEP 25 - marketing / campaign flags also default to OFF (never implied by registration)
+      expect(value, key).toBe(!key.startsWith("ai.") && !key.startsWith("communications."));
     }
     expect(Object.keys(FEATURE_FLAG_DEFAULTS).filter((k) => k.startsWith("ai.")).length).toBeGreaterThanOrEqual(9);
     // document analysis (spec §50) is not implemented, so it is deliberately not registered

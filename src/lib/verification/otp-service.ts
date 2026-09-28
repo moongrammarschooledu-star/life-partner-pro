@@ -45,6 +45,7 @@ export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", des
   await notificationService.send({
     channel: channel === "PHONE" ? "SMS" : "EMAIL",
     to: destination,
+    profileId,
     subject: channel === "EMAIL" ? "Verify your Life Partner Pro email" : undefined,
     body:
       channel === "PHONE"

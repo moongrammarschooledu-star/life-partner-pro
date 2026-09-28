@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readableText } from "@/lib/communications/content";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
@@ -51,7 +52,7 @@ export async function GET(req: Request) {
       notificationType: log.notificationType,
       deliveryStatus: log.deliveryStatus,
       recipientReference: log.recipientReference,
-      messageBody: canViewBody ? log.messageBody : null,
+      messageBody: canViewBody ? readableText(log.messageBody, log.bodyEncrypted, log.bodyRedactedAt) : null, // stored encrypted; decoded only for viewers with the permission
       isTest: log.isTest,
       retryCount: log.retryCount,
       failureReason: log.failureReason,

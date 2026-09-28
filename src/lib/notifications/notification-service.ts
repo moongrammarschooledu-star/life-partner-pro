@@ -1,42 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import type { NotificationChannel, NotificationPreference } from "@prisma/client";
-import { maskEmail, maskPhone } from "@/lib/verification/otp";
-import { classify, shouldAttemptExternalChannel, type PreferenceCategory } from "@/lib/notifications/classification";
+import type { NotificationChannel } from "@prisma/client";
 import { resolveTemplate } from "@/lib/notifications/template-resolver";
-import { dispatchChannel } from "@/lib/notifications/dispatch";
 import { buildActionUrl } from "@/lib/notifications/deep-link";
-import { checkDailyLimit } from "@/lib/notifications/anti-spam";
+import { describeNotification } from "@/lib/communications/classify";
 import type { SendNotificationInput, NotifyAdminsInput } from "@/lib/notifications/types";
 
-const MAX_DAILY_SENDS_PER_CHANNEL = 20;
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
-
-const PREFERENCE_CHANNEL_KEY: Record<NotificationChannel, "inApp" | "email" | "sms" | "whatsapp" | null> = {
-  IN_APP: "inApp",
-  EMAIL: "email",
-  SMS: "sms",
-  WHATSAPP: "whatsapp",
-};
-
-const PREFERENCE_CATEGORY_KEY: Record<Exclude<PreferenceCategory, null>, string> = {
-  PROPOSAL: "ProposalUpdates",
-  MEETING: "MeetingUpdates",
-  FOLLOWUP: "FollowUpReminders",
-  MARKETING: "Marketing",
-};
-
-function getPreferenceValue(
-  pref: NotificationPreference | null,
-  channel: NotificationChannel,
-  category: Exclude<PreferenceCategory, null>
-): boolean | null {
-  if (!pref) return null;
-  const channelKey = PREFERENCE_CHANNEL_KEY[channel];
-  if (!channelKey) return null;
-  const field = `${channelKey}${PREFERENCE_CATEGORY_KEY[category]}` as keyof NotificationPreference;
-  const value = pref[field];
-  return typeof value === "boolean" ? value : null;
-}
 
 async function isDuplicateRecent(
   recipientProfileId: string | null,
@@ -92,6 +61,8 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
         relatedProposalId: data.relatedProposalId ?? null,
         relatedProfileId: data.relatedProfileId ?? null,
         actionUrl: actionUrl ?? null,
+        priority: describeNotification(type).priority,
+        category: describeNotification(type).category,
       },
     });
 
@@ -119,59 +90,16 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
   }
 }
 
+// External delivery is owned by the communication stack (src/lib/communications): template selection, the policy engine (consent,
+// preferences, suppression, frequency, jurisdiction, quiet hours, provider eligibility), the encrypted queue and provider adapters.
 async function dispatchExternalChannels(
   profileId: string,
   type: SendNotificationInput["type"],
   data: SendNotificationInput["data"],
   language: "EN" | "UR"
 ) {
-  const [settings, contact, preference, consents] = await Promise.all([
-    prisma.appSettings.findUnique({ where: { id: 1 } }),
-    prisma.contactInfo.findUnique({ where: { profileId } }),
-    prisma.notificationPreference.findUnique({ where: { profileId } }),
-    prisma.communicationConsent.findMany({ where: { profileId } }),
-  ]);
-  if (!contact) return;
-
-  const { preferenceCategory } = classify(type);
-  const consentByChannel = new Map(consents.map((c) => [c.channel, c.status]));
-
-  const channels: { channel: NotificationChannel; enabled: boolean; destination: string | null }[] = [
-    { channel: "EMAIL", enabled: settings?.emailNotificationsEnabled ?? true, destination: contact.email },
-    { channel: "SMS", enabled: settings?.smsNotificationsEnabled ?? false, destination: contact.mobileNumber },
-    { channel: "WHATSAPP", enabled: settings?.whatsappNotificationsEnabled ?? false, destination: contact.whatsappNumber ?? null },
-  ];
-
-  for (const { channel, enabled, destination } of channels) {
-    if (!destination) continue;
-
-    const attempt = shouldAttemptExternalChannel({
-      type,
-      channelEnabledInSettings: enabled,
-      preferenceValue: preferenceCategory ? getPreferenceValue(preference, channel, preferenceCategory) : null,
-      consentStatus: (consentByChannel.get(channel) as "GRANTED" | "REVOKED" | undefined) ?? null,
-    });
-    if (!attempt) continue;
-    if (!checkDailyLimit(profileId, channel, MAX_DAILY_SENDS_PER_CHANNEL)) continue;
-
-    const rendered = await resolveTemplate(type, channel, language, data.templateVars ?? {});
-    const masked = channel === "EMAIL" ? maskEmail(destination) : maskPhone(destination);
-
-    const log = await prisma.communicationLog.create({
-      data: {
-        profileId,
-        proposalId: data.relatedProposalId ?? null,
-        channel,
-        notificationType: type,
-        templateKey: type,
-        recipientReference: masked,
-        messageBody: rendered.body,
-        isTest: data.isTest ?? false,
-      },
-    });
-
-    await dispatchChannel(log.id, channel, destination, rendered.body, rendered.subject);
-  }
+  const { dispatchEventToExternalChannels } = await import("@/lib/communications/event-dispatch");
+  await dispatchEventToExternalChannels({ profileId, type, language, relatedProposalId: data.relatedProposalId ?? null, templateVars: data.templateVars, isTest: data.isTest });
 }
 
 // Admin-composed manual send (spec §12) — unlike sendNotification(), this
@@ -186,13 +114,38 @@ export async function sendAdminComposedMessage(params: {
   channel: NotificationChannel;
   message: string;
   adminId: string;
-}): Promise<{ logId: string }> {
+  permissions?: readonly string[];
+}): Promise<{ logId: string; status: string }> {
   const language =
     (await prisma.profile.findUnique({ where: { id: params.profileId }, select: { preferredLanguage: true } }))?.preferredLanguage ?? "EN";
 
+  const { communicate } = await import("@/lib/communications/send-service");
+  const { otherPartyContact } = await import("@/lib/communications/event-dispatch");
+  void language;
+
+  // Goes through the policy engine like every other message (consent, suppression, frequency, jurisdiction, provider eligibility),
+  // and can never carry the OTHER party's contact details.
+  const result = await communicate({
+    intent: {
+      recipient: { type: "PROFILE", profileId: params.profileId },
+      channel: params.channel,
+      messageType: "SUPPORT",
+      purpose: "SUPPORT",
+      eventKey: "ADMIN_DIRECT_MESSAGE",
+      automated: false,
+      initiatedBy: { adminId: params.adminId, permissions: params.permissions ?? [] },
+      proposalId: params.proposalId ?? null,
+    },
+    body: params.message,
+    protectedStrings: await otherPartyContact(params.profileId, params.proposalId),
+    createReviewTask: false,
+  });
+  if (result.status === "BLOCKED") throw new Error(result.reasons[0] ?? "This message cannot be sent.");
+  if (!result.logId) throw new Error("This profile has no destination on file for the selected channel.");
+
+  // The in-app notification stays generic (ADMIN_DIRECT_MESSAGE default copy); only the encrypted message record carries the text.
   const inApp = await resolveTemplate("ADMIN_DIRECT_MESSAGE", "IN_APP", language, {});
   const actionUrl = buildActionUrl("PROFILE", "ADMIN_DIRECT_MESSAGE", { proposalId: params.proposalId });
-
   await prisma.notification.create({
     data: {
       recipientProfileId: params.profileId,
@@ -201,46 +154,11 @@ export async function sendAdminComposedMessage(params: {
       body: inApp.body,
       relatedProposalId: params.proposalId ?? null,
       actionUrl: actionUrl ?? null,
+      priority: "NORMAL",
+      category: "SUPPORT",
     },
   });
-
-  const now = new Date();
-  if (params.channel === "IN_APP") {
-    const log = await prisma.communicationLog.create({
-      data: {
-        profileId: params.profileId,
-        proposalId: params.proposalId ?? null,
-        channel: "IN_APP",
-        notificationType: "ADMIN_DIRECT_MESSAGE",
-        deliveryStatus: "DELIVERED",
-        messageBody: params.message,
-        sentAt: now,
-        deliveredAt: now,
-        createdById: params.adminId,
-      },
-    });
-    return { logId: log.id };
-  }
-
-  const contact = await prisma.contactInfo.findUnique({ where: { profileId: params.profileId } });
-  const destination = params.channel === "EMAIL" ? contact?.email : params.channel === "WHATSAPP" ? contact?.whatsappNumber : contact?.mobileNumber;
-  if (!destination) throw new Error("This profile has no destination on file for the selected channel.");
-
-  const masked = params.channel === "EMAIL" ? maskEmail(destination) : maskPhone(destination);
-  const log = await prisma.communicationLog.create({
-    data: {
-      profileId: params.profileId,
-      proposalId: params.proposalId ?? null,
-      channel: params.channel,
-      notificationType: "ADMIN_DIRECT_MESSAGE",
-      recipientReference: masked,
-      messageBody: params.message,
-      createdById: params.adminId,
-    },
-  });
-
-  await dispatchChannel(log.id, params.channel, destination, params.message);
-  return { logId: log.id };
+  return { logId: result.logId, status: result.status };
 }
 
 // Notifies the assigned admin if one exists, else every active

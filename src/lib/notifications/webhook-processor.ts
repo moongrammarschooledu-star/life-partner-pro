@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
+import { nextStatus } from "@/lib/communications/webhook-service";
 
 export type WebhookEventType = "DELIVERED" | "READ" | "FAILED" | "BOUNCED";
 
@@ -37,12 +38,14 @@ export async function processWebhookEvent(params: {
   });
 
   const log = await prisma.communicationLog.findFirst({ where: { providerMessageId: params.providerMessageId } });
-  if (log) {
+  // A delivery state only ever moves FORWARD (an out-of-order or contradictory event is recorded in the ledger but not applied).
+  const next = log ? nextStatus(log.deliveryStatus, STATUS_FOR_EVENT[params.eventType]) : null;
+  if (log && next) {
     const now = new Date();
     await prisma.communicationLog.update({
       where: { id: log.id },
       data: {
-        deliveryStatus: STATUS_FOR_EVENT[params.eventType],
+        deliveryStatus: next,
         ...(params.eventType === "DELIVERED" ? { deliveredAt: now } : {}),
         ...(params.eventType === "READ" ? { readAt: now } : {}),
         ...(params.eventType === "FAILED" || params.eventType === "BOUNCED" ? { failureReason: params.eventType } : {}),

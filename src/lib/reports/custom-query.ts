@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { readableText } from "@/lib/communications/content";
 import type { AdminRole } from "@/lib/permissions";
 import { REPORT_DEFINITIONS, getReportColumns, type DataSource } from "@/lib/reports/columns";
 import {
@@ -138,7 +139,7 @@ async function fetchRows(dataSource: DataSource, filters: ReportFilters, include
         notificationType: c.notificationType,
         deliveryStatus: c.deliveryStatus,
         createdAt: c.createdAt,
-        ...(includeSensitive ? { messageBody: c.messageBody } : {}),
+        ...(includeSensitive ? { messageBody: readableText(c.messageBody, c.bodyEncrypted, c.bodyRedactedAt) } : {}),
       }));
     }
     case "FollowUps": {

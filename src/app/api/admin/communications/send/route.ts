@@ -4,6 +4,7 @@ import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { assertCommunicationAccess } from "@/lib/communication-access";
 import { sendAdminComposedMessage } from "@/lib/notifications/notification-service";
+import { containsContactPattern } from "@/lib/communications/thread-service";
 import type { NotificationChannel } from "@prisma/client";
 
 const VALID_CHANNELS: NotificationChannel[] = ["IN_APP", "EMAIL", "SMS", "WHATSAPP"];
@@ -38,13 +39,25 @@ export async function POST(req: Request) {
       throw new ApiError(403, "This profile is currently restricted from admin-initiated communication.");
     }
 
-    const result = await sendAdminComposedMessage({
-      profileId,
-      proposalId: proposalId || undefined,
-      channel,
-      message: message.trim(),
-      adminId: admin.id,
-    });
+    // Free text that contains an e-mail address or phone number needs the sensitive-send permission (accidental-disclosure guard).
+    if (containsContactPattern(message) && !admin.permissions.includes("communications:send_sensitive") && !admin.permissions.includes("sensitive:communication:send")) {
+      throw new ApiError(403, "This message contains what looks like an e-mail address or phone number. Contact details cannot be sent without the sensitive-communication permission.");
+    }
+
+    let result;
+    try {
+      result = await sendAdminComposedMessage({
+        profileId,
+        proposalId: proposalId || undefined,
+        channel,
+        message: message.trim(),
+        adminId: admin.id,
+        permissions: admin.permissions,
+      });
+    } catch (error) {
+      // A policy refusal (consent, suppression, jurisdiction, ...) is an answer for the admin, not a server fault.
+      throw new ApiError(422, error instanceof Error ? error.message : "The message could not be sent.");
+    }
 
     return NextResponse.json(result);
   } catch (error) {

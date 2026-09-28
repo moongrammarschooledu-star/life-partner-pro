@@ -570,4 +570,14 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Report Received", body: "Thank you. Your report has been received and will be reviewed by our team." },
     UR: { title: "رپورٹ موصول ہو گئی", body: "شکریہ۔ آپ کی رپورٹ موصول ہو گئی ہے اور ہماری ٹیم اس کا جائزہ لے گی۔" },
   },
+
+  // ---------- STEP 25 - Communication (admin-only operational alerts) ----------
+  COMMUNICATION_PROVIDER_ALERT: {
+    EN: { title: "Communication Provider Alert", body: "A communication provider needs attention (health, failures or quota). Review the provider status." },
+    UR: { title: "کمیونیکیشن پرووائیڈر الرٹ", body: "ایک کمیونیکیشن پرووائیڈر پر توجہ درکار ہے۔ پرووائیڈر اسٹیٹس دیکھیں۔" },
+  },
+  COMMUNICATION_REVIEW_REQUIRED: {
+    EN: { title: "Communication Needs Review", body: "A message was held back by a communication policy check and needs a human review." },
+    UR: { title: "کمیونیکیشن کا جائزہ درکار ہے", body: "ایک پیغام کمیونیکیشن پالیسی کی جانچ کی وجہ سے روکا گیا ہے اور انسانی جائزہ درکار ہے۔" },
+  },
 };

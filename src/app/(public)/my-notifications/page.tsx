@@ -87,6 +87,11 @@ export default function MyNotificationsPage() {
     setItems((prev) => prev?.map((i) => (i.id === id ? { ...i, readAt: new Date().toISOString() } : i)) ?? null);
   }
 
+  async function archive(id: string) {
+    const res = await fetch(`/api/my-notifications/${id}/archive`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: true }) });
+    if (res.ok) setItems((prev) => prev?.filter((i) => i.id !== id) ?? null);
+  }
+
   async function markAllRead() {
     await fetch("/api/my-notifications/mark-all-read", { method: "POST" });
     load();
@@ -174,22 +179,20 @@ export default function MyNotificationsPage() {
                     <p className="mt-1 text-xs text-muted">{formatDateTime(item.createdAt)}</p>
                   </>
                 );
-                return item.actionUrl ? (
-                  <Link
-                    key={item.id}
-                    href={item.actionUrl}
-                    onClick={() => !item.readAt && markRead(item.id)}
-                    className={`block px-3 py-3 text-sm hover:bg-surface-muted ${item.readAt ? "" : "bg-primary/5"}`}
-                  >
-                    {content}
-                  </Link>
-                ) : (
-                  <div
-                    key={item.id}
-                    onClick={() => !item.readAt && markRead(item.id)}
-                    className={`cursor-pointer px-3 py-3 text-sm hover:bg-surface-muted ${item.readAt ? "" : "bg-primary/5"}`}
-                  >
-                    {content}
+                return (
+                  <div key={item.id} className={`flex items-start gap-2 hover:bg-surface-muted ${item.readAt ? "" : "bg-primary/5"}`}>
+                    {item.actionUrl ? (
+                      <Link href={item.actionUrl} onClick={() => !item.readAt && markRead(item.id)} className="block min-w-0 flex-1 px-3 py-3 text-sm">
+                        {content}
+                      </Link>
+                    ) : (
+                      <div onClick={() => !item.readAt && markRead(item.id)} className="min-w-0 flex-1 cursor-pointer px-3 py-3 text-sm">
+                        {content}
+                      </div>
+                    )}
+                    <button type="button" onClick={() => archive(item.id)} className="mt-3 mr-3 shrink-0 text-xs text-muted hover:text-foreground hover:underline">
+                      Archive
+                    </button>
                   </div>
                 );
               })}

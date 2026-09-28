@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     if (!message?.trim()) throw new ApiError(400, "A message is required");
     if (channel !== "IN_APP" && !to?.trim()) throw new ApiError(400, "A destination is required for this channel");
 
+    let sandboxed = false;
     if (channel === "IN_APP") {
       await prisma.notification.create({
         data: {
@@ -31,20 +32,19 @@ export async function POST(req: Request) {
       // Needs a real profile FK for CommunicationLog — the admin's own test
       // sends aren't tied to any applicant, so no row is created; dispatch
       // straight to the provider and just report success/failure inline.
-      try {
-        const { emailProvider } = await import("@/lib/notifications/providers/email-provider");
-        const { smsProvider } = await import("@/lib/notifications/providers/sms-provider");
-        const { whatsappProvider } = await import("@/lib/notifications/providers/whatsapp-provider");
-        const provider = channel === "EMAIL" ? emailProvider : channel === "SMS" ? smsProvider : whatsappProvider;
-        await provider.send(to.trim(), `[TEST] ${message.trim()}`, channel === "EMAIL" ? "Life Partner Pro — Test Notification" : undefined);
-      } catch (err) {
-        throw new ApiError(502, err instanceof Error ? err.message : "Test send failed");
-      }
+      // Uses the provider registry like every other send, so the environment guard applies: outside production a real provider is
+      // only used for allow-listed test recipients, everything else goes to the sandbox provider.
+      const { resolveProviderChain } = await import("@/lib/communications/providers/registry");
+      const chain = await resolveProviderChain({ channel, destination: to.trim() });
+      const first = chain[0];
+      const result = await first.adapter.sendMessage({ to: to.trim(), body: `[TEST] ${message.trim()}`, subject: channel === "EMAIL" ? "Life Partner Pro — Test Notification" : undefined, purpose: "TEST" });
+      if (!result.ok) throw new ApiError(502, result.error ?? "Test send failed");
+      sandboxed = first.sandboxed || !first.adapter.external;
     }
 
     await writeAudit({ action: "NOTIFICATION_TEST_SENT", adminId: admin.id, meta: { channel, isTest: true } });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, sandboxed });
   } catch (error) {
     return handleApiError(error);
   }

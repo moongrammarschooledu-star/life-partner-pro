@@ -360,7 +360,32 @@ export type Permission =
   | "sensitive:security:view"
   | "sensitive:device:view"
   | "sensitive:network:view"
-  | "sensitive:evidence:view";
+  | "sensitive:evidence:view"
+  // ---------- STEP 25 - Communication, WhatsApp, SMS, Email & Conversation Management ----------
+  // (colon style like the rest of the codebase; the spec writes the same names with dots.) The existing
+  // communication:* strings stay untouched; these are the additional spec permissions.
+  | "communications:view"
+  | "communications:send"
+  | "communications:send_sensitive"
+  | "communications:bulk"
+  | "communications:templates:view"
+  | "communications:templates:create"
+  | "communications:templates:edit"
+  | "communications:templates:approve"
+  | "communications:templates:activate"
+  | "communications:campaigns:view"
+  | "communications:campaigns:create"
+  | "communications:campaigns:approve"
+  | "communications:campaigns:manage"
+  | "communications:providers:view"
+  | "communications:providers:manage"
+  | "communications:webhooks:view"
+  | "communications:logs:view"
+  | "communications:analytics:view"
+  | "communications:export"
+  | "communications:suppress"
+  | "sensitive:communication:view"
+  | "sensitive:communication:send";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -390,6 +415,8 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "sensitive:device:view",
   "sensitive:network:view",
   "sensitive:evidence:view",
+  "sensitive:communication:view",
+  "sensitive:communication:send",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -606,6 +633,35 @@ const RISK_ALL_PERMISSIONS: Permission[] = [
   "sensitive:device:view",
   "sensitive:network:view",
   "sensitive:evidence:view",
+];
+
+// STEP 25 - the full communication permission set. SUPER_ADMIN holds all of it; every other role gets a scoped
+// subset below. The two sensitive:communication:* strings are never implied by a manager role. Maker-checker
+// separation on templates/campaigns is enforced structurally by the STEP 19 gate and by explicit no-self-approval
+// checks in the services, not by withholding a permission from a role.
+const COMMUNICATIONS_ALL_PERMISSIONS: Permission[] = [
+  "communications:view",
+  "communications:send",
+  "communications:send_sensitive",
+  "communications:bulk",
+  "communications:templates:view",
+  "communications:templates:create",
+  "communications:templates:edit",
+  "communications:templates:approve",
+  "communications:templates:activate",
+  "communications:campaigns:view",
+  "communications:campaigns:create",
+  "communications:campaigns:approve",
+  "communications:campaigns:manage",
+  "communications:providers:view",
+  "communications:providers:manage",
+  "communications:webhooks:view",
+  "communications:logs:view",
+  "communications:analytics:view",
+  "communications:export",
+  "communications:suppress",
+  "sensitive:communication:view",
+  "sensitive:communication:send",
 ];
 
 const ROLES_ALL_PERMISSIONS: Permission[] = ["roles:view", "roles:create", "roles:edit", "roles:disable", "roles:assign", "roles:delete"];
@@ -846,6 +902,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...SYSTEM_ALL_PERMISSIONS,
     ...AI_ALL_PERMISSIONS,
     ...RISK_ALL_PERMISSIONS,
+    ...COMMUNICATIONS_ALL_PERMISSIONS,
     ...ROLES_ALL_PERMISSIONS,
     ...TASKS_ALL_PERMISSIONS,
     ...APPROVALS_ALL_PERMISSIONS,
@@ -1033,6 +1090,15 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:resolve",
     "communication:view",
     "communication:send",
+    // STEP 25 - operations can watch the communication pipeline (queue, logs, providers, analytics) and send, but not configure providers.
+    "communications:view",
+    "communications:send",
+    "communications:templates:view",
+    "communications:campaigns:view",
+    "communications:providers:view",
+    "communications:webhooks:view",
+    "communications:logs:view",
+    "communications:analytics:view",
     "reports:view",
     "staff:view",
     "profile:assign",
@@ -1163,6 +1229,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "ai:risk:use",
     "communication:view",
     "communication:send",
+    "communications:view",
+    "communications:send",
+    "communications:templates:view",
     "reports:view",
     "audit:view",
     // ---------- STEP 23 ----------
@@ -1188,6 +1257,25 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     "communication:message:view",
     "notification:template:manage",
+    // STEP 25 - owns templates, campaigns, queue/analytics and suppression; NOT provider configuration
+    // (COMPLIANCE_MANAGER / SUPER_ADMIN) and NOT the sensitive:communication:* strings.
+    "communications:view",
+    "communications:send",
+    "communications:bulk",
+    "communications:templates:view",
+    "communications:templates:create",
+    "communications:templates:edit",
+    "communications:templates:approve",
+    "communications:templates:activate",
+    "communications:campaigns:view",
+    "communications:campaigns:create",
+    "communications:campaigns:approve",
+    "communications:campaigns:manage",
+    "communications:providers:view",
+    "communications:webhooks:view",
+    "communications:logs:view",
+    "communications:analytics:view",
+    "communications:suppress",
     "reports:view",
     "ai:use",
     "ai:communication:draft",
@@ -1228,6 +1316,20 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "profile:view",
     ...COMPLIANCE_ALL_PERMISSIONS,
     "ai:compliance:use",
+    // STEP 25 - provider configuration, webhook/log oversight, suppression and approval of external-facing templates/campaigns.
+    "communications:view",
+    "communications:templates:view",
+    "communications:templates:approve",
+    "communications:templates:activate",
+    "communications:campaigns:view",
+    "communications:campaigns:approve",
+    "communications:providers:view",
+    "communications:providers:manage",
+    "communications:webhooks:view",
+    "communications:logs:view",
+    "communications:analytics:view",
+    "communications:export",
+    "communications:suppress",
     // STEP 24 — owns risk rules/configuration/reporting and admin-security review.
     "risk:view",
     "risk:rules:view",
@@ -1308,6 +1410,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:escalate",
     "communication:view",
     "communication:send",
+    "communications:view",
+    "communications:send",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
     ...STAFF_SEARCH_PERMISSIONS,
@@ -1318,6 +1422,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   COMMUNICATION_STAFF: [
     "communication:view",
     "communication:send",
+    "communications:view",
+    "communications:send",
+    "communications:templates:view",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
     ...STAFF_SEARCH_PERMISSIONS,

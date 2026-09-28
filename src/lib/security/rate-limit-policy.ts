@@ -47,6 +47,7 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "my-proposals-contact-permission": { limit: 20, windowMs: 60_000 },
   "verification-doc-upload": { limit: 5, windowMs: 60_000 },
   "verification-session": { limit: 5, windowMs: 60_000 },
+  "my-communications-reply": { limit: 20, windowMs: 60_000 },
 };
 
 const CACHE_TTL_MS = 30_000;

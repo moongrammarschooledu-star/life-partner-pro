@@ -17,6 +17,8 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "verification.enabled", description: "Applicant verification submissions (OTP + documents)", sensitive: true },
   { key: "notifications.enabled", description: "Sending notifications on every channel", sensitive: true },
   { key: "whatsapp.enabled", description: "WhatsApp notification channel", sensitive: false },
+  { key: "communications.campaigns.enabled", description: "Bulk communication campaigns (defaults OFF; also requires marketing consent and an active jurisdiction rule)", sensitive: true },
+  { key: "communications.marketing.enabled", description: "Marketing messages on any channel (defaults OFF; never implied by registration)", sensitive: true },
   { key: "support.enabled", description: "New support / complaint / safety cases from applicants", sensitive: false },
   { key: "registrations.enabled", description: "New applicant registrations", sensitive: true },
   { key: "uploads.enabled", description: "File uploads (photos, documents, evidence)", sensitive: true },
@@ -36,7 +38,7 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
 ];
 
 // AI flags default to OFF: a database hiccup or a fresh install must never switch AI on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.")]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.")]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

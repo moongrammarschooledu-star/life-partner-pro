@@ -7,7 +7,6 @@ import { verifyBackup } from "@/lib/backup/verify";
 import { runIntegrityChecks } from "@/lib/ops/integrity";
 import { evaluateAndSyncAlerts } from "@/lib/ops/alerts";
 import { cleanupRateLimitBuckets } from "@/lib/ops/rate-limit-persistent";
-import { dispatchChannel } from "@/lib/notifications/dispatch";
 import { encryptPhoto } from "@/lib/privacy/photo-crypto";
 import { put } from "@vercel/blob";
 import { randomUUID } from "crypto";
@@ -61,18 +60,18 @@ export async function cleanupRateLimitsHandler(): Promise<void> {
 export async function notificationRetryHandler(): Promise<void> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   const limit = settings?.notificationRetryLimit ?? 3;
-  const failed = await prisma.communicationLog.findMany({
-    where: { deliveryStatus: "FAILED", retryCount: { lt: limit }, createdAt: { gte: new Date(Date.now() - 24 * 3_600_000) } },
-    include: { profile: { include: { contact: true } } },
+  // Rows that FAILED before the STEP 25 queue existed (plaintext body, no queue metadata) are re-queued once per run within the
+  // configured limit; everything else is already in the queue with its own backoff schedule.
+  const legacy = await prisma.communicationLog.findMany({
+    where: { deliveryStatus: "FAILED", messageType: null, deadLetteredAt: null, retryCount: { lt: limit }, createdAt: { gte: new Date(Date.now() - 24 * 3_600_000) }, channel: { not: "IN_APP" } },
+    select: { id: true },
     take: 20,
   });
-  for (const log of failed) {
-    const contact = log.profile.contact;
-    const destination = log.channel === "EMAIL" ? contact?.email : log.channel === "WHATSAPP" ? contact?.whatsappNumber : contact?.mobileNumber;
-    if (!destination) continue;
-    await prisma.communicationLog.update({ where: { id: log.id }, data: { retryCount: { increment: 1 }, deliveryStatus: "QUEUED" } });
-    await dispatchChannel(log.id, log.channel, destination, log.messageBody ?? "", undefined);
+  for (const log of legacy) {
+    await prisma.communicationLog.update({ where: { id: log.id }, data: { retryCount: { increment: 1 }, deliveryStatus: "QUEUED", queuedAt: new Date(), nextAttemptAt: new Date(), attempts: 0 } });
   }
+  const { processCommunicationQueue } = await import("@/lib/communications/send-service");
+  await processCommunicationQueue({ limit: 50, budgetMs: 20_000 });
 }
 
 // Photos uploaded before STEP 13 may still be stored unencrypted (null IV).

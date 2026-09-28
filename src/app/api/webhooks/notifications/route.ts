@@ -16,11 +16,12 @@ export async function POST(req: Request) {
   const secret = process.env.NOTIFICATION_WEBHOOK_SECRET;
   const rawBody = await req.text();
 
-  if (secret) {
-    const signature = req.headers.get("x-webhook-signature");
-    if (!verifyWebhookSignature(rawBody, signature, secret)) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
+  // Fails CLOSED: with no secret configured this endpoint accepts nothing, so nobody can fabricate a "delivered" / "read" status.
+  // (The admin "Simulate Webhook" tool calls the processor directly and does not need this route.)
+  if (!secret) return NextResponse.json({ error: "Webhook is not configured" }, { status: 503 });
+  const signature = req.headers.get("x-webhook-signature");
+  if (!verifyWebhookSignature(rawBody, signature, secret)) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   let body: { provider?: string; eventType?: string; providerMessageId?: string; idempotencyKey?: string };

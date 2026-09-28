@@ -14,7 +14,8 @@ import { readFileSync, existsSync } from "node:fs";
 const results = [];
 const add = (name, ok, detail) => results.push({ name, ok, detail });
 
-const tracked = execSync("git ls-files", { encoding: "utf8" }).split("\n").filter(Boolean);
+// Tracked files PLUS new, not-yet-committed files (so the scan covers work before it is committed), minus tracked files deleted in the working tree.
+const tracked = [...new Set(execSync("git ls-files --cached --others --exclude-standard", { encoding: "utf8" }).split("\n").filter(Boolean))].filter((f) => existsSync(f));
 const textFiles = tracked.filter((f) => /\.(ts|tsx|js|mjs|json|md|yml|yaml|env|example|toml|css)$/.test(f) && !f.includes("package-lock.json") && !f.startsWith("prisma/migrations/"));
 
 // 1. No .env file with real values is tracked.
