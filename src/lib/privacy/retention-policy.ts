@@ -178,6 +178,7 @@ export async function runDueRetentionActions() {
   await (await import("@/lib/ai/retention")).safeSweepAiData(); // STEP 16 §67 — expired AI results
   await runTaskRetentionActions().catch(() => {}); // STEP 18 §60 — archive stale completed/cancelled/expired tasks
   await (await import("@/lib/communications/retention")).safeSweepCommunicationData(); // STEP 25 §39 — redact old message bodies (hold/case aware)
+  await (await import("@/lib/documents/retention")).safeSweepDocumentRetention(); // STEP 26 §53 — redact old document bytes (hold/case aware)
   await flagUnautomatedCategories().catch(() => {});
   return { deletionsProcessed: dueDeletions.length };
 }

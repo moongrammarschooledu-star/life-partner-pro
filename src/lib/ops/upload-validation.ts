@@ -2,13 +2,30 @@
 // from its leading bytes (never trust the client-declared MIME or extension),
 // cross-check them, sanitise filenames and build a safe Content-Disposition.
 
-export type DetectedType = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+export type DetectedType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp"
+  | "application/pdf"
+  | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // "PK\x03\x04" — DOCX/XLSX are ZIP (OOXML) containers
 
 export function detectFileType(buf: Buffer): DetectedType | null {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
   if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
   if (buf.length >= 12 && buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
   if (buf.length >= 5 && buf.subarray(0, 5).toString("ascii") === "%PDF-") return "application/pdf";
+  if (buf.length >= 4 && buf.subarray(0, 4).equals(ZIP_MAGIC)) {
+    // DOCX/XLSX are ZIP containers: their local/central-directory file-name entries are stored as
+    // literal (uncompressed) ASCII, so the part name always appears verbatim in the raw bytes —
+    // a genuine, commonly-used sniffing technique, not a guess from the extension.
+    const ascii = buf.toString("latin1");
+    if (ascii.includes("word/document.xml")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (ascii.includes("xl/workbook.xml")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    return null; // a ZIP that is neither is never accepted here (blocks disguised archives)
+  }
   return null;
 }
 
@@ -17,6 +34,8 @@ const EXTENSIONS: Record<DetectedType, string[]> = {
   "image/png": ["png"],
   "image/webp": ["webp"],
   "application/pdf": ["pdf"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"],
 };
 
 // Extensions that must never appear anywhere in an uploaded filename

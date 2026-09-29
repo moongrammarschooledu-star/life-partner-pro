@@ -29,6 +29,9 @@ export function describeNotification(type: NotificationType): NotificationDescri
   if (starts(t, "ADMIN_", "TASK_", "APPROVAL_", "COMPLIANCE_", "COMMUNICATION_") || ["HIGH_RISK_DETECTED", "CRITICAL_RISK_DETECTED", "DUPLICATE_REVIEW_REQUIRED", "VERIFICATION_RISK", "CONTACT_BYPASS_DETECTED", "SAFETY_REPORT_RECEIVED", "RISK_REVIEW_DUE", "RISK_CASE_ESCALATED", "EMERGENCY_OVERRIDE_USED", "PROVIDER_VERIFICATION_FAILURE"].includes(t))
     return { messageType: "ADMIN_INTERNAL", purpose: "ADMIN_INTERNAL", category: "SYSTEM", priority: "NORMAL" };
   if (t === "ACCOUNT_REGISTERED" || starts(t, "PROFILE_")) return { messageType: "TRANSACTIONAL", purpose: "ACCOUNT", category: "SYSTEM", priority: "NORMAL" };
+  // STEP 26 — document management (ADMIN_DOCUMENT_* is already caught by the ADMIN_ branch above).
+  if (t === "DOCUMENT_EXPIRING_SOON") return { messageType: "TRANSACTIONAL", purpose: "FOLLOWUP", category: "SUPPORT", priority: "LOW" };
+  if (starts(t, "DOCUMENT_")) return { messageType: "SUPPORT", purpose: "SUPPORT", category: "SUPPORT", priority: "HIGH" };
   return { messageType: "SYSTEM", purpose: "ACCOUNT", category: "SYSTEM", priority: "NORMAL" };
 }
 

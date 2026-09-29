@@ -212,6 +212,18 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   // STEP 25 - admin-only operational alerts
   COMMUNICATION_PROVIDER_ALERT: ESSENTIAL,
   COMMUNICATION_REVIEW_REQUIRED: ESSENTIAL,
+
+  // STEP 26 - document management. Action-required / decision notices are essential (mirrors
+  // VERIFICATION_ACTION_REQUIRED/RE_VERIFICATION_REQUIRED above); only the expiry reminder is a
+  // gated, non-essential follow-up.
+  DOCUMENT_REQUESTED: ESSENTIAL,
+  DOCUMENT_REVIEW_DECIDED: ESSENTIAL,
+  DOCUMENT_EXPIRING_SOON: FOLLOWUP,
+  DOCUMENT_REVERIFICATION_REQUIRED: ESSENTIAL,
+  DOCUMENT_SHARE_REQUEST: ESSENTIAL,
+  DOCUMENT_SIGNATURE_REQUEST: ESSENTIAL,
+  ADMIN_DOCUMENT_REVIEW_QUEUE: ESSENTIAL,
+  ADMIN_DOCUMENT_SECURITY_ALERT: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

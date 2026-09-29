@@ -29,6 +29,8 @@ export function buildActionUrl(
     // STEP 24 — neutral applicant notices: where they can act, never anything about why.
     if (type === "RISK_INFORMATION_REQUESTED") return "/my-verification";
     if (type === "SAFETY_REPORT_ACKNOWLEDGED") return "/report-concern";
+    // STEP 26 — document management
+    if (type.startsWith("DOCUMENT_")) return "/dashboard/documents";
     return "/my-notifications";
   }
 
@@ -41,6 +43,7 @@ export function buildActionUrl(
   // STEP 24 — risk & safety notifications open the Risk & Safety Center.
   if (type === "DUPLICATE_REVIEW_REQUIRED") return "/admin/risk-center/duplicates";
   if (type === "COMMUNICATION_PROVIDER_ALERT" || type === "COMMUNICATION_REVIEW_REQUIRED") return "/admin/communications";
+  if (type === "ADMIN_DOCUMENT_REVIEW_QUEUE" || type === "ADMIN_DOCUMENT_SECURITY_ALERT") return "/admin/documents";
   if (["HIGH_RISK_DETECTED", "CRITICAL_RISK_DETECTED", "VERIFICATION_RISK", "ACCOUNT_SECURITY_ALERT", "CONTACT_BYPASS_DETECTED", "ADMIN_ACCESS_ANOMALY", "SAFETY_REPORT_RECEIVED", "RISK_REVIEW_DUE", "RISK_CASE_ESCALATED"].includes(type)) return "/admin/risk-center";
   if (type === "ADMIN_PROFILE_UPDATE_PENDING" && ids.profileId) return `/admin/profiles/${ids.profileId}`;
   if (type === "ADMIN_ASSIGNMENT_CHANGED" && ids.proposalId) return `/admin/proposals/${ids.proposalId}`;

@@ -385,7 +385,42 @@ export type Permission =
   | "communications:export"
   | "communications:suppress"
   | "sensitive:communication:view"
-  | "sensitive:communication:send";
+  | "sensitive:communication:send"
+  // ---------- STEP 26 - Secure Document Management, Verification, E-Signature & Lifecycle ----------
+  // "documents:download" and "verification:document:view" above already exist and stay unchanged
+  // (the STEP 8/23 identity-checklist upload routes use them); these are the additional spec permissions
+  // for the new general Document system.
+  | "documents:view"
+  | "documents:upload"
+  | "documents:edit"
+  | "documents:review"
+  | "documents:verify"
+  | "documents:reject"
+  | "documents:share"
+  | "documents:revoke_share"
+  | "documents:archive"
+  | "documents:restore"
+  | "documents:delete"
+  | "documents:export"
+  | "documents:redact"
+  | "documents:manage_requests"
+  | "documents:manage_providers"
+  | "documents:manage_retention"
+  | "documents:manage_legal_hold"
+  | "documents:audit:view"
+  | "documents:sign"
+  | "documents:sign:manage"
+  | "sensitive:documents:download"
+  | "sensitive:documents:share"
+  | "sensitive:documents:export"
+  | "sensitive:identity_documents:view"
+  // (family document access is governed by the separate FamilyPermissionKey catalog —
+  // "document.view"/"document.comment"/"document.download" in src/lib/family/permissions.ts —
+  // never by this AdminRole Permission type.)
+  | "verification:documents:review"
+  | "verification:documents:approve"
+  | "verification:documents:reject"
+  | "verification:documents:reverify";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -417,6 +452,10 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "sensitive:evidence:view",
   "sensitive:communication:view",
   "sensitive:communication:send",
+  "sensitive:documents:download",
+  "sensitive:documents:share",
+  "sensitive:documents:export",
+  "sensitive:identity_documents:view",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -664,6 +703,41 @@ const COMMUNICATIONS_ALL_PERMISSIONS: Permission[] = [
   "sensitive:communication:send",
 ];
 
+// STEP 26 - the full document-management permission set. SUPER_ADMIN holds all of it; every other role gets a
+// scoped subset below (verification review/approve stays with VERIFICATION_MANAGER/STAFF, legal hold/retention/
+// provider configuration with COMPLIANCE_MANAGER, matching the STEP 25 COMMUNICATIONS_ALL_PERMISSIONS shape above).
+const DOCUMENTS_ALL_PERMISSIONS: Permission[] = [
+  "documents:view",
+  "documents:upload",
+  "documents:edit",
+  "documents:review",
+  "documents:verify",
+  "documents:reject",
+  "documents:share",
+  "documents:revoke_share",
+  "documents:archive",
+  "documents:restore",
+  "documents:delete",
+  "documents:export",
+  "documents:redact",
+  "documents:manage_requests",
+  "documents:manage_providers",
+  "documents:manage_retention",
+  "documents:manage_legal_hold",
+  "documents:audit:view",
+  "documents:sign",
+  "documents:sign:manage",
+  "documents:download",
+  "sensitive:documents:download",
+  "sensitive:documents:share",
+  "sensitive:documents:export",
+  "sensitive:identity_documents:view",
+  "verification:documents:review",
+  "verification:documents:approve",
+  "verification:documents:reject",
+  "verification:documents:reverify",
+];
+
 const ROLES_ALL_PERMISSIONS: Permission[] = ["roles:view", "roles:create", "roles:edit", "roles:disable", "roles:assign", "roles:delete"];
 
 // STEP 18 — the full task-management permission set; SUPER_ADMIN and
@@ -903,6 +977,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...AI_ALL_PERMISSIONS,
     ...RISK_ALL_PERMISSIONS,
     ...COMMUNICATIONS_ALL_PERMISSIONS,
+    ...DOCUMENTS_ALL_PERMISSIONS,
     ...ROLES_ALL_PERMISSIONS,
     ...TASKS_ALL_PERMISSIONS,
     ...APPROVALS_ALL_PERMISSIONS,
@@ -1066,7 +1141,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // bundled into match:run/proposal:create, which also let the holder act, not just view) —
   // disclosed gap, not silently worked around by granting an action permission to a
   // read-only role. system:view is read-only (System Health/Config pages; no system:*:manage).
-  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view", "search:view"],
+  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "documents:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view", "search:view"],
 
   // ---------------------------------------------------------------- OPERATIONS_ADMIN (spec §5)
   OPERATIONS_ADMIN: [
@@ -1099,6 +1174,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communications:webhooks:view",
     "communications:logs:view",
     "communications:analytics:view",
+    // STEP 26 - operations can watch the document pipeline (queue/audit) but not review, verify, or configure it.
+    "documents:view",
+    "documents:audit:view",
     "reports:view",
     "staff:view",
     "profile:assign",
@@ -1183,6 +1261,18 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "risk:evidence:view",
     "user-reports:view",
     "ai:risk:use",
+    // STEP 26 — owns document review/verification decisions and can request documents from applicants;
+    // legal hold/retention/provider configuration stay with COMPLIANCE_MANAGER (see the lacks-note below).
+    "documents:view",
+    "documents:review",
+    "documents:verify",
+    "documents:reject",
+    "documents:manage_requests",
+    "verification:documents:review",
+    "verification:documents:approve",
+    "verification:documents:reject",
+    "verification:documents:reverify",
+    "sensitive:identity_documents:view",
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
     ...MANAGER_SEARCH_PERMISSIONS,
@@ -1190,7 +1280,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     // share contacts merely because verification is complete), finance:*, roles:*,
     // risk:escalate/risk:policy:manage/verification:policy:manage/duplicates:manage/
     // relationships:manage/safety:verification:* (policy-setting and safety-restriction
-    // authority stay with Support Manager/Super Admin, spec §44).
+    // authority stay with Support Manager/Super Admin, spec §44). Also lacks
+    // documents:manage_legal_hold/manage_retention/manage_providers/export (Compliance Manager, spec §53/§54/§60).
   ],
 
   // ---------------------------------------------------------------- SUPPORT_MANAGER (spec §8)
@@ -1240,6 +1331,11 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "safety:verification:restrict",
     "safety:verification:suspend",
     "sensitive:risk:view",
+    // STEP 26 — can request/review support-evidence-style documents on a case, and archive them once resolved.
+    "documents:view",
+    "documents:manage_requests",
+    "documents:review",
+    "documents:archive",
     ...MANAGER_TASK_PERMISSIONS,
     "tasks:escalate:senior", // spec's "senior" case-escalation tier already lives here (cases:escalate:senior above) — mirrors it for tasks
     ...MANAGER_APPROVAL_PERMISSIONS,
@@ -1348,6 +1444,15 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:view",
     "cases:create",
     "cases:escalate",
+    // STEP 26 — owns legal hold, retention and OCR/scan/signature provider configuration; document
+    // review/verification decisions stay with VERIFICATION_MANAGER (see the lacks-note below).
+    "documents:view",
+    "documents:manage_legal_hold",
+    "documents:manage_retention",
+    "documents:manage_providers",
+    "documents:audit:view",
+    "documents:export",
+    "sensitive:documents:export",
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
     "privacy:approval:view",
@@ -1356,7 +1461,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "security:approval:approve",
     ...MANAGER_SEARCH_PERMISSIONS,
     // deliberately lacks admin:manage/roles:*, finance:*, verification:approve/reject
-    // (identity-verification decisions stay with VERIFICATION_MANAGER), profile:edit.
+    // (identity-verification decisions stay with VERIFICATION_MANAGER), profile:edit,
+    // documents:review/verify/reject (document REVIEW decisions stay with VERIFICATION_MANAGER).
   ],
 
   // ---------------------------------------------------------------- STAFF_MATCHMAKER (spec §11)
@@ -1394,11 +1500,16 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "cases:view",
     "communication:view",
     "communication:send",
+    // STEP 26 — can review and request documents; final approve/reject/reverify stays per-admin (mirrors verification:approve/reject below).
+    "documents:view",
+    "documents:review",
+    "documents:manage_requests",
+    "verification:documents:review",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
     ...STAFF_SEARCH_PERMISSIONS,
     // deliberately lacks verification:approve/reject — only granted per-admin when explicitly
-    // authorized (spec §12).
+    // authorized (spec §12). Same for documents:verify/reject/verification:documents:approve/reject/reverify.
   ],
 
   // ---------------------------------------------------------------- SUPPORT_STAFF (spec §13)
@@ -1412,6 +1523,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "communication:send",
     "communications:view",
     "communications:send",
+    // STEP 26 — can request a document to resolve a case (spec §58); no review/verify authority.
+    "documents:manage_requests",
     ...STAFF_TASK_PERMISSIONS,
     ...STAFF_APPROVAL_PERMISSIONS,
     ...STAFF_SEARCH_PERMISSIONS,

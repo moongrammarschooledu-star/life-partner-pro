@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT";
 
 export interface CatalogEntry {
   label: string;
@@ -148,6 +148,14 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   BULK_COMMUNICATION_CAMPAIGN: { label: "Approve a bulk communication campaign", domain: "COMMUNICATION", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   COMMUNICATION_PROVIDER_CHANGE: { label: "Change or activate a communication provider", domain: "COMMUNICATION", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   SENSITIVE_COMMUNICATION_SEND: { label: "Send a sensitive communication", domain: "COMMUNICATION", sourceType: "PROFILE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  // STEP 26 - documents. sourceId is the Document / DocumentShare / DocumentRequest / provider id (loose reference).
+  DOCUMENT_RESTRICT: { label: "Restrict a document", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["VERIFICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  DOCUMENT_REDACT: { label: "Redact a document", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["VERIFICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  DOCUMENT_SHARE_TO_PROPOSAL: { label: "Share a document with the other party of a proposal", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPPORT_MANAGER", "SUPER_ADMIN"] },
+  DOCUMENT_LEGAL_HOLD_RELEASE: { label: "Release a document legal hold", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  DOCUMENT_PROVIDER_CHANGE: { label: "Change or activate a document scan/OCR/signature provider", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  BULK_DOCUMENT_ACTION: { label: "Run a bulk document operation", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["VERIFICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  DOCUMENT_DELETE: { label: "Permanently delete a document", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
 };
 
 export function getCatalogEntry(actionType: string): CatalogEntry | null {

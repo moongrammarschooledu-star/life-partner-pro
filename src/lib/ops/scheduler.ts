@@ -12,6 +12,7 @@ import { runApprovalAutomationSweep } from "@/lib/approvals/automation-sweep";
 import { runComplianceReminders } from "@/lib/compliance/reminders";
 import { runRiskBatch } from "@/lib/risk/batch";
 import { runCommunicationTick } from "@/lib/communications/tick";
+import { runDocumentTick } from "@/lib/documents/tick";
 
 // The single daily tick (Vercel Hobby allows exactly one cron job). Every
 // sub-task is isolated (one failing task no longer discards the others'
@@ -31,6 +32,7 @@ export const CRON_TASKS = [
   { name: "compliance-reminders", label: "Compliance rule/processor/authority-request due-date reminders", schedule: "daily tick" },
   { name: "risk-batch", label: "Risk evaluation sweep, duplicate clusters, security-event retention & review-due reminders", schedule: "daily tick" },
   { name: "communication-queue", label: "Communication queue drain, campaign batches, follow-up automation, suppression expiry & provider-health alerts", schedule: "daily tick + manual" },
+  { name: "document-lifecycle", label: "Document expiry reminders/re-verification, overdue requests, share & signature-request expiry", schedule: "daily tick + manual" },
   { name: "enqueue-jobs", label: "Schedule daily background jobs", schedule: "daily tick" },
   { name: "job-worker", label: "Background job worker", schedule: "daily tick + manual" },
   { name: "alert-evaluation", label: "Monitoring alert evaluation", schedule: "daily tick" },
@@ -68,6 +70,7 @@ export async function runDailyTick(correlationId?: string) {
         runCronTask("compliance-reminders", runComplianceReminders, opts),
         runCronTask("risk-batch", () => runRiskBatch(), opts),
         runCronTask("communication-queue", () => runCommunicationTick(), opts),
+        runCronTask("document-lifecycle", () => runDocumentTick(), opts),
       ]);
       const enqueue = await runCronTask("enqueue-jobs", enqueueDailyJobs, opts);
       const worker = await runCronTask("job-worker", () => runDueJobs({ limit: 8, budgetMs: 30_000 }), opts);

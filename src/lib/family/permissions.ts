@@ -33,6 +33,15 @@ export const FAMILY_PERMISSION_CATALOG = {
   // in data-visibility.ts, never wired to any permission at all — granting
   // this can never expose them).
   "profile.verification.view": { label: "View identity verification status", sensitive: false },
+  // STEP 26 — holding this is necessary but NOT sufficient: the family member
+  // must also have been explicitly added to that specific document's share
+  // (FamilySharedRecord, type DOCUMENT — see src/lib/documents/access-service.ts),
+  // exactly like proposal.view/meeting.view above. Never granted by any default
+  // role below — the applicant opts a family member in per-permission, and
+  // "download" in particular routes through STEP 19 approval when granted (sensitive: true).
+  "document.view": { label: "View documents shared with them", sensitive: true },
+  "document.comment": { label: "Comment on shared documents", sensitive: false },
+  "document.download": { label: "Download shared documents", sensitive: true },
 } satisfies Record<string, FamilyPermissionDef>;
 
 export type FamilyPermissionKey = keyof typeof FAMILY_PERMISSION_CATALOG;

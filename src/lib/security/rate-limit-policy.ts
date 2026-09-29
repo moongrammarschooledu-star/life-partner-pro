@@ -48,6 +48,8 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "verification-doc-upload": { limit: 5, windowMs: 60_000 },
   "verification-session": { limit: 5, windowMs: 60_000 },
   "my-communications-reply": { limit: 20, windowMs: 60_000 },
+  "my-documents-upload": { limit: 10, windowMs: 60_000 },
+  "my-documents-share-request": { limit: 10, windowMs: 60_000 },
 };
 
 const CACHE_TTL_MS = 30_000;

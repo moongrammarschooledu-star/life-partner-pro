@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, UserCircle, Heart, CalendarDays, ShieldCheck, Lock, LogOut, MessageSquare } from "lucide-react";
+import { LayoutDashboard, UserCircle, Heart, CalendarDays, ShieldCheck, Lock, LogOut, MessageSquare, FileText } from "lucide-react";
 import { FamilyGate } from "@/components/family/family-gate";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/family/proposals", label: "Proposals", icon: Heart },
   { href: "/family/meetings", label: "Meetings", icon: CalendarDays },
   { href: "/family/communications", label: "Messages", icon: MessageSquare },
+  { href: "/family/documents", label: "Documents", icon: FileText },
   { href: "/family/consent", label: "Consent & Access", icon: ShieldCheck },
   { href: "/family/security", label: "Security", icon: Lock },
 ];

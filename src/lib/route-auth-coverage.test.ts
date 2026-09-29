@@ -42,6 +42,7 @@ const PUBLIC_ROUTES = new Set([
   "/api/health", "/api/health/live", "/api/health/ready", "/api/system-state", "/api/client-errors",
   "/api/webhooks/payments/[provider]", "/api/webhooks/notifications", "/api/webhooks/verification/[provider]",
   "/api/webhooks/email", "/api/webhooks/sms", "/api/webhooks/whatsapp", // STEP 25 - signed provider delivery webhooks
+  "/api/webhooks/document-provider", "/api/webhooks/signature-provider", // STEP 26 - signed, currently unconfigured (fail closed) provider webhooks
   "/api/cron/notifications", "/api/internal/ci-evidence",
   "/api/auth/[...nextauth]",
   "/api/my-billing/packages", // public package catalogue (no personal data)

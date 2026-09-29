@@ -580,4 +580,37 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Communication Needs Review", body: "A message was held back by a communication policy check and needs a human review." },
     UR: { title: "کمیونیکیشن کا جائزہ درکار ہے", body: "ایک پیغام کمیونیکیشن پالیسی کی جانچ کی وجہ سے روکا گیا ہے اور انسانی جائزہ درکار ہے۔" },
   },
+  // STEP 26 — document management
+  DOCUMENT_REQUESTED: {
+    EN: { title: "Document Requested", body: "Our team has requested a document from you. Please open the request to see what's needed." },
+    UR: { title: "دستاویز کی درخواست", body: "ہماری ٹیم نے آپ سے ایک دستاویز کی درخواست کی ہے۔ تفصیلات دیکھنے کے لیے درخواست کھولیں۔" },
+  },
+  DOCUMENT_REVIEW_DECIDED: {
+    EN: { title: "Document Reviewed", body: "A document you uploaded has been reviewed. Open your documents to see the decision." },
+    UR: { title: "دستاویز کا جائزہ لیا گیا", body: "آپ کی اپ لوڈ کردہ دستاویز کا جائزہ لیا گیا ہے۔ فیصلہ دیکھنے کے لیے اپنی دستاویزات کھولیں۔" },
+  },
+  DOCUMENT_EXPIRING_SOON: {
+    EN: { title: "Document Expiring Soon", body: "One of your documents is expiring soon. Please upload an updated copy." },
+    UR: { title: "دستاویز کی میعاد ختم ہونے والی ہے", body: "آپ کی ایک دستاویز کی میعاد جلد ختم ہو رہی ہے۔ براہ کرم اپ ڈیٹ شدہ کاپی اپ لوڈ کریں۔" },
+  },
+  DOCUMENT_REVERIFICATION_REQUIRED: {
+    EN: { title: "Document Re-verification Required", body: "One of your documents needs to be re-verified. Please upload it again." },
+    UR: { title: "دستاویز کی دوبارہ تصدیق درکار ہے", body: "آپ کی ایک دستاویز کی دوبارہ تصدیق درکار ہے۔ براہ کرم اسے دوبارہ اپ لوڈ کریں۔" },
+  },
+  DOCUMENT_SHARE_REQUEST: {
+    EN: { title: "Document Sharing Request", body: "Someone has requested access to a document, or a sharing request needs your attention." },
+    UR: { title: "دستاویز شیئرنگ کی درخواست", body: "کسی نے ایک دستاویز تک رسائی کی درخواست کی ہے، یا ایک شیئرنگ درخواست پر آپ کی توجہ درکار ہے۔" },
+  },
+  DOCUMENT_SIGNATURE_REQUEST: {
+    EN: { title: "Signature Requested", body: "A document is waiting for your signature. Please review and respond." },
+    UR: { title: "دستخط درکار ہیں", body: "ایک دستاویز آپ کے دستخط کی منتظر ہے۔ براہ کرم جائزہ لے کر جواب دیں۔" },
+  },
+  ADMIN_DOCUMENT_REVIEW_QUEUE: {
+    EN: { title: "Document Review Queue", body: "One or more documents are waiting for staff review." },
+    UR: { title: "دستاویز کا جائزہ درکار ہے", body: "ایک یا زیادہ دستاویزات عملے کے جائزے کی منتظر ہیں۔" },
+  },
+  ADMIN_DOCUMENT_SECURITY_ALERT: {
+    EN: { title: "Document Security Alert", body: "A document security event (scan, tamper or quarantine) needs attention." },
+    UR: { title: "دستاویز سیکیورٹی الرٹ", body: "ایک دستاویز سیکیورٹی ایونٹ (اسکین، تبدیلی یا قرنطینہ) پر توجہ درکار ہے۔" },
+  },
 };

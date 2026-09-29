@@ -76,6 +76,7 @@ enum AssignmentResourceType {
   AI_SAFETY_EVENT
   ADMIN_TASK
   ADMIN_USER
+  DOCUMENT
 }
 
 // STEP 18 — CRITICAL added to match CasePriority's 5-value scale exactly.
@@ -169,6 +170,13 @@ enum AdminTaskType {
   // ---------- STEP 24 — Fraud Prevention & Account Safety Intelligence ----------
   RISK_REVIEW // CASE — a RiskCase needs human review (never an automatic decision)
   ADMIN_SECURITY_REVIEW // CASE — privileged-access anomaly; investigation task, not an accusation
+
+  // ---------- STEP 26 — Secure Document Management, Verification, E-Signature & Lifecycle ----------
+  DOCUMENT_REVIEW_TASK // DOCUMENT — an uploaded document needs staff review
+  DOCUMENT_REQUEST_FOLLOWUP // DOCUMENT — a document request is overdue
+  DOCUMENT_REVERIFICATION_TASK // DOCUMENT — a document expired and needs re-upload + review
+  DOCUMENT_SECURITY_TASK // DOCUMENT — a scan/quarantine/tamper finding needs review
+  DOCUMENT_SHARE_APPROVAL_TASK // DOCUMENT — a document share request needs approval
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -374,6 +382,9 @@ enum RestrictionType {
   PAYMENT_RESTRICTED // checked in src/lib/finance/checkout.ts startCheckout
   FAMILY_ACCESS_RESTRICTED // checked in src/lib/family/access-control.ts getFamilyMembership
   FULL_ACCOUNT_RESTRICTED // checked in requireApplicantProfileId / requireFamilyMemberId
+
+  // ---------- STEP 26 — Secure Document Management ----------
+  DOCUMENT_ACCESS_RESTRICTED // checked in src/lib/documents/access-service.ts before upload/share/download
 }
 
 enum ResolutionCategory {
@@ -1137,6 +1148,41 @@ enum AuditAction {
   COMMUNICATION_WEBHOOK_REJECTED
   COMMUNICATION_LOG_VIEWED
   COMMUNICATION_QUEUE_PROCESSED
+
+  // ---------- STEP 26 — Secure Document Management, Verification, E-Signature & Lifecycle ----------
+  // (DOCUMENT_UPLOADED and DOCUMENT_REVIEWED already exist above — STEP 8/23's verification-document
+  // routes use them, and this general document system reuses the same two values for the same actions.)
+  DOCUMENT_VIEWED
+  DOCUMENT_PREVIEWED
+  DOCUMENT_DOWNLOADED
+  DOCUMENT_VERSION_CREATED
+  DOCUMENT_APPROVED
+  DOCUMENT_REJECTED
+  DOCUMENT_REVERIFICATION_REQUIRED
+  DOCUMENT_RESTRICTED
+  DOCUMENT_ARCHIVED
+  DOCUMENT_RESTORED
+  DOCUMENT_DELETED
+  DOCUMENT_QUARANTINED
+  DOCUMENT_RELEASED
+  DOCUMENT_SHARE_REQUESTED
+  DOCUMENT_SHARE_APPROVED
+  DOCUMENT_SHARE_REJECTED
+  DOCUMENT_SHARE_REVOKED
+  DOCUMENT_SHARE_ACCESSED
+  DOCUMENT_REQUEST_CREATED
+  DOCUMENT_REQUEST_CANCELLED
+  DOCUMENT_SIGNATURE_REQUESTED
+  DOCUMENT_SIGNATURE_SIGNED
+  DOCUMENT_SIGNATURE_DECLINED
+  DOCUMENT_SIGNATURE_VOIDED
+  DOCUMENT_REDACTED
+  DOCUMENT_EXPORTED
+  DOCUMENT_PACKAGE_CREATED
+  DOCUMENT_INTEGRITY_ERROR
+  DOCUMENT_LEGAL_HOLD_PLACED
+  DOCUMENT_LEGAL_HOLD_LIFTED
+  DOCUMENT_TYPE_CONFIG_CHANGED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1361,6 +1407,16 @@ enum NotificationType {
   // STEP 25 - admin-only operational alerts
   COMMUNICATION_PROVIDER_ALERT
   COMMUNICATION_REVIEW_REQUIRED
+
+  // STEP 26 - document management
+  DOCUMENT_REQUESTED // applicant - a document has been requested of them
+  DOCUMENT_REVIEW_DECIDED // applicant - a document was approved / rejected / needs more information
+  DOCUMENT_EXPIRING_SOON // applicant - a document is expiring
+  DOCUMENT_REVERIFICATION_REQUIRED // applicant - a document must be re-uploaded
+  DOCUMENT_SHARE_REQUEST // applicant/admin - someone has asked to share a document with them, or a share needs approval
+  DOCUMENT_SIGNATURE_REQUEST // signer - a document is waiting for their signature
+  ADMIN_DOCUMENT_REVIEW_QUEUE // admin-only - a document needs staff review
+  ADMIN_DOCUMENT_SECURITY_ALERT // admin-only - a scan/tamper/quarantine event needs attention
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1437,6 +1493,7 @@ enum DataCategory {
   WORKFLOW_TASK_DATA
   GOVERNANCE_APPROVAL_DATA
   RISK_EVIDENCE // STEP 24 — risk cases, assessments and evidence; never auto-deleted while a case is open or a hold is active
+  DOCUMENT_RECORDS // STEP 26 — the general Document store (VERIFICATION_DOCUMENTS above stays the STEP 8/23 identity-checklist category)
 }
 
 enum RetentionAction {
@@ -5251,6 +5308,13 @@ enum SecurityEventType {
   PERMISSION_DENIED
   CONTACT_BYPASS_ATTEMPT
   NEW_DEVICE_SESSION
+
+  // ---------- STEP 26 — Secure Document Management ----------
+  DOCUMENT_UPLOAD_REJECTED // failed validation / repeated failed uploads
+  DOCUMENT_SCAN_SUSPICIOUS // security scanner flagged embedded script / polyglot signature
+  DOCUMENT_TAMPER_DETECTED // stored hash no longer matches the file's current hash
+  DOCUMENT_UNAUTHORIZED_ACCESS // an access/download was attempted without permission
+  DOCUMENT_SHARE_ANOMALY // repeated / unusual sharing attempts
 }
 
 enum SecurityIncidentControl {
@@ -7191,4 +7255,546 @@ model CommunicationCampaignRecipient {
 
   @@unique([campaignId, profileId])
   @@index([campaignId, status])
+}
+
+// ============================================================================
+// STEP 26 — Secure Document Management, Verification, E-Signature & Document
+// Lifecycle. A genuinely new, general-purpose document store for categories
+// that had no home (education/employment/income/family/address/legal/
+// agreement/consent/support/administrative/...). It does NOT replace or
+// migrate VerificationDocument/ProfileVerification (STEP 8/23's identity
+// checklist flow) or CaseEvidence (STEP 24) — those keep working unchanged.
+// Storage pattern mirrors document-storage.ts exactly (Vercel Blob +
+// application-layer AES-256-GCM; the raw blob URL never reaches the client).
+// Legal holds reuse the existing DataHold model (recordType "Document");
+// retention reuses RetentionActionLog; review/expiry work reuses AdminTask;
+// gated actions reuse ApprovalRequest (STEP 19); family grants reuse
+// FamilySharedRecord (type DOCUMENT, added above).
+// ============================================================================
+
+enum DocumentClassification {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  HIGHLY_SENSITIVE
+  RESTRICTED
+}
+
+enum DocumentOwnerType {
+  PROFILE
+  FAMILY_MEMBER
+  PROPOSAL
+  SUPPORT_CASE
+  RISK_CASE
+  PRIVACY_REQUEST
+  ADMIN
+  SYSTEM
+}
+
+enum DocumentStatus {
+  UPLOADING
+  UPLOADED
+  SCANNING
+  AVAILABLE
+  UNDER_REVIEW
+  VERIFIED
+  PARTIALLY_VERIFIED
+  REJECTED
+  EXPIRED
+  REVERIFICATION_REQUIRED
+  RESTRICTED
+  QUARANTINED
+  ARCHIVED
+  DELETED
+}
+
+enum DocumentUploaderType {
+  PROFILE
+  FAMILY_MEMBER
+  ADMIN
+  SYSTEM
+}
+
+enum DocumentScanStatus {
+  PENDING
+  SCANNING
+  CLEAN
+  INFECTED
+  SUSPICIOUS
+  SCAN_FAILED
+  QUARANTINED
+}
+
+enum DocumentQuarantineDecision {
+  PENDING
+  RELEASED
+  DESTROYED
+}
+
+enum DocumentShareRecipientType {
+  FAMILY_MEMBER
+  ADMIN
+  PROFILE
+}
+
+enum DocumentShareScope {
+  VIEW
+  DOWNLOAD
+}
+
+enum DocumentShareStatus {
+  REQUESTED
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  EXPIRED
+  REVOKED
+  REJECTED
+}
+
+enum DocumentRequestStatus {
+  DRAFT
+  SENT
+  VIEWED
+  UPLOADED
+  UNDER_REVIEW
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+enum DocumentSignatureStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PARTIALLY_SIGNED
+  SIGNED
+  DECLINED
+  EXPIRED
+  VOIDED
+  FAILED
+}
+
+enum DocumentSignatureRecipientStatus {
+  PENDING
+  SENT
+  VIEWED
+  SIGNED
+  DECLINED
+}
+
+enum DocumentAccessAction {
+  VIEW
+  PREVIEW
+  DOWNLOAD
+  SHARE
+  VERIFY
+  REJECT
+  APPROVE
+  REDACT
+  EXPORT
+  DELETE
+  RESTORE
+}
+
+// Admin-editable catalog (spec §2/§3) — never a Prisma enum, so a new category
+// or document type never needs a migration. Document.categoryKey/typeKey are
+// validated against these at write time (src/lib/documents/catalog.ts).
+model DocumentCategoryConfig {
+  id                    String                 @id @default(cuid())
+  key                   String                 @unique // e.g. IDENTITY, EDUCATION, LEGAL, SUPPORT
+  label                 String
+  active                Boolean                @default(true)
+  defaultClassification DocumentClassification @default(RESTRICTED)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  types DocumentTypeConfig[]
+
+  @@index([active])
+}
+
+model DocumentTypeConfig {
+  id                    String                 @id @default(cuid())
+  key                   String                 @unique // e.g. PASSPORT, NATIONAL_ID, DEGREE, CONSENT_FORM
+  label                 String
+  category              DocumentCategoryConfig @relation(fields: [categoryKey], references: [key])
+  categoryKey           String
+  defaultClassification DocumentClassification @default(RESTRICTED)
+  requiresExpiry        Boolean                @default(false)
+  acceptedMimeTypes     String                 @default("[]") // JSON array; empty = the global default allow-list
+  active                Boolean                @default(true)
+  // Never treat any type as universally mandatory here — that decision belongs to the
+  // feature that requests it (e.g. the STEP 8/23 verification checklist), not this catalog.
+  createdById           String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  documents Document[]
+
+  @@index([categoryKey, active])
+}
+
+model Document {
+  id           String @id @default(cuid())
+  documentCode String @unique // public identifier, LPP-DOC-######, distinct from `id`
+
+  ownerType DocumentOwnerType
+  ownerId   String // loose pointer — the record this document belongs to
+  profileId String? // convenience loose reference for filtering/queries when the owner resolves to an applicant; not a hard FK
+
+  type        DocumentTypeConfig @relation(fields: [typeKey], references: [key])
+  typeKey     String
+  categoryKey String
+
+  classification DocumentClassification @default(RESTRICTED)
+  status         DocumentStatus         @default(UPLOADING)
+
+  // ---------- current version (mirrors the latest DocumentVersion row) ----------
+  currentVersion         Int    @default(1)
+  secureStorageReference String // Vercel Blob key — never sent to the client
+  ivBase64               String
+  authTagBase64          String
+  mimeType               String
+  originalFilename       String // sanitized display name only, see safeFilename()
+  sizeBytes              Int
+  fileHash               String // SHA-256 of the plaintext bytes — tamper detection + duplicate detection
+
+  uploaderType DocumentUploaderType
+  uploaderId   String
+
+  // ---------- verification (spec §16) — columns on the row, like CommunicationLog's own status ----------
+  verificationStatus    DocumentVerificationStatus @default(NOT_SUBMITTED)
+  verificationMethod    String? // MANUAL | PROVIDER | OCR_ASSISTED
+  verificationProvider  String?
+  verificationReference String?
+  reviewedById          String?
+  reviewedAt            DateTime?
+  verificationReason    String? // neutral rejection-reason key, spec §19
+  verificationNotes     String?
+  verificationVersion   Int                        @default(1)
+
+  expiresAt      DateTime?
+  archivedAt     DateTime?
+  softDeletedAt  DateTime?
+  bodyRedactedAt DateTime? // set when retention/redaction removed the stored bytes (metadata kept)
+
+  proposalId String? // loose — set when this document was uploaded specifically for/about a proposal
+  caseId     String? // loose — set when this document is support/risk case evidence-adjacent
+  requestId  String? // loose — the DocumentRequest this upload satisfies, if any
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions          DocumentVersion[]
+  scans             DocumentSecurityScan[]
+  accessLogs        DocumentAccessLog[]
+  shares            DocumentShare[]
+  redactions        DocumentRedaction[]
+  verifications     DocumentVerificationEvent[]
+  signatureRequests DocumentSignatureRequest[]
+
+  @@index([ownerType, ownerId])
+  @@index([profileId, status])
+  @@index([typeKey])
+  @@index([categoryKey])
+  @@index([status])
+  @@index([classification])
+  @@index([expiresAt])
+  @@index([fileHash])
+  @@index([requestId])
+}
+
+enum DocumentVerificationStatus {
+  NOT_SUBMITTED
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  PARTIALLY_VERIFIED
+  REJECTED
+  REVERIFICATION_REQUIRED
+}
+
+// One row per replacement (spec §33/§34). The parent Document's live columns
+// always mirror whichever version is current — never overwritten in place.
+model DocumentVersion {
+  id              String   @id @default(cuid())
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId      String
+  version         Int
+  previousVersion Int?
+
+  secureStorageReference String
+  ivBase64               String
+  authTagBase64          String
+  mimeType               String
+  sizeBytes              Int
+  fileHash               String
+
+  uploaderType DocumentUploaderType
+  uploaderId   String
+  changeReason String?
+
+  scanStatus         DocumentScanStatus         @default(PENDING)
+  verificationStatus DocumentVerificationStatus @default(NOT_SUBMITTED)
+
+  createdAt DateTime @default(now())
+
+  @@unique([documentId, version])
+  @@index([documentId])
+}
+
+model DocumentSecurityScan {
+  id         String             @id @default(cuid())
+  document   Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  version    Int
+  status     DocumentScanStatus @default(PENDING)
+  scanner    String // "heuristic-v1" | a configured external provider key
+  findings   String             @default("[]") // JSON array of finding codes (never raw file content)
+  scannedAt  DateTime?
+  createdAt  DateTime           @default(now())
+
+  quarantine DocumentQuarantine?
+
+  @@index([documentId, version])
+  @@index([status])
+}
+
+model DocumentQuarantine {
+  id           String                     @id @default(cuid())
+  scan         DocumentSecurityScan       @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  scanId       String                     @unique
+  documentId   String
+  reason       String
+  decision     DocumentQuarantineDecision @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  decisionNote String?
+  createdAt    DateTime                   @default(now())
+
+  @@index([documentId])
+  @@index([decision])
+}
+
+// Per-document access timeline (spec §56) — also mirrored into the global
+// AuditLog via writeAudit() for the platform-wide feed.
+model DocumentAccessLog {
+  id            String               @id @default(cuid())
+  document      Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId    String
+  action        DocumentAccessAction
+  actorType     DocumentUploaderType // reuses PROFILE|FAMILY_MEMBER|ADMIN|SYSTEM
+  actorId       String
+  purpose       String?
+  result        String // ALLOWED | DENIED
+  denialReason  String?
+  ipHash        String?
+  userAgentHash String?
+  createdAt     DateTime             @default(now())
+
+  @@index([documentId, createdAt])
+  @@index([actorType, actorId])
+  @@index([action])
+}
+
+// Explicit, expiring sharing grant (spec §27-§29). Document/proposal/family
+// access never implies this — it is always a separate row.
+model DocumentShare {
+  id            String                     @id @default(cuid())
+  document      Document                   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId    String
+  recipientType DocumentShareRecipientType
+  recipientId   String
+  scope         DocumentShareScope         @default(VIEW)
+  purpose       String
+  status        DocumentShareStatus        @default(REQUESTED)
+  requestedById String
+  approvalId    String? // loose STEP 19 ApprovalRequest.id pointer
+  watermarked   Boolean                    @default(true)
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  revokedById   String?
+  revokeReason  String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  @@index([documentId, status])
+  @@index([recipientType, recipientId])
+  @@index([status, expiresAt])
+}
+
+// Admin -> applicant document requests (spec §37/§38).
+model DocumentRequest {
+  id                  String                @id @default(cuid())
+  requestCode         String                @unique // LPP-DREQ-######
+  typeKey             String
+  purpose             String
+  requestedFromType   DocumentUploaderType
+  requestedFromId     String
+  dueDate             DateTime?
+  priority            String                @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  instructions        String?
+  assignedToId        String?
+  status              DocumentRequestStatus @default(DRAFT)
+  resultingDocumentId String?
+  createdById         String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  events DocumentRequestEvent[]
+
+  @@index([requestedFromType, requestedFromId])
+  @@index([status])
+  @@index([assignedToId])
+}
+
+model DocumentRequestEvent {
+  id        String                @id @default(cuid())
+  request   DocumentRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId String
+  eventType String // SENT | VIEWED | UPLOADED | REVIEWED | REMINDED | CANCELLED | EXPIRED
+  actorType DocumentUploaderType?
+  actorId   String?
+  note      String?
+  createdAt DateTime              @default(now())
+
+  @@index([requestId, createdAt])
+}
+
+// Provider-neutral e-signature layer (spec §40-§43). Default provider is the
+// in-app LocalSignatureProvider — an authenticated acknowledgement, never
+// represented as a cryptographic/legally-binding signature unless a real,
+// legal-reviewed provider is configured behind this same interface.
+model DocumentSignatureRequest {
+  id                      String                  @id @default(cuid())
+  signCode                String                  @unique // LPP-SIGN-######
+  document                Document                @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId              String
+  provider                String                  @default("LOCAL")
+  status                  DocumentSignatureStatus @default(DRAFT)
+  requestedById           String
+  message                 String?
+  expiresAt               DateTime?
+  voidedAt                DateTime?
+  voidedById              String?
+  voidReason              String?
+  signedDocumentVersionId String? // loose pointer to the DocumentVersion produced once fully signed
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  recipients DocumentSignatureRecipient[]
+  events     DocumentSignatureEvent[]
+
+  @@index([documentId])
+  @@index([status])
+}
+
+model DocumentSignatureRecipient {
+  id            String                           @id @default(cuid())
+  request       DocumentSignatureRequest         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId     String
+  recipientType DocumentUploaderType
+  recipientId   String
+  order         Int                              @default(1)
+  status        DocumentSignatureRecipientStatus @default(PENDING)
+  viewedAt      DateTime?
+  signedAt      DateTime?
+  declinedAt    DateTime?
+  declineReason String?
+  signedName    String? // the typed full legal name captured at signing (LocalSignatureProvider)
+  ipHash        String?
+
+  @@unique([requestId, recipientType, recipientId])
+  @@index([requestId, status])
+}
+
+model DocumentSignatureEvent {
+  id            String                   @id @default(cuid())
+  request       DocumentSignatureRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId     String
+  eventType     String // SENT | VIEWED | SIGNED | DECLINED | VOIDED | EXPIRED
+  recipientType DocumentUploaderType?
+  recipientId   String?
+  documentHash  String? // the document's hash at the moment of this event — tamper evidence
+  createdAt     DateTime                 @default(now())
+
+  @@index([requestId, createdAt])
+}
+
+// Secure redaction (spec §49) — the original is never modified; this points
+// at the DocumentVersion the redacted derivative was stored as.
+model DocumentRedaction {
+  id              String   @id @default(cuid())
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId      String
+  sourceVersion   Int
+  redactedVersion Int // the DocumentVersion.version of the derivative
+  reason          String
+  regions         String // JSON array of {page,x,y,width,height} or "FULL_PAGE:n"
+  redactedById    String
+  approvalId      String?
+  createdAt       DateTime @default(now())
+
+  @@index([documentId])
+}
+
+// Review-history trail for Document.verificationStatus (spec §17 "review history").
+model DocumentVerificationEvent {
+  id         String   @id @default(cuid())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  action     String // SUBMITTED | APPROVED | REJECTED | REQUEST_MORE_INFORMATION | REQUEST_REUPLOAD | MARK_REVERIFICATION_REQUIRED | ESCALATE | RESTRICT
+  reasonKey  String? // neutral configurable reason, spec §19
+  note       String?
+  actorId    String?
+  approvalId String? // set when this action went through the STEP 19 gate
+  createdAt  DateTime @default(now())
+
+  @@index([documentId, createdAt])
+}
+
+// Permission/consent/hold-checked manifest (spec §51) — not a real .zip (no
+// zip dependency in this repo); each item resolves to its own signed access
+// ticket when fetched, never a bundled file.
+model DocumentPackage {
+  id          String            @id @default(cuid())
+  packageCode String            @unique // LPP-DOCPKG-######
+  kind        String // VERIFICATION | PROPOSAL | SUPPORT_CASE | COMPLIANCE
+  ownerType   DocumentOwnerType
+  ownerId     String
+  createdById String
+  purpose     String
+  expiresAt   DateTime?
+  createdAt   DateTime          @default(now())
+
+  items DocumentPackageItem[]
+
+  @@index([ownerType, ownerId])
+}
+
+model DocumentPackageItem {
+  id            String          @id @default(cuid())
+  package       DocumentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId     String
+  documentId    String
+  included      Boolean         @default(true)
+  excludeReason String?
+
+  @@unique([packageId, documentId])
+}
+
+// OCR is disabled by default (no vendor configured — see src/lib/documents/providers/noop-ocr-provider.ts).
+// This table exists so a real provider has somewhere to write to later; output is ALWAYS treated as
+// unverified pending human review and is never written to Document.verificationStatus directly.
+model DocumentOcrResult {
+  id            String   @id @default(cuid())
+  documentId    String
+  provider      String
+  extractedText String?
+  fields        String   @default("{}") // JSON
+  detectedType  String?
+  createdAt     DateTime @default(now())
+
+  @@index([documentId])
 }

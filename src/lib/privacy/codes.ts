@@ -41,7 +41,11 @@ export type SequencePrefix =
   | "REPORT"
   | "CTPL"
   | "THR"
-  | "CAMP";
+  | "CAMP"
+  | "DOC"
+  | "DREQ"
+  | "SIGN"
+  | "DOCPKG";
 
 export async function nextSequenceCode(prefix: SequencePrefix): Promise<string> {
   const counter = await prisma.sequenceCounter.upsert({
