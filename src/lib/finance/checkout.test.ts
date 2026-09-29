@@ -22,6 +22,7 @@ vi.mock("@/lib/finance/providers/registry", () => ({
 }));
 vi.mock("@/lib/finance/rollout", () => ({
   assertPaymentsAvailable: vi.fn(async () => undefined),
+  getPaymentFeatureFlags: vi.fn(async () => ({ couponsEnabled: true })),
   PaymentsUnavailableError: class PaymentsUnavailableError extends Error {},
 }));
 vi.mock("@/lib/prisma", () => ({

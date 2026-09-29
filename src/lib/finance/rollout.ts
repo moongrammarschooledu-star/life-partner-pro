@@ -30,6 +30,15 @@ export interface PaymentFeatureFlags {
   betaEnabled: boolean;
   publicCheckoutEnabled: boolean;
   providerWebhooksEnabled: boolean;
+  // STEP 27 §61 — real kill switches (renewals/coupons/referrals/
+  // promotions/credits), same AppSettings-booleans-through-one-function
+  // pattern as every flag above. "Disable a specific package" needs no
+  // separate switch — Package.status = INACTIVE already covers it.
+  renewalsEnabled: boolean;
+  couponsEnabled: boolean;
+  referralsEnabled: boolean;
+  promotionsEnabled: boolean;
+  creditsEnabled: boolean;
 }
 
 export async function getPaymentFeatureFlags(): Promise<PaymentFeatureFlags & { rolloutStage: PaymentRolloutStage }> {
@@ -44,6 +53,11 @@ export async function getPaymentFeatureFlags(): Promise<PaymentFeatureFlags & { 
     betaEnabled: settings?.betaEnabled ?? false,
     publicCheckoutEnabled: settings?.publicCheckoutEnabled ?? false,
     providerWebhooksEnabled: settings?.providerWebhooksEnabled ?? true,
+    renewalsEnabled: settings?.renewalsEnabled ?? true,
+    couponsEnabled: settings?.couponsEnabled ?? true,
+    referralsEnabled: settings?.referralsEnabled ?? true,
+    promotionsEnabled: settings?.promotionsEnabled ?? true,
+    creditsEnabled: settings?.creditsEnabled ?? true,
   };
 }
 

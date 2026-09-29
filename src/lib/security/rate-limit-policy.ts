@@ -50,6 +50,8 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "my-communications-reply": { limit: 20, windowMs: 60_000 },
   "my-documents-upload": { limit: 10, windowMs: 60_000 },
   "my-documents-share-request": { limit: 10, windowMs: 60_000 },
+  "my-referrals-link": { limit: 5, windowMs: 60_000 },
+  "my-coupons-validate": { limit: 20, windowMs: 60_000 },
 };
 
 const CACHE_TTL_MS = 30_000;

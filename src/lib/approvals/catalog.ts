@@ -93,6 +93,10 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   PAYMENT_ROLLOUT: { label: "Change payment rollout stage", domain: "FINANCE", sourceType: "PAYMENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["FINANCE_MANAGER", "SUPER_ADMIN"] },
   PAYMENT_DISABLE: { label: "Disable payments (kill switch)", domain: "FINANCE", sourceType: "PAYMENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["FINANCE_MANAGER", "SUPER_ADMIN"] },
   PROVIDER_CONFIGURATION_CHANGE: { label: "Change payment provider configuration", domain: "FINANCE", sourceType: "PAYMENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_4", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  // ---------- STEP 27 ----------
+  PACKAGE_VERSION_ACTIVATION: { label: "Activate a new package version (feature/limit set change)", domain: "FINANCE", sourceType: "PAYMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["FINANCE_MANAGER", "SUPER_ADMIN"] },
+  PROMOTION_APPROVAL: { label: "Approve a large/high-cost promotion", domain: "FINANCE", sourceType: "PAYMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["FINANCE_MANAGER", "SUPER_ADMIN"] },
+  REFERRAL_REWARD_CONFIG: { label: "Configure or change referral reward rules", domain: "FINANCE", sourceType: "PAYMENT", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["FINANCE_MANAGER", "SUPER_ADMIN"] },
 
   // ---------- ADMINISTRATION ----------
   ROLE_ASSIGNMENT: { label: "Assign an admin role", domain: "ADMINISTRATION", sourceType: "ADMIN_USER", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_4", defaultAllowedRoles: ["SUPER_ADMIN"] },

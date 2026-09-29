@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { isValidPaymentStatusTransition, isValidOrderStatusTransition, isValidRefundStatusTransition, isValidSubscriptionStatusTransition, isValidRolloutTransition } from "./status-transitions";
+import {
+  isValidPaymentStatusTransition,
+  isValidOrderStatusTransition,
+  isValidRefundStatusTransition,
+  isValidSubscriptionStatusTransition,
+  isValidRolloutTransition,
+  isValidReferralStatusTransition,
+  isValidCouponRedemptionTransition,
+  isValidPromotionLikeStatusTransition,
+  isValidPackageVersionStatusTransition,
+} from "./status-transitions";
 
 describe("isValidPaymentStatusTransition", () => {
   it("allows the normal happy path", () => {
@@ -105,5 +115,74 @@ describe("isValidRolloutTransition", () => {
   it("rejects a no-op transition to the same stage", () => {
     expect(isValidRolloutTransition("PRODUCTION", "PRODUCTION")).toBe(false);
     expect(isValidRolloutTransition("DISABLED", "DISABLED")).toBe(false);
+  });
+});
+
+// ---------- STEP 27 ----------
+
+describe("isValidReferralStatusTransition", () => {
+  it("allows the normal qualifying path", () => {
+    expect(isValidReferralStatusTransition("PENDING", "LINKED")).toBe(true);
+    expect(isValidReferralStatusTransition("LINKED", "QUALIFIED")).toBe(true);
+    expect(isValidReferralStatusTransition("QUALIFIED", "REWARDED")).toBe(true);
+  });
+  it("allows a review-required detour back to QUALIFIED or to REJECTED", () => {
+    expect(isValidReferralStatusTransition("QUALIFIED", "REFERRAL_REVIEW_REQUIRED")).toBe(true);
+    expect(isValidReferralStatusTransition("REFERRAL_REVIEW_REQUIRED", "QUALIFIED")).toBe(true);
+    expect(isValidReferralStatusTransition("REFERRAL_REVIEW_REQUIRED", "REJECTED")).toBe(true);
+  });
+  it("rejects skipping straight from PENDING to REWARDED", () => {
+    expect(isValidReferralStatusTransition("PENDING", "REWARDED")).toBe(false);
+  });
+  it("rejects any transition out of a terminal state", () => {
+    expect(isValidReferralStatusTransition("REWARDED", "QUALIFIED")).toBe(false);
+    expect(isValidReferralStatusTransition("REJECTED", "QUALIFIED")).toBe(false);
+  });
+});
+
+describe("isValidCouponRedemptionTransition", () => {
+  it("allows a reservation to be redeemed, released, or to expire", () => {
+    expect(isValidCouponRedemptionTransition("RESERVED", "REDEEMED")).toBe(true);
+    expect(isValidCouponRedemptionTransition("RESERVED", "RELEASED")).toBe(true);
+    expect(isValidCouponRedemptionTransition("RESERVED", "EXPIRED")).toBe(true);
+  });
+  it("allows a redeemed coupon to be reversed (refund/cancellation)", () => {
+    expect(isValidCouponRedemptionTransition("REDEEMED", "REVERSED")).toBe(true);
+  });
+  it("rejects re-redeeming an already-redeemed or released/expired/reversed row", () => {
+    expect(isValidCouponRedemptionTransition("REDEEMED", "REDEEMED")).toBe(false);
+    expect(isValidCouponRedemptionTransition("RELEASED", "REDEEMED")).toBe(false);
+    expect(isValidCouponRedemptionTransition("EXPIRED", "REDEEMED")).toBe(false);
+    expect(isValidCouponRedemptionTransition("REVERSED", "REDEEMED")).toBe(false);
+  });
+});
+
+describe("isValidPromotionLikeStatusTransition", () => {
+  it("allows the normal lifecycle", () => {
+    expect(isValidPromotionLikeStatusTransition("DRAFT", "ACTIVE")).toBe(true);
+    expect(isValidPromotionLikeStatusTransition("ACTIVE", "PAUSED")).toBe(true);
+    expect(isValidPromotionLikeStatusTransition("PAUSED", "ACTIVE")).toBe(true);
+    expect(isValidPromotionLikeStatusTransition("ACTIVE", "ENDED")).toBe(true);
+    expect(isValidPromotionLikeStatusTransition("ENDED", "ARCHIVED")).toBe(true);
+  });
+  it("rejects reactivating an ended or archived promotion", () => {
+    expect(isValidPromotionLikeStatusTransition("ENDED", "ACTIVE")).toBe(false);
+    expect(isValidPromotionLikeStatusTransition("ARCHIVED", "ACTIVE")).toBe(false);
+  });
+});
+
+describe("isValidPackageVersionStatusTransition", () => {
+  it("allows the normal approval path", () => {
+    expect(isValidPackageVersionStatusTransition("DRAFT", "PENDING_APPROVAL")).toBe(true);
+    expect(isValidPackageVersionStatusTransition("PENDING_APPROVAL", "APPROVED")).toBe(true);
+    expect(isValidPackageVersionStatusTransition("APPROVED", "ACTIVE")).toBe(true);
+    expect(isValidPackageVersionStatusTransition("ACTIVE", "SUPERSEDED")).toBe(true);
+  });
+  it("rejects skipping approval and going straight to ACTIVE", () => {
+    expect(isValidPackageVersionStatusTransition("DRAFT", "ACTIVE")).toBe(false);
+  });
+  it("rejects reviving a rejected or superseded version", () => {
+    expect(isValidPackageVersionStatusTransition("REJECTED", "PENDING_APPROVAL")).toBe(false);
+    expect(isValidPackageVersionStatusTransition("SUPERSEDED", "ACTIVE")).toBe(false);
   });
 });

@@ -420,7 +420,18 @@ export type Permission =
   | "verification:documents:review"
   | "verification:documents:approve"
   | "verification:documents:reject"
-  | "verification:documents:reverify";
+  | "verification:documents:reverify"
+  // ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+  | "finance:entitlements:view"
+  | "finance:entitlements:manage"
+  | "finance:credits:view"
+  | "finance:credits:manage"
+  | "finance:pricing:view"
+  | "referrals:view"
+  | "referrals:manage"
+  | "referrals:review"
+  | "promotions:view"
+  | "promotions:manage";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -581,6 +592,17 @@ const FINANCE_ALL_PERMISSIONS: Permission[] = [
   "finance:webhooks:view",
   "sensitive:finance:view",
   "sensitive:finance:export",
+  // ---------- STEP 27 ----------
+  "finance:entitlements:view",
+  "finance:entitlements:manage",
+  "finance:credits:view",
+  "finance:credits:manage",
+  "finance:pricing:view",
+  "referrals:view",
+  "referrals:manage",
+  "referrals:review",
+  "promotions:view",
+  "promotions:manage",
 ];
 
 const SYSTEM_ALL_PERMISSIONS: Permission[] = [

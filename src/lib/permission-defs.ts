@@ -367,6 +367,18 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "verification:documents:approve": "Approve a document as part of identity verification",
   "verification:documents:reject": "Reject a document as part of identity verification",
   "verification:documents:reverify": "Mark a document as needing re-verification",
+
+  // ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+  "finance:entitlements:view": "View feature entitlement definitions and the entitlement matrix",
+  "finance:entitlements:manage": "Edit package entitlements, the feature catalog, and grant/revoke entitlement overrides",
+  "finance:credits:view": "View member service-credit balances and transactions",
+  "finance:credits:manage": "Grant, refund, or adjust member service credits",
+  "finance:pricing:view": "View pricing, package versions, and promotion configuration",
+  "referrals:view": "View referral programs, codes, and referral records",
+  "referrals:manage": "Create/edit referral programs and reward configuration",
+  "referrals:review": "Resolve referrals flagged for fraud/eligibility review",
+  "promotions:view": "View promotional campaigns",
+  "promotions:manage": "Create/edit/activate promotional campaigns",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

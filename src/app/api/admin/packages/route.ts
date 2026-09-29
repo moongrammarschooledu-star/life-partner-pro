@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { nextSequenceCode } from "@/lib/privacy/codes";
-import type { BillingType } from "@prisma/client";
+import type { BillingType, PackageType } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -24,8 +24,8 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const admin = await requireAdmin("finance:packages:manage");
-    const { name, description, billingType, durationDays, trialDays, amountMinor, currencyCode, refundPolicyNote } = (await req.json()) as {
-      name?: string; description?: string; billingType?: BillingType; durationDays?: number | null; trialDays?: number;
+    const { name, description, billingType, packageType, durationDays, trialDays, amountMinor, currencyCode, refundPolicyNote } = (await req.json()) as {
+      name?: string; description?: string; billingType?: BillingType; packageType?: PackageType; durationDays?: number | null; trialDays?: number;
       amountMinor?: number; currencyCode?: string; refundPolicyNote?: string;
     };
 
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
         name: name.trim(),
         description: description.trim(),
         billingType,
+        packageType: packageType ?? "SUBSCRIPTION",
         durationDays: durationDays ?? null,
         trialDays: trialDays ?? 0,
         refundPolicyNote: refundPolicyNote ?? null,

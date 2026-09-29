@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { getProvider } from "@/lib/finance/providers/registry";
 import { generateInvoice } from "@/lib/finance/invoice";
-import { activateSubscription } from "@/lib/finance/subscription";
+import { activateSubscription, isEligibleForTrial } from "@/lib/finance/subscription";
+import { evaluateQualifyingEvent } from "@/lib/referrals/referral-service";
 import { notifyPaymentSuccess, notifyPaymentFailed } from "@/lib/notifications/events";
 import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { getPaymentFeatureFlags } from "@/lib/finance/rollout";
@@ -90,7 +91,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
           const item = payment.order.items[0];
           if (item) {
             const pkg = await prisma.package.findUnique({ where: { id: item.packageId } });
-            if (pkg) await activateSubscription({ profileId: payment.profileId, packageId: pkg.id, billingType: pkg.billingType, durationDays: pkg.durationDays, trialDays: pkg.trialDays });
+            if (pkg) {
+              // STEP 27 §19 — re-checked here (not trusted from checkout time)
+              // since eligibility could theoretically change between checkout
+              // and payment confirmation; the check itself is deterministic.
+              const trialDays = pkg.trialDays > 0 && (await isEligibleForTrial(payment.profileId, pkg.id)) ? pkg.trialDays : 0;
+              await activateSubscription({
+                profileId: payment.profileId,
+                packageId: pkg.id,
+                billingType: pkg.billingType,
+                durationDays: pkg.durationDays,
+                trialDays,
+                packagePriceId: item.packagePriceId,
+                packageVersionId: item.packageVersionId,
+              });
+              // STEP 27 §36 — FIRST_PAYMENT is the most common qualifying
+              // event; REGISTRATION already fires at account creation
+              // (not from here) and VERIFICATION_COMPLETE from the
+              // verification flow — neither belongs in this webhook.
+              await evaluateQualifyingEvent(payment.profileId, "FIRST_PAYMENT").catch(() => undefined);
+            }
           }
         } else if (event.status === "FAILED" && payment.status !== "FAILED") {
           await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failedAt: new Date() } });

@@ -77,6 +77,7 @@ enum AssignmentResourceType {
   ADMIN_TASK
   ADMIN_USER
   DOCUMENT
+  REFERRAL
 }
 
 // STEP 18 — CRITICAL added to match CasePriority's 5-value scale exactly.
@@ -177,6 +178,10 @@ enum AdminTaskType {
   DOCUMENT_REVERIFICATION_TASK // DOCUMENT — a document expired and needs re-upload + review
   DOCUMENT_SECURITY_TASK // DOCUMENT — a scan/quarantine/tamper finding needs review
   DOCUMENT_SHARE_APPROVAL_TASK // DOCUMENT — a document share request needs approval
+
+  // ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+  REFERRAL_REVIEW // REFERRAL — a referral needs fraud/eligibility review
+  COUPON_ISSUE_REVIEW // PAYMENT — a coupon abuse signal needs review
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -1183,6 +1188,39 @@ enum AuditAction {
   DOCUMENT_LEGAL_HOLD_PLACED
   DOCUMENT_LEGAL_HOLD_LIFTED
   DOCUMENT_TYPE_CONFIG_CHANGED
+
+  // ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+  // PACKAGE_CREATED/UPDATED/PRICE_CHANGED, COUPON_CREATED/UPDATED,
+  // SUBSCRIPTION_CREATED/RENEWED/CANCELLED/EXPIRED, and ENTITLEMENT_GRANTED
+  // already exist above (STEP 14) and are reused as-is (ENTITLEMENT_GRANTED
+  // now also covers EntitlementOverride grants, not just package activation);
+  // these are the genuinely new ones.
+  PACKAGE_ACTIVATED
+  PACKAGE_ARCHIVED
+  PACKAGE_VERSION_CREATED
+  PACKAGE_VERSION_ACTIVATED
+  FEATURE_DEFINITION_CHANGED
+  ENTITLEMENT_REVOKED
+  ENTITLEMENT_EXPIRED
+  ENTITLEMENT_OVERRIDE
+  USAGE_CONSUMED
+  USAGE_REFUNDED
+  USAGE_RESET
+  SUBSCRIPTION_CHANGED
+  COUPON_REDEEMED
+  COUPON_REVOKED
+  PROMOTION_CREATED
+  PROMOTION_ACTIVATED
+  PROMOTION_STATUS_CHANGED
+  REFERRAL_PROGRAM_CREATED
+  REFERRAL_PROGRAM_STATUS_CHANGED
+  REFERRAL_CREATED
+  REFERRAL_QUALIFIED
+  REFERRAL_REWARDED
+  REFERRAL_REVERSED
+  CREDIT_GRANTED
+  CREDIT_USED
+  CREDIT_REVOKED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1417,6 +1455,16 @@ enum NotificationType {
   DOCUMENT_SIGNATURE_REQUEST // signer - a document is waiting for their signature
   ADMIN_DOCUMENT_REVIEW_QUEUE // admin-only - a document needs staff review
   ADMIN_DOCUMENT_SECURITY_ALERT // admin-only - a scan/tamper/quarantine event needs attention
+
+  // ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+  TRIAL_STARTED
+  TRIAL_ENDING
+  PACKAGE_CHANGED
+  COUPON_APPLIED
+  COUPON_EXPIRED
+  REFERRAL_REWARD_GRANTED
+  ENTITLEMENT_EXPIRED
+  ADMIN_REFERRAL_REVIEW_REQUIRED // admin-only - a referral needs fraud/eligibility review
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1640,6 +1688,10 @@ enum RefundType {
 enum DiscountType {
   PERCENTAGE
   FIXED_AMOUNT
+  // STEP 27 §30
+  FREE_TRIAL
+  FREE_FEATURE
+  CREDIT
 }
 
 enum ManualPaymentStatus {
@@ -1773,6 +1825,12 @@ model AdminUser {
   reconciliationRunsStarted ReconciliationRun[]
   bankAccountsCreated       BankAccount[]
   paymentRolloutEvents      PaymentRolloutEvent[]
+
+  // ---------- STEP 27 — Membership, Entitlements, Coupons & Referrals ----------
+  packageVersionsCreated       PackageVersion[]      @relation("PackageVersionCreatedBy")
+  packageVersionsApproved      PackageVersion[]      @relation("PackageVersionApprovedBy")
+  entitlementOverridesCreated  EntitlementOverride[] @relation("EntitlementOverrideCreatedBy")
+  entitlementOverridesApproved EntitlementOverride[] @relation("EntitlementOverrideApprovedBy")
 
   // ---------- Workflow & Task Management (STEP 18) ----------
   tasksCreated                AdminTask[]         @relation("AdminTaskCreator")
@@ -2835,6 +2893,14 @@ model AppSettings {
   betaEnabled                      Boolean             @default(false)
   publicCheckoutEnabled            Boolean             @default(false)
   providerWebhooksEnabled          Boolean             @default(true)
+  // STEP 27 — membership/entitlements kill switches, same open AppSettings
+  // pattern as the payment flags above (never SystemControl.emergency's
+  // fixed Zod shape, which would need a migration per new switch).
+  renewalsEnabled                  Boolean             @default(true)
+  couponsEnabled                   Boolean             @default(true)
+  referralsEnabled                 Boolean             @default(true)
+  promotionsEnabled                Boolean             @default(true)
+  creditsEnabled                   Boolean             @default(true)
   paymentBetaPercentage            Int                 @default(0)
   paymentBetaAllowedProfileIds     Json?
   paymentBetaAllowedCountries      Json?
@@ -4521,27 +4587,103 @@ model BankAccount {
 }
 
 model Package {
-  id               String      @id @default(cuid())
-  packageCode      String      @unique // LPP-PKG-######
-  name             String
-  description      String
-  billingType      BillingType
-  durationDays     Int? // null for ONE_TIME
-  active           Boolean     @default(true)
-  displayOrder     Int         @default(0)
-  trialDays        Int         @default(0)
-  refundPolicyNote String?
-  createdBy        AdminUser?  @relation(fields: [createdById], references: [id])
-  createdById      String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  id                    String                @id @default(cuid())
+  packageCode           String                @unique // LPP-PKG-######
+  name                  String
+  description           String
+  billingType           BillingType
+  durationDays          Int? // null for ONE_TIME
+  active                Boolean               @default(true) // STEP 27 — derived mirror of status === ACTIVE, kept so existing `!pkg.active` guards never change
+  displayOrder          Int                   @default(0)
+  trialDays             Int                   @default(0)
+  // STEP 27 — repeat-trial abuse guard scope (spec §19); default PER_ACCOUNT
+  // matches the pre-STEP-27 unconditional-per-subscription behavior most closely.
+  trialEligibilityScope TrialEligibilityScope @default(PER_ACCOUNT)
+  refundPolicyNote      String?
+  // STEP 27 §2/§4 — package type/lifecycle status, additive. `active` above
+  // stays in sync (written by the same code path) so nothing else has to change.
+  packageType           PackageType           @default(SUBSCRIPTION)
+  status                PackageStatus         @default(ACTIVE)
+  currentVersion        Int                   @default(1)
+  createdBy             AdminUser?            @relation(fields: [createdById], references: [id])
+  createdById           String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   prices        PackagePrice[]
   entitlements  PackageEntitlement[]
   orderItems    OrderItem[]
   subscriptions Subscription[]
+  versions      PackageVersion[]
+  promotions    PromotionPackage[]
 
   @@index([active, displayOrder])
+  @@index([status])
+}
+
+enum PackageType {
+  FREE
+  ONE_TIME
+  SUBSCRIPTION
+  TRIAL
+  PROMOTIONAL
+  CUSTOM
+  ENTERPRISE
+}
+
+enum PackageStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  SCHEDULED
+  EXPIRED
+  ARCHIVED
+}
+
+enum TrialEligibilityScope {
+  PER_PACKAGE
+  PER_ACCOUNT
+}
+
+// STEP 27 §5 — the real "never silently change an active package" mechanism;
+// PackagePrice (below) only versions price. One row per activated change to
+// a package's feature/limit set, with maker-checker approval for anything
+// beyond a pure price change (see APPROVAL_CATALOG's PACKAGE_VERSION_ACTIVATION).
+model PackageVersion {
+  id               String               @id @default(cuid())
+  versionCode      String               @unique // LPP-PKGV-######
+  package          Package              @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId        String
+  versionNumber    Int
+  previousVersion  Int?
+  name             String
+  description      String
+  packageType      PackageType
+  priceMinor       Int
+  currencyCode     String
+  featuresSnapshot Json // denormalized PackageEntitlement rows at the time of this version
+  limitsSnapshot   Json
+  changeReason     String
+  status           PackageVersionStatus @default(DRAFT)
+  createdBy        AdminUser?           @relation("PackageVersionCreatedBy", fields: [createdById], references: [id])
+  createdById      String?
+  approvedBy       AdminUser?           @relation("PackageVersionApprovedBy", fields: [approvedById], references: [id])
+  approvedById     String?
+  effectiveAt      DateTime?
+  createdAt        DateTime             @default(now())
+
+  subscriptions Subscription[]
+
+  @@index([packageId, versionNumber])
+}
+
+enum PackageVersionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  SUPERSEDED
+  REJECTED
 }
 
 // Append-only (spec §46) — a price "change" is a new row, never an update to
@@ -4559,6 +4701,8 @@ model PackagePrice {
   active        Boolean  @default(true)
   createdById   String?
   createdAt     DateTime @default(now())
+
+  subscriptions Subscription[]
 
   @@index([packageId, effectiveFrom])
 }
@@ -4585,6 +4729,18 @@ model Subscription {
   profileId              String
   package                Package             @relation(fields: [packageId], references: [id])
   packageId              String
+  // STEP 27 §1/§23 — the exact price/version this subscription was created
+  // under, so a later package/price change never retroactively alters an
+  // existing subscriber's terms. Nullable for backward compat with rows
+  // created before STEP 27; entitlement resolution falls back to the live
+  // package when null.
+  packagePrice           PackagePrice?       @relation(fields: [packagePriceId], references: [id])
+  packagePriceId         String?
+  packageVersion         PackageVersion?     @relation(fields: [packageVersionId], references: [id])
+  packageVersionId       String?
+  // STEP 27 §23 — a scheduled (NEXT_CYCLE) package change, applied by the
+  // renewal tick rather than immediately.
+  pendingPackageId       String?
   provider               PaymentProviderName
   providerSubscriptionId String?
   status                 SubscriptionStatus  @default(PENDING)
@@ -4595,6 +4751,8 @@ model Subscription {
   trialEndsAt            DateTime?
   cancelledAt            DateTime?
   cancellationReason     String?
+  // STEP 27 §22 — audit/notification clarity only, no new state machine.
+  cancelInitiatedBy      String? // "USER" | "ADMIN" | "PROVIDER"
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
 
@@ -4644,18 +4802,19 @@ model Order {
 }
 
 model OrderItem {
-  id             String  @id @default(cuid())
-  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId        String
-  package        Package @relation(fields: [packageId], references: [id])
-  packageId      String
-  packagePriceId String? // snapshot reference only, not a live FK dependency for amounts
-  description    String
-  quantity       Int     @default(1)
-  unitPriceMinor Int
-  discountMinor  Int     @default(0)
-  taxMinor       Int     @default(0)
-  totalMinor     Int
+  id               String  @id @default(cuid())
+  order            Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId          String
+  package          Package @relation(fields: [packageId], references: [id])
+  packageId        String
+  packagePriceId   String? // snapshot reference only, not a live FK dependency for amounts
+  packageVersionId String? // STEP 27 §47 — snapshot reference only, same convention as packagePriceId
+  description      String
+  quantity         Int     @default(1)
+  unitPriceMinor   Int
+  discountMinor    Int     @default(0)
+  taxMinor         Int     @default(0)
+  totalMinor       Int
 
   @@index([orderId])
 }
@@ -4818,39 +4977,75 @@ model Refund {
 // Spec §20/§21 — a Coupon is a Discount that requires a redeemable code;
 // discountCode is the internal admin-facing id, code is what a user types.
 model Coupon {
-  id                   String       @id @default(cuid())
-  discountCode         String       @unique // LPP-DISC-######
-  code                 String       @unique // e.g. "WELCOME10"
-  description          String?
-  discountType         DiscountType
-  discountValue        Int // percent (0-100) or fixed minor-unit amount depending on discountType
-  minPurchaseMinor     Int?
-  maxDiscountMinor     Int?
-  startDate            DateTime?
-  endDate              DateTime?
-  usageLimit           Int?
-  perUserLimit         Int?
-  applicablePackageIds Json? // array of Package ids; null = all packages
-  active               Boolean      @default(true)
-  createdBy            AdminUser?   @relation(fields: [createdById], references: [id])
-  createdById          String?
-  createdAt            DateTime     @default(now())
+  id                          String       @id @default(cuid())
+  discountCode                String       @unique // LPP-DISC-######
+  code                        String       @unique // e.g. "WELCOME10"
+  description                 String?
+  discountType                DiscountType
+  discountValue               Int // percent (0-100) or fixed minor-unit amount depending on discountType
+  minPurchaseMinor            Int?
+  maxDiscountMinor            Int?
+  startDate                   DateTime?
+  endDate                     DateTime?
+  usageLimit                  Int?
+  perUserLimit                Int?
+  applicablePackageIds        Json? // array of Package ids; null = all packages
+  active                      Boolean      @default(true)
+  // STEP 27 §31 — additive coupon conditions; null/false on any of these
+  // means "unrestricted on that axis", matching applicablePackageIds' own
+  // convention above. See src/lib/finance/coupon.ts's fail-closed rule: if
+  // the column is set but the caller didn't supply the matching input, the
+  // coupon is rejected rather than silently treated as unrestricted.
+  currencyCode                String?
+  allowedCountries            Json? // array of ISO country codes; null = any
+  firstTimeUserOnly           Boolean      @default(false)
+  allowedSubscriptionTypes    Json? // array of PackageType values; null = any
+  campaignKey                 String?
+  requiresReferralEligibility Boolean      @default(false)
+  // STEP 27 §30 — dispatch target for discountType=FREE_FEATURE (an
+  // EntitlementOverride grant, not a checkout price reduction); for
+  // FREE_TRIAL/CREDIT, discountValue itself is reinterpreted as trial-days
+  // / credit-minor-amount respectively — see src/lib/finance/coupon.ts.
+  freeFeatureKey              String?
+  createdBy                   AdminUser?   @relation(fields: [createdById], references: [id])
+  createdById                 String?
+  createdAt                   DateTime     @default(now())
 
   redemptions CouponRedemption[]
 }
 
 model CouponRedemption {
-  id                   String   @id @default(cuid())
-  coupon               Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  id                   String                 @id @default(cuid())
+  coupon               Coupon                 @relation(fields: [couponId], references: [id], onDelete: Cascade)
   couponId             String
-  profile              Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile              Profile                @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId            String
-  orderId              String
+  // STEP 27 §34 — nullable so a RESERVED redemption can exist before the
+  // Order it will attach to is created (e.g. a provider-hosted checkout
+  // redirect flow). REDEEMED rows always have one.
+  orderId              String?
   discountAppliedMinor Int
-  redeemedAt           DateTime @default(now())
+  status               CouponRedemptionStatus @default(REDEEMED)
+  reservedAt           DateTime?
+  expiresAt            DateTime?
+  redeemedAt           DateTime               @default(now())
 
   @@unique([couponId, orderId])
   @@index([couponId, profileId])
+  @@index([couponId, status])
+}
+
+// STEP 27 §34 — a reservation and its eventual redemption are the SAME row
+// transitioning status, never two rows. resolveCouponForOrder's usage-count
+// queries filter to REDEEMED only, so a cancelled/reversed/expired
+// redemption never counts toward usageLimit/perUserLimit (closes the
+// cancel-and-retry coupon-abuse loophole, spec §33).
+enum CouponRedemptionStatus {
+  RESERVED
+  REDEEMED
+  RELEASED
+  REVERSED
+  EXPIRED
 }
 
 // Rate stored in basis points (1/100 of a percent, e.g. 1700 = 17.00%) to
@@ -4887,6 +5082,330 @@ model FeatureUsage {
   updatedAt      DateTime @updatedAt
 
   @@unique([profileId, featureKey, periodStart])
+}
+
+// =====================================================================
+// STEP 27 — Membership, Packages, Feature Entitlements, Coupons, Referral
+// & Revenue Growth Management. Extends STEP 14's payment foundation above
+// (Package/PackagePrice/PackageEntitlement/Subscription/Coupon/
+// CouponRedemption/FeatureUsage/TaxRule) — see the REUSE/EXTEND/NEW ledger
+// in the plan for what this deliberately does NOT duplicate.
+// =====================================================================
+
+// STEP 27 §6 — admin-configurable feature registry, never an enum, mirrors
+// DocumentCategoryConfig/DocumentTypeConfig exactly (src/lib/documents/catalog.ts).
+// PackageEntitlement.featureKey stays free-text; src/lib/finance/catalog.ts
+// validates writes against this table.
+model FeatureDefinition {
+  id             String           @id @default(cuid())
+  key            String           @unique // e.g. PROFILE_CREATE, MATCHING, AI_ASSISTANCE, DOCUMENT_UPLOAD
+  label          String
+  description    String?
+  category       String? // free-text grouping for the admin UI, e.g. "Matching", "AI"
+  usageLimitType FeatureLimitType @default(UNLIMITED)
+  active         Boolean          @default(true)
+  createdById    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([active])
+}
+
+enum FeatureLimitType {
+  UNLIMITED
+  PER_DAY
+  PER_WEEK
+  PER_MONTH
+  PER_BILLING_PERIOD
+  LIFETIME
+  PER_TRANSACTION
+}
+
+// STEP 27 §10/§11 — append-only ledger for idempotency/audit/refund,
+// alongside (never replacing) FeatureUsage's atomic race-safe counter above.
+model FeatureUsageLedger {
+  id               String             @id @default(cuid())
+  profileId        String
+  featureKey       String
+  subscriptionId   String?
+  action           FeatureUsageAction
+  quantity         Int                @default(1)
+  requestId        String // caller-supplied idempotency key
+  referenceType    String? // loose pointer, e.g. "PROPOSAL" | "AI_QUERY" | "DOCUMENT_UPLOAD"
+  referenceId      String?
+  reversedLedgerId String?
+  createdAt        DateTime           @default(now())
+
+  @@unique([featureKey, requestId])
+  @@index([profileId, featureKey, createdAt])
+}
+
+enum FeatureUsageAction {
+  CONSUMED
+  REFUNDED
+  ADMIN_RESET
+}
+
+// STEP 27 §5/§8/§27 — the one place a real persistent entitlement grant/
+// revoke exists, on top of the normal package-derived entitlements.
+// expiresAt is deliberately NEVER nullable: "never grant hidden permanent
+// entitlements" is structural here, not a convention — a genuinely
+// long-lived override is just a far-future, admin-chosen, always-visible date.
+model EntitlementOverride {
+  id              String                  @id @default(cuid())
+  profileId       String
+  featureKey      String
+  overrideType    EntitlementOverrideType
+  limitValue      Int? // used when overrideType = LIMIT_ADJUST
+  reason          String
+  // Nullable: most overrides are admin-granted, but a few are system-granted
+  // (e.g. a referral reward's FEATURE_UNLOCK/DISCOUNT dispatch in
+  // src/lib/referrals/referral-service.ts) — those have no real AdminUser
+  // actor and must not be forced to fabricate one.
+  createdBy       AdminUser?              @relation("EntitlementOverrideCreatedBy", fields: [createdById], references: [id])
+  createdById     String?
+  createdBySystem Boolean                 @default(false)
+  approvedBy      AdminUser?              @relation("EntitlementOverrideApprovedBy", fields: [approvedById], references: [id])
+  approvedById    String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime                @default(now())
+
+  @@index([profileId, featureKey, expiresAt])
+}
+
+enum EntitlementOverrideType {
+  GRANT
+  REVOKE
+  LIMIT_ADJUST
+}
+
+// STEP 27 §28/§29 — service credits; not cash unless explicitly configured
+// (spec §28). One running balance per profile per currency.
+model MembershipCredit {
+  id           String   @id @default(cuid())
+  creditCode   String   @unique // LPP-CREDIT-######
+  profileId    String
+  balanceMinor Int      @default(0)
+  currencyCode String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions CreditTransaction[]
+
+  @@unique([profileId, currencyCode])
+}
+
+model CreditTransaction {
+  id            String                @id @default(cuid())
+  credit        MembershipCredit      @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  creditId      String
+  type          CreditTransactionType
+  amountMinor   Int // always positive; `type` determines its effect on balance
+  reason        String
+  referenceType String? // "ORDER" | "REFERRAL_REWARD" | "PROMOTION" | "ADMIN_ADJUST"
+  referenceId   String?
+  createdById   String?
+  createdAt     DateTime              @default(now())
+
+  @@index([creditId, createdAt])
+}
+
+enum CreditTransactionType {
+  GRANTED
+  USED
+  REFUNDED
+  EXPIRED
+  REVOKED
+  ADJUSTED
+}
+
+// STEP 27 §35-43 — referral program. Confirmed zero prior art anywhere in
+// the codebase before this STEP.
+model ReferralProgram {
+  id                    String                  @id @default(cuid())
+  programCode           String                  @unique // LPP-REFPR-######
+  name                  String
+  description           String?
+  rewardType            ReferralRewardType
+  rewardConfig          Json // shape depends on rewardType, e.g. { days: 30 } or { creditMinor: 50000, currencyCode: "PKR" }
+  qualifyingEvent       ReferralQualifyingEvent
+  qualifyingEventConfig Json?
+  maxRewardsPerReferrer Int?
+  maxReferralsPerPeriod Int?
+  periodDays            Int?
+  status                PromotionLikeStatus     @default(DRAFT)
+  startDate             DateTime?
+  endDate               DateTime?
+  createdById           String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  codes     ReferralCode[]
+  referrals Referral[]
+}
+
+enum ReferralRewardType {
+  FREE_DAYS
+  CREDIT
+  FEATURE_UNLOCK
+  DISCOUNT
+  COUPON
+  POINTS
+}
+
+enum ReferralQualifyingEvent {
+  REGISTRATION
+  FIRST_PAYMENT
+  VERIFICATION_COMPLETE
+  SUBSCRIPTION_ACTIVE_N_DAYS
+}
+
+// Shared DRAFT/SCHEDULED/ACTIVE/PAUSED/ENDED/ARCHIVED lifecycle for
+// ReferralProgram and Promotion (spec §44/§35 use the same status shape).
+enum PromotionLikeStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  ENDED
+  ARCHIVED
+}
+
+// Per-user referral codes (e.g. LPP-MUNAWAR-7QX2) are NOT sequence-counter
+// codes — see src/lib/referrals/referral-service.ts for the unpredictable
+// generation (readable slug + crypto-random suffix, spec §35's explicit
+// "do not use predictable referral codes").
+model ReferralCode {
+  id        String          @id @default(cuid())
+  code      String          @unique
+  program   ReferralProgram @relation(fields: [programId], references: [id])
+  programId String
+  profileId String // the referrer
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+
+  referrals Referral[]
+
+  @@index([profileId])
+}
+
+model Referral {
+  id                String          @id @default(cuid())
+  referralCode      ReferralCode    @relation(fields: [referralCodeId], references: [id])
+  referralCodeId    String
+  program           ReferralProgram @relation(fields: [programId], references: [id])
+  programId         String
+  referrerProfileId String
+  refereeProfileId  String          @unique // one referral relationship per new account
+  status            ReferralStatus  @default(PENDING)
+  linkedAt          DateTime?
+  qualifiedAt       DateTime?
+  rewardedAt        DateTime?
+  fraudFlags        Json? // populated by the STEP 24 risk integration; never auto-accusatory in status alone
+  createdAt         DateTime        @default(now())
+
+  events  ReferralEvent[]
+  rewards ReferralReward[]
+
+  @@index([referrerProfileId])
+  @@index([status])
+}
+
+enum ReferralStatus {
+  PENDING
+  LINKED
+  QUALIFIED
+  REWARDED
+  REFERRAL_REVIEW_REQUIRED
+  REJECTED
+  EXPIRED
+}
+
+model ReferralEvent {
+  id         String   @id @default(cuid())
+  referral   Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  referralId String
+  eventType  String // CODE_ENTERED | ELIGIBILITY_CHECKED | LINKED | QUALIFYING_EVENT_MET | FRAUD_CHECK_RUN | REWARD_TRIGGERED
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  @@index([referralId])
+}
+
+model ReferralReward {
+  id                   String               @id @default(cuid())
+  referral             Referral             @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  referralId           String
+  beneficiaryProfileId String // referrer or referee, depending on program config
+  rewardType           ReferralRewardType
+  rewardConfig         Json
+  status               ReferralRewardStatus @default(PENDING)
+  grantedAt            DateTime?
+  createdAt            DateTime             @default(now())
+
+  transactions ReferralRewardTransaction[]
+}
+
+enum ReferralRewardStatus {
+  PENDING
+  GRANTED
+  REVERSED
+  EXPIRED
+}
+
+model ReferralRewardTransaction {
+  id        String         @id @default(cuid())
+  reward    ReferralReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  rewardId  String
+  action    String // GRANTED | REVERSED
+  detail    Json?
+  createdAt DateTime       @default(now())
+}
+
+// STEP 27 §44/§45 — promotions. Server-validated eligibility only
+// (src/lib/promotions/eligibility.ts); never a client-trusted flag.
+model Promotion {
+  id            String              @id @default(cuid())
+  promotionCode String              @unique // LPP-PROMO-######
+  name          String
+  promotionType PromotionType
+  config        Json // shape depends on promotionType
+  status        PromotionLikeStatus @default(DRAFT)
+  startDate     DateTime?
+  endDate       DateTime?
+  createdById   String?
+  approvedById  String? // maker-checker for large promotions (PROMOTION_APPROVAL)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  rules    PromotionRule[]
+  packages PromotionPackage[]
+}
+
+enum PromotionType {
+  PACKAGE_DISCOUNT
+  TRIAL_EXTENSION
+  CREDIT_GRANT
+  FEATURE_UNLOCK
+}
+
+model PromotionRule {
+  id          String    @id @default(cuid())
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId String
+  ruleType    String // FIRST_TIME_USER | COUNTRY | CURRENCY | MIN_ACCOUNT_AGE_DAYS | SUBSCRIPTION_TYPE
+  ruleConfig  Json
+}
+
+model PromotionPackage {
+  id          String    @id @default(cuid())
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId String
+  package     Package   @relation(fields: [packageId], references: [id])
+  packageId   String
+
+  @@unique([promotionId, packageId])
 }
 
 model ReconciliationRun {
@@ -5315,6 +5834,12 @@ enum SecurityEventType {
   DOCUMENT_TAMPER_DETECTED // stored hash no longer matches the file's current hash
   DOCUMENT_UNAUTHORIZED_ACCESS // an access/download was attempted without permission
   DOCUMENT_SHARE_ANOMALY // repeated / unusual sharing attempts
+
+  // ---------- STEP 27 — Membership, Subscriptions, Coupons & Referrals ----------
+  COUPON_ABUSE_SUSPECTED // reused/expired/manipulated coupon attempt, or repeated validation failures
+  REFERRAL_ABUSE_SUSPECTED // self-referral, device reuse, reward-duplication attempt
+  ENTITLEMENT_BYPASS_ATTEMPT // frontend claimed access the backend check denied
+  UNUSUAL_TRANSACTION_PATTERN // rapid upgrade/downgrade/cancel cycling, proration abuse pattern
 }
 
 enum SecurityIncidentControl {

@@ -6,6 +6,7 @@ import { getProvider } from "@/lib/finance/providers/registry";
 import { notifyRefundRequested, notifyRefundCompleted } from "@/lib/notifications/events";
 import { ApiError } from "@/lib/route-guard";
 import { createFromEvent } from "@/lib/workflow/engine";
+import { reverseCoupon } from "@/lib/finance/coupon";
 import type { RefundType, RefundStatus } from "@prisma/client";
 
 // Spec §23 — RBAC tiers enforced by the caller (route checks the
@@ -113,4 +114,12 @@ export async function executeRefund(refundId: string, executedById: string) {
 
   await writeAudit({ action: "REFUND_EXECUTED", adminId: executedById, targetProfileId: payment.profileId, meta: { refundId, result: "COMPLETED" } });
   await notifyRefundCompleted(payment.profileId);
+
+  // STEP 27 §34 — a fully refunded order's coupon redemption no longer
+  // counts toward usage/per-user limits (closes the pay-refund-retry
+  // coupon-abuse loophole); a partial refund leaves it REDEEMED as-is.
+  if (newPaymentStatus === "REFUNDED") {
+    const redemption = await prisma.couponRedemption.findFirst({ where: { orderId: payment.orderId, status: "REDEEMED" } });
+    if (redemption) await reverseCoupon(redemption.id, executedById).catch(() => undefined);
+  }
 }

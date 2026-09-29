@@ -20,23 +20,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const admin = await requireAdmin("finance:packages:manage");
     const { id } = await params;
-    const { name, description, active, displayOrder, trialDays, refundPolicyNote } = (await req.json()) as {
-      name?: string; description?: string; active?: boolean; displayOrder?: number; trialDays?: number; refundPolicyNote?: string;
+    const { name, description, active, status, packageType, trialEligibilityScope, displayOrder, trialDays, refundPolicyNote } = (await req.json()) as {
+      name?: string; description?: string; active?: boolean; status?: "DRAFT" | "ACTIVE" | "INACTIVE" | "SCHEDULED" | "EXPIRED" | "ARCHIVED";
+      packageType?: string; trialEligibilityScope?: "PER_PACKAGE" | "PER_ACCOUNT"; displayOrder?: number; trialDays?: number; refundPolicyNote?: string;
     };
+
+    // STEP 27 §2/§4 — `active` stays a derived mirror of `status`, written by
+    // this one code path: if `status` is provided it's authoritative and
+    // `active` is derived from it; a bare legacy `active` toggle (no
+    // `status`) maps onto ACTIVE/INACTIVE for backward compatibility.
+    const resolvedStatus = status ?? (active !== undefined ? (active ? "ACTIVE" : "INACTIVE") : undefined);
+    const resolvedActive = status !== undefined ? status === "ACTIVE" : active;
 
     const updated = await prisma.package.update({
       where: { id },
       data: {
         ...(name !== undefined ? { name: name.trim() } : {}),
         ...(description !== undefined ? { description: description.trim() } : {}),
-        ...(active !== undefined ? { active } : {}),
+        ...(resolvedActive !== undefined ? { active: resolvedActive } : {}),
+        ...(resolvedStatus !== undefined ? { status: resolvedStatus } : {}),
+        ...(packageType !== undefined ? { packageType: packageType as never } : {}),
+        ...(trialEligibilityScope !== undefined ? { trialEligibilityScope } : {}),
         ...(displayOrder !== undefined ? { displayOrder } : {}),
         ...(trialDays !== undefined ? { trialDays } : {}),
         ...(refundPolicyNote !== undefined ? { refundPolicyNote } : {}),
       },
     });
 
-    await writeAudit({ action: "PACKAGE_UPDATED", adminId: admin.id, meta: { packageId: id } });
+    await writeAudit({ action: resolvedStatus === "ACTIVE" ? "PACKAGE_ACTIVATED" : resolvedStatus === "ARCHIVED" ? "PACKAGE_ARCHIVED" : "PACKAGE_UPDATED", adminId: admin.id, meta: { packageId: id } });
     return NextResponse.json(updated);
   } catch (error) {
     return handleApiError(error);

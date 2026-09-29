@@ -613,4 +613,38 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Document Security Alert", body: "A document security event (scan, tamper or quarantine) needs attention." },
     UR: { title: "دستاویز سیکیورٹی الرٹ", body: "ایک دستاویز سیکیورٹی ایونٹ (اسکین، تبدیلی یا قرنطینہ) پر توجہ درکار ہے۔" },
   },
+
+  // ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+  TRIAL_STARTED: {
+    EN: { title: "Trial Started", body: "Your trial has started. Enjoy your premium features until it ends." },
+    UR: { title: "ٹرائل شروع ہو گیا", body: "آپ کا ٹرائل شروع ہو گیا ہے۔ اختتام تک اپنی پریمیم خصوصیات سے فائدہ اٹھائیں۔" },
+  },
+  TRIAL_ENDING: {
+    EN: { title: "Trial Ending Soon", body: "Your trial is ending soon. Choose a package to keep your premium features." },
+    UR: { title: "ٹرائل جلد ختم ہو رہا ہے", body: "آپ کا ٹرائل جلد ختم ہو رہا ہے۔ اپنی پریمیم خصوصیات جاری رکھنے کے لیے پیکج منتخب کریں۔" },
+  },
+  PACKAGE_CHANGED: {
+    EN: { title: "Package Changed", body: "Your membership package has changed. Open your membership page to see the details." },
+    UR: { title: "پیکج تبدیل ہو گیا", body: "آپ کا ممبرشپ پیکج تبدیل ہو گیا ہے۔ تفصیلات دیکھنے کے لیے اپنا ممبرشپ صفحہ کھولیں۔" },
+  },
+  COUPON_APPLIED: {
+    EN: { title: "Coupon Applied", body: "Your coupon was applied to this order." },
+    UR: { title: "کوپن لاگو ہو گیا", body: "آپ کا کوپن اس آرڈر پر لاگو کر دیا گیا ہے۔" },
+  },
+  COUPON_EXPIRED: {
+    EN: { title: "Coupon Expired", body: "A coupon you had is no longer valid." },
+    UR: { title: "کوپن کی معیاد ختم", body: "آپ کا ایک کوپن اب کارآمد نہیں رہا۔" },
+  },
+  REFERRAL_REWARD_GRANTED: {
+    EN: { title: "Referral Reward Granted", body: "You've earned a referral reward. Open your referrals page to see it." },
+    UR: { title: "ریفرل انعام دیا گیا", body: "آپ نے ایک ریفرل انعام حاصل کیا ہے۔ دیکھنے کے لیے اپنا ریفرلز صفحہ کھولیں۔" },
+  },
+  ENTITLEMENT_EXPIRED: {
+    EN: { title: "Feature Access Expired", body: "Access to a premium feature has expired. Open your membership page for options." },
+    UR: { title: "فیچر تک رسائی ختم", body: "ایک پریمیم فیچر تک رسائی ختم ہو گئی ہے۔ اختیارات کے لیے اپنا ممبرشپ صفحہ کھولیں۔" },
+  },
+  ADMIN_REFERRAL_REVIEW_REQUIRED: {
+    EN: { title: "Referral Needs Review", body: "A referral has been flagged for eligibility/fraud review." },
+    UR: { title: "ریفرل کا جائزہ درکار ہے", body: "ایک ریفرل کو اہلیت/فراڈ کے جائزے کے لیے نشان زد کیا گیا ہے۔" },
+  },
 };

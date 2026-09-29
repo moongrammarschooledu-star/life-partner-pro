@@ -5,8 +5,9 @@ import { addMoney, subtractMoney } from "@/lib/finance/money";
 import { resolveCouponForOrder } from "@/lib/finance/coupon";
 import { computeTax, resolveTaxRule } from "@/lib/finance/tax";
 import { getActiveProvider } from "@/lib/finance/providers/registry";
-import { assertPaymentsAvailable, PaymentsUnavailableError } from "@/lib/finance/rollout";
+import { assertPaymentsAvailable, PaymentsUnavailableError, getPaymentFeatureFlags } from "@/lib/finance/rollout";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
+import { notifyCouponApplied } from "@/lib/notifications/events";
 
 export class CheckoutError extends Error {}
 
@@ -31,17 +32,35 @@ export async function startCheckout(params: { profileId: string; packageId: stri
     throw error;
   }
 
-  const pkg = await prisma.package.findUnique({ where: { id: params.packageId }, include: { prices: { where: { active: true }, orderBy: { effectiveFrom: "desc" }, take: 1 } } });
+  const pkg = await prisma.package.findUnique({
+    where: { id: params.packageId },
+    include: {
+      prices: { where: { active: true }, orderBy: { effectiveFrom: "desc" }, take: 1 },
+      versions: { where: { status: "ACTIVE" }, orderBy: { versionNumber: "desc" }, take: 1 },
+    },
+  });
   if (!pkg || !pkg.active) throw new CheckoutError("This package is not currently available.");
   const price = pkg.prices[0];
   if (!price) throw new CheckoutError("This package has no active price configured.");
+  const activeVersion = pkg.versions?.[0];
 
   const subtotalMinor = price.amountMinor;
   let discountMinor = 0;
   let couponId: string | undefined;
 
   if (params.couponCode) {
-    const result = await resolveCouponForOrder(params.couponCode, params.profileId, params.packageId, subtotalMinor);
+    // STEP 27 §61 — kill switch: new coupon usage is refused while existing
+    // redemptions/orders remain untouched, same as every other rollout flag.
+    if (!(await getPaymentFeatureFlags()).couponsEnabled) throw new CheckoutError("Coupons are temporarily unavailable.");
+    // STEP 27 §31 — full coupon condition context; a caller that omits a
+    // field the coupon restricts on fails closed inside resolveCouponForOrder.
+    const isFirstTimeUser = !(await prisma.order.findFirst({ where: { profileId: params.profileId, status: { in: ["PAID", "COMPLETED"] } } }));
+    const result = await resolveCouponForOrder(params.couponCode, params.profileId, params.packageId, subtotalMinor, {
+      currencyCode: price.currencyCode,
+      country: params.country,
+      isFirstTimeUser,
+      subscriptionType: pkg.packageType,
+    });
     if (!result.ok) throw new CheckoutError(result.reason);
     discountMinor = result.discountMinor;
     couponId = result.couponId;
@@ -68,6 +87,7 @@ export async function startCheckout(params: { profileId: string; packageId: stri
         create: {
           packageId: pkg.id,
           packagePriceId: price.id,
+          packageVersionId: activeVersion?.id ?? null,
           description: pkg.name,
           quantity: 1,
           unitPriceMinor: subtotalMinor,
@@ -81,6 +101,7 @@ export async function startCheckout(params: { profileId: string; packageId: stri
 
   if (couponId) {
     await prisma.couponRedemption.create({ data: { couponId, profileId: params.profileId, orderId: order.id, discountAppliedMinor: discountMinor } });
+    await notifyCouponApplied(params.profileId);
   }
 
   // STEP 23 Add-on — non-blocking jurisdiction/tax review flag (spec: "use

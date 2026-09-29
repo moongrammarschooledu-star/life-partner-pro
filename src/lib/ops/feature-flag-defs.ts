@@ -38,6 +38,18 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   // STEP 26 — document management. OCR defaults OFF: no OCR vendor is configured (see the NoopOcrProvider);
   // turning this on alone changes nothing until a real provider is also configured.
   { key: "documents.ocr.enabled", description: "OCR-assisted document processing (output is always unverified, pending human review)", sensitive: true },
+  // STEP 27 — membership/entitlements. "packages.enabled" is deliberately NOT
+  // registered here: disabling a specific package is already covered by
+  // Package.status = INACTIVE, and there is no separate "all packages" master
+  // switch to alias — a flag with no real consumer would be misleading (see
+  // the file header). subscriptions/coupons alias the existing/new AppSettings
+  // booleans (same one-source-of-truth pattern as payments.enabled); referrals/
+  // promotions/credits are genuinely independent switches.
+  { key: "subscriptions.enabled", description: "New subscription checkouts (existing subscriptions unaffected)", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
+  { key: "coupons.enabled", description: "Coupon validation and redemption at checkout", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
+  { key: "referrals.enabled", description: "Referral code generation, linking, and reward granting", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
+  { key: "promotions.enabled", description: "Promotional campaign eligibility and application at checkout", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
+  { key: "credits.enabled", description: "Membership credit grants and use at checkout", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
 ];
 
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.

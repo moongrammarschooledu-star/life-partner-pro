@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { assertKnownFeatureKey } from "@/lib/finance/catalog";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,6 +11,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { featureKey, limitValue, resetPeriod } = (await req.json()) as { featureKey?: string; limitValue?: number | null; resetPeriod?: string | null };
 
     if (!featureKey?.trim()) throw new ApiError(400, "A feature key is required.");
+    // STEP 27 §6 — rejects an unknown/inactive key rather than silently
+    // accepting a typo that would never resolve to anything at check time.
+    await assertKnownFeatureKey(featureKey.trim());
 
     const entitlement = await prisma.packageEntitlement.upsert({
       where: { packageId_featureKey: { packageId: id, featureKey: featureKey.trim() } },

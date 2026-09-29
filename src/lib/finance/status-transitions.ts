@@ -1,4 +1,4 @@
-import type { PaymentStatus, OrderStatus, RefundStatus, SubscriptionStatus, PaymentRolloutStage } from "@prisma/client";
+import type { PaymentStatus, OrderStatus, RefundStatus, SubscriptionStatus, PaymentRolloutStage, ReferralStatus, CouponRedemptionStatus, PromotionLikeStatus, PackageVersionStatus } from "@prisma/client";
 
 // Spec §56 — no arbitrary status changes. Every mutation route calls one of
 // these before writing a new status; an invalid transition is rejected with
@@ -85,4 +85,61 @@ const ROLLOUT_TRANSITIONS: Record<PaymentRolloutStage, PaymentRolloutStage[]> = 
 
 export function isValidRolloutTransition(from: PaymentRolloutStage, to: PaymentRolloutStage): boolean {
   return ROLLOUT_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+// ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+
+const REFERRAL_TRANSITIONS: Record<ReferralStatus, ReferralStatus[]> = {
+  PENDING: ["LINKED", "EXPIRED"],
+  LINKED: ["QUALIFIED", "EXPIRED"],
+  QUALIFIED: ["REWARDED", "REFERRAL_REVIEW_REQUIRED", "REJECTED", "EXPIRED"],
+  REWARDED: [],
+  REFERRAL_REVIEW_REQUIRED: ["QUALIFIED", "REJECTED"],
+  REJECTED: [],
+  EXPIRED: [],
+};
+
+export function isValidReferralStatusTransition(from: ReferralStatus, to: ReferralStatus): boolean {
+  return REFERRAL_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+// A reservation and its eventual redemption are the same row (spec §34) —
+// this is the row's own lifecycle, not two separate tables.
+const COUPON_REDEMPTION_TRANSITIONS: Record<CouponRedemptionStatus, CouponRedemptionStatus[]> = {
+  RESERVED: ["REDEEMED", "RELEASED", "EXPIRED"],
+  REDEEMED: ["REVERSED"],
+  RELEASED: [],
+  REVERSED: [],
+  EXPIRED: [],
+};
+
+export function isValidCouponRedemptionTransition(from: CouponRedemptionStatus, to: CouponRedemptionStatus): boolean {
+  return COUPON_REDEMPTION_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+// Shared by ReferralProgram and Promotion (both use PromotionLikeStatus).
+const PROMOTION_LIKE_TRANSITIONS: Record<PromotionLikeStatus, PromotionLikeStatus[]> = {
+  DRAFT: ["SCHEDULED", "ACTIVE", "ARCHIVED"],
+  SCHEDULED: ["ACTIVE", "PAUSED", "ARCHIVED"],
+  ACTIVE: ["PAUSED", "ENDED"],
+  PAUSED: ["ACTIVE", "ENDED"],
+  ENDED: ["ARCHIVED"],
+  ARCHIVED: [],
+};
+
+export function isValidPromotionLikeStatusTransition(from: PromotionLikeStatus, to: PromotionLikeStatus): boolean {
+  return PROMOTION_LIKE_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+const PACKAGE_VERSION_TRANSITIONS: Record<PackageVersionStatus, PackageVersionStatus[]> = {
+  DRAFT: ["PENDING_APPROVAL", "REJECTED"],
+  PENDING_APPROVAL: ["APPROVED", "REJECTED"],
+  APPROVED: ["ACTIVE"],
+  ACTIVE: ["SUPERSEDED"],
+  SUPERSEDED: [],
+  REJECTED: [],
+};
+
+export function isValidPackageVersionStatusTransition(from: PackageVersionStatus, to: PackageVersionStatus): boolean {
+  return PACKAGE_VERSION_TRANSITIONS[from]?.includes(to) ?? false;
 }

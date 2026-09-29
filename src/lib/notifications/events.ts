@@ -329,6 +329,35 @@ export async function notifySubscriptionCancelled(profileId: string) {
   await sendNotification({ profileId, type: "SUBSCRIPTION_CANCELLED", data: {} });
 }
 
+// ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
+export async function notifyTrialStarted(profileId: string) {
+  await sendNotification({ profileId, type: "TRIAL_STARTED", data: {} });
+}
+
+export async function notifyTrialEnding(profileId: string) {
+  await sendNotification({ profileId, type: "TRIAL_ENDING", data: {} });
+}
+
+export async function notifyPackageChanged(profileId: string) {
+  await sendNotification({ profileId, type: "PACKAGE_CHANGED", data: {} });
+}
+
+export async function notifyCouponApplied(profileId: string) {
+  await sendNotification({ profileId, type: "COUPON_APPLIED", data: {} });
+}
+
+export async function notifyCouponExpired(profileId: string) {
+  await sendNotification({ profileId, type: "COUPON_EXPIRED", data: {} });
+}
+
+export async function notifyReferralRewardGranted(profileId: string) {
+  await sendNotification({ profileId, type: "REFERRAL_REWARD_GRANTED", data: {} });
+}
+
+export async function notifyEntitlementExpired(profileId: string) {
+  await sendNotification({ profileId, type: "ENTITLEMENT_EXPIRED", data: {} });
+}
+
 export async function notifyInvoiceCreated(profileId: string) {
   await sendNotification({ profileId, type: "INVOICE_CREATED", data: {} });
 }

@@ -224,6 +224,17 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   DOCUMENT_SIGNATURE_REQUEST: ESSENTIAL,
   ADMIN_DOCUMENT_REVIEW_QUEUE: ESSENTIAL,
   ADMIN_DOCUMENT_SECURITY_ALERT: ESSENTIAL,
+
+  // STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals —
+  // essential, matching STEP 14's payment/subscription treatment above.
+  TRIAL_STARTED: ESSENTIAL,
+  TRIAL_ENDING: FOLLOWUP,
+  PACKAGE_CHANGED: ESSENTIAL,
+  COUPON_APPLIED: ESSENTIAL,
+  COUPON_EXPIRED: FOLLOWUP,
+  REFERRAL_REWARD_GRANTED: ESSENTIAL,
+  ENTITLEMENT_EXPIRED: ESSENTIAL,
+  ADMIN_REFERRAL_REVIEW_REQUIRED: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {
