@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { notifyProfileVerificationChanged, notifyProfileSuspended } from "@/lib/notifications/events";
+import { syncCrmStageOnVerification, syncCrmStageFromProfileStatus } from "@/lib/crm/profile-status-sync";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import type { VerificationStatus } from "@prisma/client";
@@ -173,6 +174,8 @@ export async function setVerificationStatus(profileId: string, newStatus: Verifi
     await notifyProfileVerificationChanged(profileId, notifyType);
   }
 
+  if (newStatus === "VERIFIED") await syncCrmStageOnVerification(profileId);
+
   return verification;
 }
 
@@ -195,4 +198,5 @@ export async function suspendProfile(profileId: string, opts: { adminId: string;
 
   await writeAudit({ action: "PROFILE_SUSPENDED", adminId: opts.adminId, targetProfileId: profileId, meta: { reason: opts.reason } });
   await notifyProfileSuspended(profileId);
+  await syncCrmStageFromProfileStatus(profileId, "SUSPENDED");
 }

@@ -39,6 +39,7 @@ const TASKS: Record<AiFeatureKey, string> = {
   // produced by the built-in deterministic builders only (see src/lib/ai/features.ts).
   COMPLIANCE_SUMMARY: "Task: (not used with external providers)",
   RISK_CASE_SUMMARY: "Task: (not used with external providers)",
+  CRM_SUMMARY: "Task: (not used with external providers)",
 };
 
 export interface PromptTemplate {

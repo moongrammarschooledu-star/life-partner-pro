@@ -17,6 +17,8 @@ interface WorkloadRow {
   upcomingMeetings: number;
   overdueTasks: number;
   completedTasksLast30Days: number;
+  assignedCrmRecords: number;
+  pendingLeadFollowUps: number;
 }
 
 // Spec §9 — workload/service-quality view for ADMIN+SUPER_ADMIN. Presented
@@ -49,7 +51,7 @@ export default function TeamWorkloadPage() {
       ) : (
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead className="text-left text-xs text-muted">
                 <tr>
                   <th className="pb-2">Staff Member</th>
@@ -61,6 +63,8 @@ export default function TeamWorkloadPage() {
                   <th className="pb-2 text-right">Upcoming Meetings</th>
                   <th className="pb-2 text-right">Overdue Tasks</th>
                   <th className="pb-2 text-right">Completed (30 days)</th>
+                  <th className="pb-2 text-right">Assigned CRM Records</th>
+                  <th className="pb-2 text-right">Pending Lead Follow-ups</th>
                 </tr>
               </thead>
               <tbody>
@@ -75,6 +79,8 @@ export default function TeamWorkloadPage() {
                     <td className="py-2 text-right">{row.upcomingMeetings}</td>
                     <td className={`py-2 text-right ${row.overdueTasks > 0 ? "font-medium text-danger" : ""}`}>{row.overdueTasks}</td>
                     <td className="py-2 text-right">{row.completedTasksLast30Days}</td>
+                    <td className="py-2 text-right">{row.assignedCrmRecords}</td>
+                    <td className="py-2 text-right">{row.pendingLeadFollowUps}</td>
                   </tr>
                 ))}
               </tbody>

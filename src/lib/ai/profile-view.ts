@@ -189,6 +189,13 @@ export const FIELD_POLICY: Record<AiFeatureKey, FieldPolicy> = {
     optional: [],
     restricted: [...ALWAYS_RESTRICTED, "individualProfiles", "riskScore", "deviceIdentifiers", "networkIdentifiers"],
   },
+  // STEP 28 — CRM record metadata only (lifecycle/assignment/follow-up
+  // counts); never raw profile fields, never a raw risk score.
+  CRM_SUMMARY: {
+    required: ["crmRecordMetadata"],
+    optional: [],
+    restricted: [...ALWAYS_RESTRICTED, "riskScore", "deviceIdentifiers", "networkIdentifiers"],
+  },
 };
 
 export function classificationOf(field: string): DataClassification {

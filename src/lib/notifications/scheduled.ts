@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notifyMeetingReminder, notifyFollowupReminder, notifyOverdueFollowUp, notifyProposalPendingReminder } from "@/lib/notifications/events";
+import { runFollowupReminderSweep, evaluateFollowupAutomation } from "@/lib/crm/followup-service";
 
 const MINUTES = 60 * 1000;
 
@@ -14,6 +15,9 @@ export interface ScheduledRunResult {
   followUpReminders: number;
   overdueFollowUpAlerts: number;
   pendingProposalReminders: number;
+  crmFollowupRemindersSent: number;
+  crmFollowupsMarkedOverdue: number;
+  crmFollowupEscalations: number;
 }
 
 // Idempotent and safe to call repeatedly (manually or via Vercel Cron) — a
@@ -28,6 +32,9 @@ export async function runScheduledNotifications(): Promise<ScheduledRunResult> {
     followUpReminders: 0,
     overdueFollowUpAlerts: 0,
     pendingProposalReminders: 0,
+    crmFollowupRemindersSent: 0,
+    crmFollowupsMarkedOverdue: 0,
+    crmFollowupEscalations: 0,
   };
 
   if (settings?.meetingReminder24hEnabled ?? true) {
@@ -41,6 +48,16 @@ export async function runScheduledNotifications(): Promise<ScheduledRunResult> {
     result.overdueFollowUpAlerts = await sendOverdueFollowUpAlerts(now);
   }
   result.pendingProposalReminders = await sendPendingProposalReminders(now, settings?.pendingProposalReminderDays ?? 3);
+
+  // STEP 28 §29/§30 — CRM-linked follow-ups only (crmRecordId set); the
+  // applicant-facing single "due today"/overdue notices above are untouched
+  // and keep firing for every follow-up regardless of CRM linkage. This
+  // sweep instead notifies the ASSIGNED STAFF MEMBER, multi-stage, per the
+  // admin-configurable FollowUpReminderConfig windows.
+  const crmSweep = await runFollowupReminderSweep();
+  result.crmFollowupRemindersSent = crmSweep.sent;
+  result.crmFollowupsMarkedOverdue = crmSweep.overdueMarked;
+  result.crmFollowupEscalations = await evaluateFollowupAutomation();
 
   return result;
 }

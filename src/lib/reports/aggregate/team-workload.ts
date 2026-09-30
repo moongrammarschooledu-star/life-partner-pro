@@ -1,6 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { subDays } from "date-fns";
 import { ACTIVE_TASK_STATUSES } from "@/lib/workflow/status";
+import type { LeadStatus } from "@prisma/client";
+
+// STEP 28 §33 — a lead hasn't reached a terminal outcome yet, so it still
+// needs staff follow-up (mirrors ACTIVE_TASK_STATUSES's "still open" intent).
+const OPEN_LEAD_STATUSES: LeadStatus[] = [
+  "NEW",
+  "CONTACTED",
+  "RESPONDED",
+  "QUALIFICATION_PENDING",
+  "QUALIFIED",
+  "DUPLICATE_REVIEW_REQUIRED",
+  "REGISTRATION_STARTED",
+  "REGISTERED",
+];
 
 // Spec §9 — Team Workload Dashboard, open to ADMIN+SUPER_ADMIN (gated by
 // "staff:view", distinct from STEP 10's SUPER_ADMIN-only
@@ -25,6 +39,8 @@ export async function computeTeamWorkload() {
         upcomingMeetings,
         overdueTasks,
         completedTasksLast30Days,
+        assignedCrmRecords,
+        pendingLeadFollowUps,
       ] = await Promise.all([
         prisma.adminAssignment.count({ where: { adminId: admin.id, resourceType: "PROFILE", status: { not: "REASSIGNED" } } }),
         prisma.proposal.count({ where: { assignedToId: admin.id } }),
@@ -35,6 +51,8 @@ export async function computeTeamWorkload() {
         }),
         prisma.adminTask.count({ where: { assignedToId: admin.id, status: { in: ACTIVE_TASK_STATUSES }, dueAt: { lt: now } } }),
         prisma.adminTask.count({ where: { assignedToId: admin.id, status: "COMPLETED", completedAt: { gte: subDays(now, 30) } } }),
+        prisma.crmRecord.count({ where: { assignedStaffId: admin.id } }),
+        prisma.lead.count({ where: { assignedStaffId: admin.id, status: { in: OPEN_LEAD_STATUSES } } }),
       ]);
 
       return {
@@ -48,6 +66,8 @@ export async function computeTeamWorkload() {
         upcomingMeetings,
         overdueTasks,
         completedTasksLast30Days,
+        assignedCrmRecords,
+        pendingLeadFollowUps,
       };
     })
   );

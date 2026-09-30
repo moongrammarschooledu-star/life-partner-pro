@@ -235,6 +235,15 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   REFERRAL_REWARD_GRANTED: ESSENTIAL,
   ENTITLEMENT_EXPIRED: ESSENTIAL,
   ADMIN_REFERRAL_REVIEW_REQUIRED: ESSENTIAL,
+
+  // STEP 28 — CRM, Applicant Lifecycle & Lead Management — admin-only,
+  // internal (assignment/SLA notices via notifyAdmins), never sent to a profile.
+  CRM_FOLLOWUP_DUE: ESSENTIAL,
+  CRM_FOLLOWUP_OVERDUE: ESSENTIAL,
+  CRM_STAGE_CHANGED: ESSENTIAL,
+  CRM_ASSIGNED_TO_YOU: ESSENTIAL,
+  CRM_SLA_ESCALATED: ESSENTIAL,
+  LEAD_ASSIGNED_TO_YOU: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

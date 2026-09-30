@@ -35,6 +35,7 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "ai.report_assistant.enabled", description: "AI report summaries (numbers come from existing reports only)", sensitive: true },
   { key: "ai.compliance_summary.enabled", description: "AI compliance configuration summary (read-only; human legal review required)", sensitive: true },
   { key: "ai.risk_summary.enabled", description: "AI risk-case summary (read-only; never concludes guilt or decides an action; human review required)", sensitive: true },
+  { key: "ai.crm_summary.enabled", description: "AI CRM applicant/timeline summary (read-only metadata only; never decides the next lifecycle step; human review required)", sensitive: true },
   // STEP 26 — document management. OCR defaults OFF: no OCR vendor is configured (see the NoopOcrProvider);
   // turning this on alone changes nothing until a real provider is also configured.
   { key: "documents.ocr.enabled", description: "OCR-assisted document processing (output is always unverified, pending human review)", sensitive: true },

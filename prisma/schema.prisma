@@ -78,6 +78,8 @@ enum AssignmentResourceType {
   ADMIN_USER
   DOCUMENT
   REFERRAL
+  LEAD
+  CRM_RECORD
 }
 
 // STEP 18 — CRITICAL added to match CasePriority's 5-value scale exactly.
@@ -95,6 +97,12 @@ enum AssignmentStatus {
   WAITING
   COMPLETED
   REASSIGNED
+  // STEP 28 — CRM record assignment lifecycle (spec §14); the original 5
+  // keep their exact STEP 18 meaning for AdminTask assignments.
+  UNASSIGNED
+  TRANSFERRED
+  ON_HOLD
+  CLOSED
 }
 
 // STEP 18 — the original 7 keep their exact meaning and resourceType pairing
@@ -182,6 +190,14 @@ enum AdminTaskType {
   // ---------- STEP 27 — Membership, Packages, Entitlements, Coupons & Referrals ----------
   REFERRAL_REVIEW // REFERRAL — a referral needs fraud/eligibility review
   COUPON_ISSUE_REVIEW // PAYMENT — a coupon abuse signal needs review
+
+  // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
+  CRM_LEAD_REVIEW // LEAD — a new/qualified lead needs staff review
+  CRM_DUPLICATE_REVIEW // LEAD — a lead was flagged as a potential duplicate
+  CRM_FOLLOWUP_ESCALATION // FOLLOW_UP — a follow-up automation rule fired (e.g. no response after N days)
+  CRM_STAGE_STALL_REVIEW // CRM_RECORD — a record has been stuck in one lifecycle stage too long
+  CRM_MERGE_REVIEW // CRM_RECORD — a duplicate-CRM-record merge plan needs review
+  CRM_REASSIGNMENT_REVIEW // CRM_RECORD — a reassignment request needs review
 }
 
 // STEP 18 — PENDING is kept only as an inert legacy status for pre-STEP-18
@@ -735,6 +751,15 @@ enum FollowUpStatus {
   PENDING
   COMPLETED
   CANCELLED
+  // STEP 28 §28 — additive; existing PENDING/COMPLETED/CANCELLED rows and
+  // every pre-STEP-28 consumer (cron/UI/AI-draft/reports) are unaffected.
+  SCHEDULED
+  IN_PROGRESS
+  WAITING_FOR_USER
+  WAITING_FOR_STAFF
+  OVERDUE
+  ESCALATED
+  REOPENED
 }
 
 enum AuditAction {
@@ -1221,6 +1246,29 @@ enum AuditAction {
   CREDIT_GRANTED
   CREDIT_USED
   CREDIT_REVOKED
+
+  // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
+  CRM_RECORD_CREATED
+  CRM_RECORD_EDITED
+  CRM_LIFECYCLE_TRANSITIONED
+  CRM_ASSIGNED
+  CRM_REASSIGNED
+  CRM_NOTE_ADDED
+  CRM_NOTE_UPDATED
+  CRM_NOTE_DELETED
+  CRM_TAG_APPLIED
+  CRM_TAG_REMOVED
+  LEAD_CREATED
+  LEAD_CONVERTED
+  LEAD_STATUS_CHANGED
+  CRM_FOLLOWUP_CREATED
+  CRM_FOLLOWUP_COMPLETED
+  CRM_SLA_BREACHED
+  CRM_MERGE_EXECUTED
+  CRM_EXPORT
+  CRM_BULK_ACTION
+  CRM_SAVED_VIEW_CREATED
+  CRM_AI_SUMMARY_GENERATED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1465,6 +1513,15 @@ enum NotificationType {
   REFERRAL_REWARD_GRANTED
   ENTITLEMENT_EXPIRED
   ADMIN_REFERRAL_REVIEW_REQUIRED // admin-only - a referral needs fraud/eligibility review
+
+  // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
+  // Admin-only, internal (staff assignment/SLA notices) — never sent to an applicant.
+  CRM_FOLLOWUP_DUE
+  CRM_FOLLOWUP_OVERDUE
+  CRM_STAGE_CHANGED
+  CRM_ASSIGNED_TO_YOU
+  CRM_SLA_ESCALATED
+  LEAD_ASSIGNED_TO_YOU
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1832,6 +1889,10 @@ model AdminUser {
   entitlementOverridesCreated  EntitlementOverride[] @relation("EntitlementOverrideCreatedBy")
   entitlementOverridesApproved EntitlementOverride[] @relation("EntitlementOverrideApprovedBy")
 
+  // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
+  crmRecordsAssigned CrmRecord[]
+  crmSavedViews      CrmSavedView[]
+
   // ---------- Workflow & Task Management (STEP 18) ----------
   tasksCreated                AdminTask[]         @relation("AdminTaskCreator")
   taskComments                TaskComment[]
@@ -1910,6 +1971,7 @@ model Profile {
   consent             ConsentRecord?
   communications      Communication[]
   followUps           FollowUp[]
+  crmRecord           CrmRecord? // STEP 28
   pendingUpdate       PendingUpdate?
   dashboardPreference DashboardPreference?
   familyAccount       FamilyAccount?
@@ -2440,9 +2502,83 @@ model FollowUp {
   // Scheduled-reminder dedup guard (spec §23).
   reminderSentAt DateTime?
 
+  // ---------- STEP 28 — CRM follow-up extension (additive, all optional) ----------
+  followUpCode    String?              @unique // LPP-FUP-######, only set for CRM-created follow-ups
+  crmRecord       CrmRecord?           @relation(fields: [crmRecordId], references: [id])
+  crmRecordId     String?
+  type            CrmFollowUpType?
+  channel         NotificationChannel?
+  nextAction      String?
+  slaState        CrmFollowUpSlaState?
+  escalatedTaskId String? // set when automation opens an AdminTask for this follow-up (spec §30)
+
+  reminderLogs FollowUpReminderLog[]
+
   @@index([dueDate, status])
   @@index([profileId])
   @@index([proposalId])
+  @@index([crmRecordId])
+}
+
+// STEP 28 §27
+enum CrmFollowUpType {
+  INITIAL_CONTACT
+  PROFILE_REVIEW
+  PROFILE_COMPLETION
+  VERIFICATION
+  MATCH_REVIEW
+  PROPOSAL
+  PROPOSAL_RESPONSE
+  CONTACT_PERMISSION
+  MEETING
+  MEETING_FOLLOWUP
+  FAMILY_COORDINATION
+  SUPPORT
+  PAYMENT
+  RENEWAL
+  DOCUMENT
+  GENERAL
+}
+
+// STEP 28 §54 (adapted to FollowUp — CRM AdminTasks keep using the existing
+// TaskSlaConfig/classifyTaskSla system as-is).
+enum CrmFollowUpSlaState {
+  ON_TRACK
+  DUE_SOON
+  DUE
+  OVERDUE
+  BREACHED
+  PAUSED
+  EXEMPT
+}
+
+// STEP 28 §29 — admin-configurable multi-stage reminder cadence per follow-up
+// type, instead of the single hard-coded "due today" check the pre-STEP-28
+// cron used. A typed Int[] column is simpler to query/admin-edit than a JSON
+// blob, and keeps this distinct from TaskSlaConfig (task SLA != follow-up
+// reminder cadence — different domains, keyed differently).
+model FollowUpReminderConfig {
+  id             String          @id @default(cuid())
+  followUpType   CrmFollowUpType @unique
+  hoursBeforeDue Int[] // e.g. [24, 12, 1, 0] — 0 means "at due time"
+  active         Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+// Dedup guard for the multi-stage reminder loop — one row per
+// (followUpId, hoursBeforeDue) actually sent, so re-running the cron never
+// re-sends the same stage twice. Preferred over a mutable array column on
+// FollowUp itself (spec §29's "do not hard-code" is about the intervals,
+// not the dedup mechanism).
+model FollowUpReminderLog {
+  id             String   @id @default(cuid())
+  followUp       FollowUp @relation(fields: [followUpId], references: [id], onDelete: Cascade)
+  followUpId     String
+  hoursBeforeDue Int
+  sentAt         DateTime @default(now())
+
+  @@unique([followUpId, hoursBeforeDue])
 }
 
 // ---------- Contact sharing ----------
@@ -6405,6 +6541,11 @@ enum AiFeature {
   // STEP 24 — read-only summary of a RiskCase; never concludes guilt, never
   // decides an adverse action (see src/lib/ai/safety.ts ADVERSE_DECISION).
   RISK_CASE_SUMMARY
+  // STEP 28 — read-only summary of a CRM record's own operational metadata
+  // (lifecycle stage, follow-up/proposal counts, neutral risk indicator band
+  // only). Built-in builder only, same as RISK_CASE_SUMMARY — see
+  // src/lib/crm/ai-assistant.ts.
+  CRM_SUMMARY
 }
 
 enum AiRequestStatus {
@@ -8322,4 +8463,324 @@ model DocumentOcrResult {
   createdAt     DateTime @default(now())
 
   @@index([documentId])
+}
+
+// =====================================================================
+// STEP 28 — CRM, Applicant Lifecycle, Lead Management, Follow-Up &
+// Relationship History. Additive only — Profile.status (ProfileStatus)
+// remains the sole driver of matching/proposal/verification logic and is
+// never written to by anything in this block; see CrmLifecycleStage below
+// for the separate, richer operational view this STEP adds on top of it.
+// =====================================================================
+
+// The central per-applicant operational record (spec §2). One per eligible
+// applicant — created alongside (or shortly after) Profile creation, or via
+// Lead conversion (see Lead below).
+model CrmRecord {
+  id                 String             @id @default(cuid())
+  crmCode            String             @unique // LPP-CRM-######
+  profile            Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId          String             @unique
+  lifecycleStage     CrmLifecycleStage  @default(REGISTERED)
+  leadId             String? // loose pointer to the originating Lead, if any
+  leadSource         LeadSource?
+  assignedStaff      AdminUser?         @relation(fields: [assignedStaffId], references: [id])
+  assignedStaffId    String?
+  assignedTeamId     String? // loose pointer to Department — mirrors AdminTask.assignedDepartmentId
+  assignmentStatus   AssignmentStatus   @default(UNASSIGNED)
+  priority           AssignmentPriority @default(NORMAL)
+  lastActivityAt     DateTime?
+  nextFollowupAt     DateTime?
+  // STEP 27 campaign attribution — loose pointers, never duplicated data (spec §49).
+  referralId         String?
+  couponId           String?
+  promotionId        String?
+  // STEP 28 §39 merge history — see src/lib/crm/merge-service.ts. Conservative
+  // by design: absorbed profiles' Proposal/Payment/Document/Subscription rows
+  // are NOT repointed here, only CRM-layer data is (see CrmMergeLink).
+  absorbedProfileIds String[]           @default([])
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  lifecycleHistory CrmLifecycleHistory[]
+  notes            CrmNote[]
+  tags             CrmRecordTag[]
+  followUps        FollowUp[]
+
+  @@index([lifecycleStage])
+  @@index([assignedStaffId])
+  @@index([priority, nextFollowupAt])
+  @@index([leadId])
+}
+
+// STEP 28 §3/§6 — full operational granularity. Deliberately NOT the same
+// enum as ProfileStatus: this tracks CRM-specific operational states
+// (CONTACT_COORDINATION, FOLLOWUP, FURTHER_DISCUSSION, FINALIZATION_REVIEW)
+// that ProfileStatus has no equivalent for, and is kept in sync one-way,
+// best-effort from ProfileStatus via src/lib/crm/profile-status-sync.ts —
+// never the reverse.
+enum CrmLifecycleStage {
+  REGISTERED
+  PROFILE_INCOMPLETE
+  PROFILE_SUBMITTED
+  UNDER_REVIEW
+  VERIFICATION_PENDING
+  VERIFIED
+  ACTIVE
+  MATCHING
+  PROPOSAL_ACTIVE
+  WAITING_FOR_RESPONSE
+  MUTUAL_INTEREST
+  CONTACT_COORDINATION
+  MEETING_SCHEDULED
+  MEETING_COMPLETED
+  FOLLOWUP
+  FURTHER_DISCUSSION
+  FINALIZATION_REVIEW
+  FINALIZED
+  MARRIED
+  ON_HOLD
+  NOT_INTERESTED
+  REJECTED
+  DEACTIVATED
+  SUSPENDED
+  ARCHIVED
+}
+
+// STEP 28 §4 — append-only; no update/delete path is ever exposed by
+// src/lib/crm/lifecycle-service.ts. Mirrors CaseStatusHistory/
+// SubscriptionEvent's exact precedent.
+model CrmLifecycleHistory {
+  id          String             @id @default(cuid())
+  crmRecord   CrmRecord          @relation(fields: [crmRecordId], references: [id], onDelete: Cascade)
+  crmRecordId String
+  fromStage   CrmLifecycleStage?
+  toStage     CrmLifecycleStage
+  reason      String?
+  triggeredBy TriggerSource
+  actorId     String? // AdminUser id; null for AUTOMATION/PROFILE_STATUS_SYNC
+  createdAt   DateTime           @default(now())
+
+  @@index([crmRecordId, createdAt])
+}
+
+enum TriggerSource {
+  MANUAL
+  AUTOMATION
+  PROFILE_STATUS_SYNC
+}
+
+// STEP 28 §7-11 — pre-registration intake. A Lead predates any Profile/
+// CrmRecord; on conversion it links to both (spec §10's Lead -> Applicant
+// Account -> CRM Record flow).
+model Lead {
+  id                   String     @id @default(cuid())
+  leadCode             String     @unique // LPP-LEAD-######
+  fullName             String
+  email                String?
+  phone                String?
+  city                 String?
+  area                 String?
+  inquiry              String?
+  source               LeadSource
+  campaign             String?
+  status               LeadStatus @default(NEW)
+  assignedStaffId      String?
+  assignedTeamId       String?
+  // STEP 28 §12 — checked before any non-essential outreach, alongside the
+  // existing STEP 13/23/25 consent/preference/suppression checks; this flag
+  // alone is never sufficient on its own to permit outreach.
+  consentGiven         Boolean    @default(false)
+  duplicateOfLeadId    String?
+  convertedProfileId   String?
+  convertedCrmRecordId String?
+  referralId           String? // STEP 27 attribution
+  couponId             String?
+  promotionId          String?
+  notes                String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  convertedAt          DateTime?
+
+  events LeadEvent[]
+
+  @@index([status])
+  @@index([assignedStaffId])
+  @@index([source])
+}
+
+// Append-only, mirrors CrmLifecycleHistory's exact shape.
+model LeadEvent {
+  id         String      @id @default(cuid())
+  lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId     String
+  fromStatus LeadStatus?
+  toStatus   LeadStatus
+  reason     String?
+  actorId    String?
+  createdAt  DateTime    @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+enum LeadSource {
+  WEBSITE
+  SOCIAL_MEDIA
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
+  YOUTUBE
+  WHATSAPP
+  REFERRAL
+  FAMILY_REFERRAL
+  STAFF_REFERRAL
+  DIRECT
+  AD_CAMPAIGN
+  EVENT
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  RESPONDED
+  QUALIFICATION_PENDING
+  QUALIFIED
+  DUPLICATE_REVIEW_REQUIRED
+  REGISTRATION_STARTED
+  REGISTERED
+  CONVERTED
+  NOT_INTERESTED
+  INVALID
+  DUPLICATE
+  DO_NOT_CONTACT
+  ARCHIVED
+}
+
+// STEP 28 §24/§25 — visibility reuses CommunicationVisibility directly
+// (PUBLIC_TO_USER/INTERNAL_ONLY/STAFF_SHARED/MANAGER_ONLY is an exact
+// structural match for the spec's ask) rather than a near-duplicate enum.
+// Soft-delete mirrors TaskComment's exact pattern (deletedAt, never a hard delete).
+model CrmNote {
+  id          String                  @id @default(cuid())
+  crmRecord   CrmRecord               @relation(fields: [crmRecordId], references: [id], onDelete: Cascade)
+  crmRecordId String
+  authorId    String
+  body        String
+  visibility  CommunicationVisibility @default(INTERNAL_ONLY)
+  deletedAt   DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([crmRecordId, createdAt])
+}
+
+// STEP 28 §33/§34 — system + admin-created tags. Content policy (no
+// stigmatizing/defamatory labels) is enforced in src/lib/crm/crm-record-service.ts
+// at creation time, not here — a denylist check, not a schema constraint.
+model CrmTag {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  category    String?
+  isSystem    Boolean  @default(false)
+  active      Boolean  @default(true)
+  colorToken  String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  records CrmRecordTag[]
+}
+
+model CrmRecordTag {
+  id          String    @id @default(cuid())
+  crmRecord   CrmRecord @relation(fields: [crmRecordId], references: [id], onDelete: Cascade)
+  crmRecordId String
+  tag         CrmTag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId       String
+  addedById   String?
+  addedAt     DateTime  @default(now())
+
+  @@unique([crmRecordId, tagId])
+  @@index([tagId])
+}
+
+// STEP 28 §36/§37 — mirrors SavedSearch's exact shape; a separate model
+// because the filterable-field universe differs (lifecycle/assignment/
+// follow-up-status/etc. vs SEARCHABLE_FIELDS' Profile-only fields).
+model CrmSavedView {
+  id           String                @id @default(cuid())
+  viewCode     String                @unique // LPP-CRMV-######
+  owner        AdminUser             @relation(fields: [ownerId], references: [id])
+  ownerId      String
+  name         String
+  description  String?
+  filterJson   Json
+  viewType     CrmViewType           @default(TABLE)
+  visibility   SavedSearchVisibility @default(PRIVATE)
+  departmentId String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([ownerId])
+  @@index([visibility])
+}
+
+enum CrmViewType {
+  TABLE
+  KANBAN
+}
+
+// STEP 28 §38/§39 — the actual merge EXECUTION step that STEP 24/23's
+// planDuplicateMerge() deliberately leaves manual (see its own comment:
+// "this plan does not execute it"). Conservative by design: only CRM-layer
+// rows move to the survivor; Proposal/Payment/Document/Subscription/
+// VerificationDocument foreign keys are NEVER rewritten by this — one row
+// per absorbed profile records exactly what moved, so staff can still find
+// historical data on the original profile record.
+model CrmMergeLink {
+  id                  String   @id @default(cuid())
+  survivorCrmRecordId String
+  absorbedProfileId   String
+  clusterId           String // the DuplicateCluster this merge executed
+  approvalCode        String // the ApprovalRequest that gated this (DUPLICATE_MERGE)
+  movedNotes          Int      @default(0)
+  movedTags           Int      @default(0)
+  movedFollowups      Int      @default(0)
+  movedLeadEvents     Int      @default(0)
+  executedById        String
+  executedAt          DateTime @default(now())
+
+  @@index([survivorCrmRecordId])
+  @@index([absorbedProfileId])
+}
+
+// STEP 28 §15 — admin-configurable assignment rule per resource type
+// (+ optional department scope). autoAssign() in
+// src/lib/crm/assignment-service.ts consults this; ROUND_ROBIN's
+// "lastAssignedId" is a simple rotating pointer, not a queue.
+model AssignmentRuleConfig {
+  id             String                 @id @default(cuid())
+  resourceType   AssignmentResourceType
+  // "GLOBAL" sentinel for "no department scope" instead of null — a nullable
+  // column here would break the compound-unique lookup below under Postgres
+  // NULL semantics (every NULL is distinct, so findUnique on a null
+  // departmentId could never find the "global" row it's looking for).
+  departmentId   String                 @default("GLOBAL")
+  rule           CrmAssignmentRule      @default(MANUAL)
+  lastAssignedId String? // ROUND_ROBIN pointer only
+  active         Boolean                @default(true)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([resourceType, departmentId])
+}
+
+enum CrmAssignmentRule {
+  ROUND_ROBIN
+  LEAST_LOADED
+  MANUAL
+  TEAM_BASED
+  SPECIALIZATION
+  GEOGRAPHIC
 }

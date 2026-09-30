@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT" | "CRM";
 
 export interface CatalogEntry {
   label: string;
@@ -145,6 +145,12 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   // restrictions always need a real second approver.
   PERMANENT_RESTRICTION: { label: "Apply a permanent (no end date) account restriction", domain: "RISK", sourceType: "PROFILE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
   DUPLICATE_MERGE: { label: "Approve a duplicate-account merge plan", domain: "RISK", sourceType: "PROFILE", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["VERIFICATION_MANAGER", "SUPER_ADMIN"] },
+  // ---------- STEP 28 ----------
+  // No dedicated "CRM Manager" role exists or is created by this STEP —
+  // OPERATIONS_ADMIN (the existing general operations oversight role)
+  // covers it, matching the "reuse an existing role" precedent set by
+  // every prior STEP that considered and rejected a new role.
+  CRM_BULK_HIGH_RISK_ACTION: { label: "Run a high-risk bulk CRM action", domain: "CRM", sourceType: "CRM_RECORD", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["OPERATIONS_ADMIN", "SUPER_ADMIN"] },
   RISK_RULE_CHANGE: { label: "Change a risk rule or factor", domain: "RISK", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   RISK_THRESHOLD_CHANGE: { label: "Change a risk threshold or rate-limit policy", domain: "RISK", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   // STEP 25 - communication. sourceId is the template / campaign / provider id (loose reference, like the compliance entries).

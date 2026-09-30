@@ -3,7 +3,8 @@ import { ApiError } from "@/lib/route-guard";
 import { getCurrentAssigneeId } from "@/lib/admin-assignment";
 import { hasActiveBreakGlass } from "@/lib/privacy/break-glass";
 import { hasBroadRecordAccess, type AdminRole, type Permission } from "@/lib/permissions";
-import type { Case } from "@prisma/client";
+import { typePermissionFor } from "@/lib/case-type-permission";
+import type { Case, CaseType } from "@prisma/client";
 
 // Spec §11 — the concrete, Cases-only implementation of VIEW/COMMENT/EDIT/
 // MANAGE/APPROVE/OWNER. Nothing else in this codebase has a graded
@@ -93,4 +94,53 @@ export function canViewNoteLevel(admin: AccessAdmin, noteLevel: keyof typeof NOT
 export function defaultNoteLevelFor(admin: AccessAdmin): "STAFF" | "ADMIN" | "SENIOR_ADMIN" | "SUPER_ADMIN" {
   const rank = resolveNoteViewRank(admin);
   return (Object.keys(NOTE_LEVEL_RANK) as (keyof typeof NOTE_LEVEL_RANK)[]).find((k) => NOTE_LEVEL_RANK[k] === rank) ?? "STAFF";
+}
+
+export interface CaseSummaryForProfile {
+  id: string;
+  caseNumber: string;
+  type: CaseType;
+  subject: string;
+  priority: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Extracted from src/app/api/admin/cases/route.ts's GET handler (spec §29's
+// relatedToProfileId filter) for reuse by the CRM Applicant 360 Support tab
+// and src/lib/crm/timeline-service.ts — same visibility rules: a case type
+// the admin lacks the matching view permission for is excluded entirely, a
+// staff-conduct complaint (reportedAdminId set) requires
+// cases:staff-conduct:view, and a non-broad-access role only sees cases it's
+// assigned to or explicitly shared on.
+export async function listCasesForProfile(profileId: string, admin: AccessAdmin): Promise<CaseSummaryForProfile[]> {
+  const allowedTypes: CaseType[] = (["SUPPORT", "COMPLAINT", "SAFETY_REPORT", "INTERNAL"] as CaseType[]).filter((t) => {
+    const perm = typePermissionFor(t, "view");
+    return !perm || admin.permissions.includes(perm);
+  });
+  if (allowedTypes.length === 0) return [];
+
+  const visibleIdFilter: { in: string[] } | undefined = hasBroadRecordAccess(admin.role)
+    ? undefined
+    : await (async () => {
+        const [assignedCaseIds, sharedCaseIds] = await Promise.all([
+          prisma.adminAssignment.findMany({ where: { resourceType: "CASE", adminId: admin.id, status: { not: "REASSIGNED" } }, select: { resourceId: true } }),
+          prisma.caseAccessGrant.findMany({ where: { adminId: admin.id }, select: { caseId: true } }),
+        ]);
+        return { in: [...new Set([...assignedCaseIds.map((a) => a.resourceId), ...sharedCaseIds.map((s) => s.caseId)])] };
+      })();
+
+  const cases = await prisma.case.findMany({
+    where: {
+      type: { in: allowedTypes },
+      OR: [{ reporterProfileId: profileId }, { reportedProfileId: profileId }],
+      ...(admin.permissions.includes("cases:staff-conduct:view") ? {} : { reportedAdminId: null }),
+      ...(visibleIdFilter ? { id: visibleIdFilter } : {}),
+    },
+    select: { id: true, caseNumber: true, type: true, subject: true, priority: true, status: true, createdAt: true, updatedAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return cases;
 }

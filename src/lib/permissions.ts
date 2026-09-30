@@ -431,7 +431,55 @@ export type Permission =
   | "referrals:manage"
   | "referrals:review"
   | "promotions:view"
-  | "promotions:manage";
+  | "promotions:manage"
+  // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
+  | "crm:view"
+  | "crm:create"
+  | "crm:edit"
+  | "crm:archive"
+  | "crm:restore"
+  | "crm:assign"
+  | "crm:reassign"
+  | "crm:lifecycle:view"
+  | "crm:lifecycle:manage"
+  | "crm:leads:view"
+  | "crm:leads:manage"
+  | "crm:leads:convert"
+  | "crm:notes:view"
+  | "crm:notes:create"
+  | "crm:notes:edit"
+  | "crm:notes:delete"
+  | "crm:notes:manager_view"
+  | "crm:followups:view"
+  | "crm:followups:create"
+  | "crm:followups:edit"
+  | "crm:followups:complete"
+  | "crm:tags:view"
+  | "crm:tags:manage"
+  | "crm:search"
+  | "crm:saved_views:view"
+  | "crm:saved_views:create"
+  | "crm:saved_views:edit"
+  | "crm:saved_views:delete"
+  | "crm:analytics:view"
+  | "crm:reports:view"
+  | "crm:export"
+  | "crm:bulk"
+  | "crm:merge:view"
+  | "crm:merge:request"
+  | "crm:merge:approve"
+  | "crm:workflow:view"
+  | "crm:workflow:manage"
+  | "crm:sla:view"
+  | "crm:sla:manage"
+  | "crm:audit:view"
+  | "sensitive:crm:view"
+  | "sensitive:crm:export"
+  | "sensitive:crm:notes:view"
+  | "sensitive:crm:communication:view"
+  | "sensitive:crm:documents:view"
+  | "sensitive:crm:risk:view"
+  | "ai:crm:use";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -605,6 +653,48 @@ const FINANCE_ALL_PERMISSIONS: Permission[] = [
   "promotions:manage",
 ];
 
+const CRM_ALL_PERMISSIONS: Permission[] = [
+  "crm:view",
+  "crm:create",
+  "crm:edit",
+  "crm:archive",
+  "crm:restore",
+  "crm:assign",
+  "crm:reassign",
+  "crm:lifecycle:view",
+  "crm:lifecycle:manage",
+  "crm:leads:view",
+  "crm:leads:manage",
+  "crm:leads:convert",
+  "crm:notes:view",
+  "crm:notes:create",
+  "crm:notes:edit",
+  "crm:notes:delete",
+  "crm:followups:view",
+  "crm:followups:create",
+  "crm:followups:edit",
+  "crm:followups:complete",
+  "crm:tags:view",
+  "crm:tags:manage",
+  "crm:search",
+  "crm:saved_views:view",
+  "crm:saved_views:create",
+  "crm:saved_views:edit",
+  "crm:saved_views:delete",
+  "crm:analytics:view",
+  "crm:reports:view",
+  "crm:export",
+  "crm:bulk",
+  "crm:merge:view",
+  "crm:merge:request",
+  "crm:merge:approve",
+  "crm:workflow:view",
+  "crm:workflow:manage",
+  "crm:sla:view",
+  "crm:sla:manage",
+  "crm:audit:view",
+];
+
 const SYSTEM_ALL_PERMISSIONS: Permission[] = [
   "system:view",
   "system:config:manage",
@@ -636,6 +726,7 @@ const AI_ALL_PERMISSIONS: Permission[] = [
   "ai:test:run",
   "ai:compliance:use",
   "ai:risk:use",
+  "ai:crm:use",
 ];
 
 // STEP 23 Add-on — the full compliance permission set; SUPER_ADMIN holds all
@@ -1000,6 +1091,14 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...RISK_ALL_PERMISSIONS,
     ...COMMUNICATIONS_ALL_PERMISSIONS,
     ...DOCUMENTS_ALL_PERMISSIONS,
+    ...CRM_ALL_PERMISSIONS,
+    "crm:notes:manager_view",
+    "sensitive:crm:view",
+    "sensitive:crm:export",
+    "sensitive:crm:notes:view",
+    "sensitive:crm:communication:view",
+    "sensitive:crm:documents:view",
+    "sensitive:crm:risk:view",
     ...ROLES_ALL_PERMISSIONS,
     ...TASKS_ALL_PERMISSIONS,
     ...APPROVALS_ALL_PERMISSIONS,
@@ -1163,7 +1262,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // bundled into match:run/proposal:create, which also let the holder act, not just view) —
   // disclosed gap, not silently worked around by granting an action permission to a
   // read-only role. system:view is read-only (System Health/Config pages; no system:*:manage).
-  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "documents:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view", "search:view"],
+  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "documents:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view", "search:view", "crm:view"],
 
   // ---------------------------------------------------------------- OPERATIONS_ADMIN (spec §5)
   OPERATIONS_ADMIN: [
@@ -1209,6 +1308,19 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...OPERATIONS_APPROVAL_PERMISSIONS,
     ...SEARCH_ALL_PERMISSIONS,
     "family:manage",
+    // STEP 28 — CRM oversight sits with Operations (no dedicated "CRM Manager"
+    // role exists or is created by this STEP), including the manager-only
+    // note tier and merge approval; sensitive:crm:* covers viewing/exporting
+    // linked communication/document/risk data surfaced inside the CRM.
+    ...CRM_ALL_PERMISSIONS,
+    "crm:notes:manager_view",
+    "ai:crm:use",
+    "sensitive:crm:view",
+    "sensitive:crm:export",
+    "sensitive:crm:notes:view",
+    "sensitive:crm:communication:view",
+    "sensitive:crm:documents:view",
+    "sensitive:crm:risk:view",
     // deliberately lacks: admin:manage/roles:* (no role/permission management), finance:provider:manage,
     // finance:rollout:* (no unrestricted payment rollout control unless separately delegated),
     // system:restore:approve (no system recovery), releases:manage (no deployment control),
@@ -1239,6 +1351,22 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
     ...MATCHMAKING_SEARCH_PERMISSIONS,
+    // STEP 28 — a superset of STAFF_MATCHMAKER's CRM grants (role-management's
+    // manager-superset invariant), plus manager-level note/assignment oversight.
+    "crm:view",
+    "crm:lifecycle:view",
+    "crm:notes:view",
+    "crm:notes:create",
+    "crm:notes:edit",
+    "crm:notes:delete",
+    "crm:followups:view",
+    "crm:followups:create",
+    "crm:followups:edit",
+    "crm:followups:complete",
+    "crm:tags:view",
+    "crm:search",
+    "crm:assign",
+    "crm:reassign",
     // deliberately lacks match:configure (cannot change matching algorithm weights, spec §6),
     // admin:manage / staff:view / roles:* (cannot manage staff permissions),
     // finance:* (cannot manage payment settings).
@@ -1298,6 +1426,23 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
     ...MANAGER_SEARCH_PERMISSIONS,
+    // STEP 28 — a superset of VERIFICATION_STAFF's CRM grants (role-management's
+    // "a manager can grant any role whose permissions it fully holds" invariant),
+    // plus manager-level note/assignment oversight.
+    "crm:view",
+    "crm:lifecycle:view",
+    "crm:notes:view",
+    "crm:notes:create",
+    "crm:notes:edit",
+    "crm:notes:delete",
+    "crm:followups:view",
+    "crm:followups:create",
+    "crm:followups:edit",
+    "crm:followups:complete",
+    "crm:tags:view",
+    "crm:search",
+    "crm:assign",
+    "crm:reassign",
     // deliberately lacks proposal:finalize/contact:reveal (spec §7: cannot finalize proposals or
     // share contacts merely because verification is complete), finance:*, roles:*,
     // risk:escalate/risk:policy:manage/verification:policy:manage/duplicates:manage/
@@ -1365,6 +1510,20 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "security:approval:approve", // STEP 19 §6 SAFETY domain (SAFETY_RESTRICTION/PROFILE_SUSPENSION/SAFETY_CASE_ESCALATION) sits with Support Manager, mirroring safety_cases:* above
     ...MANAGER_SEARCH_PERMISSIONS,
     "family:manage",
+    // STEP 28 — a superset of SUPPORT_STAFF's CRM grants (role-management's
+    // manager-superset invariant), plus manager-level note/assignment oversight.
+    "crm:view",
+    "crm:notes:view",
+    "crm:notes:create",
+    "crm:notes:edit",
+    "crm:notes:delete",
+    "crm:followups:view",
+    "crm:followups:create",
+    "crm:followups:edit",
+    "crm:followups:complete",
+    "crm:search",
+    "crm:assign",
+    "crm:reassign",
     // deliberately lacks sensitive:finance:*, proposal:finalize, roles:*, security:approval:execute
     // (execution of a security override stays with Super Admin/Operations Admin).
   ],
@@ -1400,6 +1559,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...MANAGER_TASK_PERMISSIONS,
     ...MANAGER_APPROVAL_PERMISSIONS,
     ...MANAGER_SEARCH_PERMISSIONS,
+    // STEP 28 — a superset of COMMUNICATION_STAFF's sole CRM grant (role-management's manager-superset invariant).
+    "crm:view",
     // deliberately lacks sensitive:contact:view/contact:reveal (cannot access private contact
     // details unless separately granted), contact:reveal:override, profile:edit, verification:*, finance:*.
     // Spec §9 also lists proposals.view/proposal_communications.view/meetings.view: same disclosed
@@ -1509,6 +1670,18 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "candidate:recommend", // STEP 20 — matchmaking staff specifically may run mutual-candidate search + advanced filters, unlike other *_STAFF roles
     // sensitive:contact:view intentionally NOT granted by default — spec §11: requires the
     // permission AND approved consent/workflow, granted per-admin when actually needed.
+    // STEP 28 — matchmaking staff work the CRM pipeline day-to-day: view/lifecycle-view,
+    // their own notes/follow-ups, tags read, search. No merge/bulk/export/workflow-manage.
+    "crm:view",
+    "crm:lifecycle:view",
+    "crm:notes:view",
+    "crm:notes:create",
+    "crm:followups:view",
+    "crm:followups:create",
+    "crm:followups:edit",
+    "crm:followups:complete",
+    "crm:tags:view",
+    "crm:search",
   ],
 
   // ---------------------------------------------------------------- VERIFICATION_STAFF (spec §12)
@@ -1532,6 +1705,15 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...STAFF_SEARCH_PERMISSIONS,
     // deliberately lacks verification:approve/reject — only granted per-admin when explicitly
     // authorized (spec §12). Same for documents:verify/reject/verification:documents:approve/reject/reverify.
+    // STEP 28 — verification staff can see/annotate the CRM record while reviewing, not manage it broadly.
+    "crm:view",
+    "crm:lifecycle:view",
+    "crm:notes:view",
+    "crm:notes:create",
+    "crm:followups:view",
+    "crm:followups:create",
+    "crm:followups:complete",
+    "crm:search",
   ],
 
   // ---------------------------------------------------------------- SUPPORT_STAFF (spec §13)
@@ -1551,6 +1733,14 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...STAFF_APPROVAL_PERMISSIONS,
     ...STAFF_SEARCH_PERMISSIONS,
     // deliberately lacks sensitive:documents/income/contact/notes:view (spec §13) unless separately granted.
+    // STEP 28 — support staff need CRM context (open cases/notes/follow-ups) for the applicant they're helping.
+    "crm:view",
+    "crm:notes:view",
+    "crm:notes:create",
+    "crm:followups:view",
+    "crm:followups:create",
+    "crm:followups:complete",
+    "crm:search",
   ],
 
   // ---------------------------------------------------------------- COMMUNICATION_STAFF (spec §14)
@@ -1564,6 +1754,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...STAFF_APPROVAL_PERMISSIONS,
     ...STAFF_SEARCH_PERMISSIONS,
     // deliberately lacks contact:reveal/sensitive:contact:view, profile:edit, verification:*, finance:*.
+    // STEP 28 — read-only CRM context before sending a message; no note/follow-up authoring here.
+    "crm:view",
   ],
 
   // ---------------------------------------------------------------- REPORTING_ANALYST (spec §15)
@@ -1583,6 +1775,11 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     // task mutation permission (create/assign/complete/escalate/etc.) — read-only analytics only.
     // Same for approvals:* — no create/approve/reject/execute, read-only governance analytics (spec §39).
     // Same for search:* — view-only, no candidate:*/advanced/sensitive/export (spec §46's analytics-only framing).
+    // STEP 28 — read-only CRM analytics/reports/export, no record mutation.
+    "crm:view",
+    "crm:analytics:view",
+    "crm:reports:view",
+    "crm:export",
   ],
 };
 

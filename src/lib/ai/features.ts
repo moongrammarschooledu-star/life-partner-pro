@@ -12,6 +12,9 @@ import { buildReportSummary } from "@/lib/ai/analysis/report";
 import { buildRiskCaseSummary } from "@/lib/ai/analysis/risk-summary";
 import { getRiskCaseForActor } from "@/lib/risk/case-service";
 import { verifyEvidenceRecord } from "@/lib/risk/evidence-service";
+import { assertCanSeeCrmRecord } from "@/lib/crm/access";
+import { buildCrmApplicantSummary, buildCrmTimelineSummary } from "@/lib/crm/ai-assistant";
+import { getCrmTimeline } from "@/lib/crm/timeline-service";
 import { STANDARD_LIMITATIONS } from "@/lib/ai/analysis/summary";
 import { loadMatchConfig } from "@/lib/ai/match-config";
 import { executeTool } from "@/lib/ai/copilot/tools";
@@ -215,7 +218,10 @@ export async function runCommunicationDraft(admin: SessionAdmin, input: { profil
 }
 
 export async function runFollowUpDraft(admin: SessionAdmin, input: { followUpId: string; language: AiLanguage }): Promise<AiOutcome> {
-  const fu = await prisma.followUp.findUnique({ where: { id: input.followUpId }, select: { id: true, adminId: true, profileId: true, purpose: true, status: true, dueDate: true, priority: true, proposal: { select: { status: true } } } });
+  const fu = await prisma.followUp.findUnique({
+    where: { id: input.followUpId },
+    select: { id: true, adminId: true, profileId: true, purpose: true, status: true, dueDate: true, priority: true, proposal: { select: { status: true } }, crmRecord: { select: { crmCode: true, lifecycleStage: true } } },
+  });
   try {
     if (!fu) throw new ApiError(403, "no access");
     await assertFollowUpAccess(admin, { id: fu.id, adminId: fu.adminId });
@@ -231,7 +237,19 @@ export async function runFollowUpDraft(admin: SessionAdmin, input: { followUpId:
     extraCacheParts: { followUp: fu.id, due: fu.dueDate.toISOString(), status: fu.status },
     build: async (ctx) => ({
       payload: buildFollowUpSuggestion(
-        { profileCode: ctx.loaded[0].view.profileCode, purpose: fu.purpose, status: fu.status, dueDate: fu.dueDate, priority: fu.priority, proposalStatus: fu.proposal?.status ?? null, now: new Date() },
+        {
+          profileCode: ctx.loaded[0].view.profileCode,
+          purpose: fu.purpose,
+          status: fu.status,
+          dueDate: fu.dueDate,
+          priority: fu.priority,
+          proposalStatus: fu.proposal?.status ?? null,
+          now: new Date(),
+          // STEP 28 — enriches the draft's evidence when this follow-up is
+          // CRM-linked; a pre-STEP-28 follow-up simply has no crmRecord.
+          crmCode: fu.crmRecord?.crmCode,
+          lifecycleStage: fu.crmRecord?.lifecycleStage,
+        },
         input.language
       ),
     }),
@@ -296,6 +314,65 @@ export async function runRiskCaseSummary(admin: SessionAdmin, input: { riskCaseI
           linkedDuplicateCluster: cluster > 0,
           falsePositiveSignals: signals.filter((s) => s.status === "FALSE_POSITIVE").length,
           cappedBySingleSignal: assessment?.cappedBySingleSignal ?? false,
+        }),
+      };
+    },
+  });
+}
+
+// STEP 28 — CRM applicant/timeline summary. Built-in deterministic builder
+// only (src/lib/crm/ai-assistant.ts), same no-provider-call pattern as
+// RISK_CASE_SUMMARY above; the neutral risk-indicator band (never a raw
+// score, spec §46) comes from the most recent open RiskCase, if any.
+export async function runCrmSummary(admin: SessionAdmin, input: { crmRecordId: string; mode?: "applicant" | "timeline" }): Promise<AiOutcome> {
+  const record = await prisma.crmRecord.findUnique({ where: { id: input.crmRecordId } });
+  try {
+    if (!record) throw new ApiError(403, "no access");
+    assertCanSeeCrmRecord(admin, record);
+  } catch {
+    await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature: "CRM_SUMMARY", reason: "UNKNOWN_OR_HIDDEN_RECORD" });
+    return denied("You do not have access to this CRM record.");
+  }
+
+  return runAiRequest({
+    admin,
+    feature: "CRM_SUMMARY",
+    profileIds: [],
+    extraCacheParts: { crmRecordId: record.id, mode: input.mode ?? "applicant", updatedAt: record.updatedAt.toISOString() },
+    build: async () => {
+      if (input.mode === "timeline") {
+        const items = await getCrmTimeline(record.id, admin, 500);
+        const stageChanges = items.filter((i) => i.sourceType === "LIFECYCLE").length;
+        const first = items[items.length - 1]?.createdAt;
+        const last = items[0]?.createdAt;
+        const spanDays = first && last ? Math.max(0, Math.round((last.getTime() - first.getTime()) / 86_400_000)) : 0;
+        return { payload: buildCrmTimelineSummary({ eventCount: items.length, stageChanges, spanDays, lastEventLabel: items[0]?.label ?? null }) };
+      }
+
+      const [assignedStaff, verification, openFollowUps, overdueFollowUps, activeProposals, tagRows, openRiskCase, activeSubscription] = await Promise.all([
+        record.assignedStaffId ? prisma.adminUser.findUnique({ where: { id: record.assignedStaffId }, select: { name: true } }) : Promise.resolve(null),
+        prisma.profileVerification.findUnique({ where: { profileId: record.profileId }, select: { status: true } }),
+        prisma.followUp.count({ where: { crmRecordId: record.id, status: { notIn: ["COMPLETED", "CANCELLED"] } } }),
+        prisma.followUp.count({ where: { crmRecordId: record.id, slaState: { in: ["OVERDUE", "BREACHED"] } } }),
+        prisma.proposal.count({ where: { OR: [{ profileAId: record.profileId }, { profileBId: record.profileId }], status: { notIn: ["CLOSED", "REJECTED", "ARCHIVED", "NOT_INTERESTED"] } } }),
+        prisma.crmRecordTag.findMany({ where: { crmRecordId: record.id }, include: { tag: { select: { name: true } } } }),
+        prisma.riskCase.findFirst({ where: { subjectProfileId: record.profileId, status: { notIn: ["CLOSED", "DISMISSED"] } }, orderBy: { createdAt: "desc" }, select: { riskLevel: true } }),
+        prisma.subscription.findFirst({ where: { profileId: record.profileId, status: "ACTIVE" }, include: { package: { select: { name: true } } } }),
+      ]);
+
+      return {
+        payload: buildCrmApplicantSummary({
+          crmCode: record.crmCode,
+          lifecycleStage: record.lifecycleStage,
+          verificationStatus: verification?.status ?? "NOT_VERIFIED",
+          assignedStaffName: assignedStaff?.name ?? null,
+          openFollowUps,
+          overdueFollowUps,
+          activeProposals,
+          lastActivityDaysAgo: record.lastActivityAt ? Math.round((Date.now() - record.lastActivityAt.getTime()) / 86_400_000) : null,
+          membershipPackageName: activeSubscription?.package?.name ?? null,
+          riskIndicatorBand: openRiskCase?.riskLevel ?? null,
+          tags: tagRows.map((t) => t.tag.name),
         }),
       };
     },

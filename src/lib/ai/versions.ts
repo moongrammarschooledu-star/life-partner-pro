@@ -23,6 +23,7 @@ export const PROMPT_VERSIONS = {
   // entry, so runAiRequest would have recorded an undefined promptVersion).
   COMPLIANCE_SUMMARY: "LPP-AI-COMPLIANCE-SUMMARY-v1.0",
   RISK_CASE_SUMMARY: "LPP-AI-RISK-CASE-SUMMARY-v1.0",
+  CRM_SUMMARY: "LPP-AI-CRM-SUMMARY-v1.0",
 } as const;
 
 export type AiFeatureKey = keyof typeof PROMPT_VERSIONS;

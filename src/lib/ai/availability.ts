@@ -18,6 +18,7 @@ export const FEATURE_FLAG_FOR: Record<AiFeature, string> = {
   PROFILE_IMPROVEMENT: "ai.profile_summary.enabled",
   COMPLIANCE_SUMMARY: "ai.compliance_summary.enabled",
   RISK_CASE_SUMMARY: "ai.risk_summary.enabled",
+  CRM_SUMMARY: "ai.crm_summary.enabled",
 };
 
 export const PERMISSION_FOR: Record<AiFeature, Permission> = {
@@ -38,6 +39,9 @@ export const PERMISSION_FOR: Record<AiFeature, Permission> = {
   // STEP 24 — its own permission, never bundled into "ai:use": risk data is
   // sensitive internal information (spec §48).
   RISK_CASE_SUMMARY: "ai:risk:use",
+  // STEP 28 — its own permission, never bundled into "ai:use": CRM records
+  // carry cross-domain operational context (lifecycle, assignment, risk band).
+  CRM_SUMMARY: "ai:crm:use",
 };
 
 export type UnavailableReason = "KILL_SWITCH" | "PHASE_DISABLED" | "NOT_IN_ROLLOUT" | "FLAG_OFF" | "PROVIDER_DISABLED" | "NO_PERMISSION";

@@ -647,4 +647,30 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Referral Needs Review", body: "A referral has been flagged for eligibility/fraud review." },
     UR: { title: "ریفرل کا جائزہ درکار ہے", body: "ایک ریفرل کو اہلیت/فراڈ کے جائزے کے لیے نشان زد کیا گیا ہے۔" },
   },
+
+  // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
+  CRM_FOLLOWUP_DUE: {
+    EN: { title: "Follow-Up Due", body: "A follow-up you're assigned is due soon. Open the CRM record to review it." },
+    UR: { title: "فالو اپ واجب الادا ہے", body: "آپ کو تفویض کردہ ایک فالو اپ جلد واجب الادا ہے۔ تفصیلات کے لیے سی آر ایم ریکارڈ کھولیں۔" },
+  },
+  CRM_FOLLOWUP_OVERDUE: {
+    EN: { title: "Follow-Up Overdue", body: "A follow-up you're assigned is now overdue." },
+    UR: { title: "فالو اپ کی میعاد ختم", body: "آپ کو تفویض کردہ ایک فالو اپ کی میعاد ختم ہو چکی ہے۔" },
+  },
+  CRM_STAGE_CHANGED: {
+    EN: { title: "CRM Stage Changed", body: "A CRM record you're assigned moved to a new lifecycle stage." },
+    UR: { title: "سی آر ایم مرحلہ تبدیل", body: "آپ کو تفویض کردہ سی آر ایم ریکارڈ ایک نئے مرحلے میں منتقل ہو گیا ہے۔" },
+  },
+  CRM_ASSIGNED_TO_YOU: {
+    EN: { title: "CRM Record Assigned To You", body: "A CRM record has been assigned to you." },
+    UR: { title: "سی آر ایم ریکارڈ آپ کو تفویض", body: "ایک سی آر ایم ریکارڈ آپ کو تفویض کیا گیا ہے۔" },
+  },
+  CRM_SLA_ESCALATED: {
+    EN: { title: "CRM SLA Escalated", body: "A CRM follow-up you're assigned has breached its SLA and was escalated." },
+    UR: { title: "سی آر ایم ایس ایل اے بڑھا دیا گیا", body: "آپ کو تفویض کردہ ایک فالو اپ کا ایس ایل اے ختم ہو گیا اور اسے بڑھا دیا گیا ہے۔" },
+  },
+  LEAD_ASSIGNED_TO_YOU: {
+    EN: { title: "Lead Assigned To You", body: "A new lead has been assigned to you." },
+    UR: { title: "لیڈ آپ کو تفویض", body: "ایک نئی لیڈ آپ کو تفویض کی گئی ہے۔" },
+  },
 };

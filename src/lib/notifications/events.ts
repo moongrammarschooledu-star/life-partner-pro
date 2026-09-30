@@ -358,6 +358,36 @@ export async function notifyEntitlementExpired(profileId: string) {
   await sendNotification({ profileId, type: "ENTITLEMENT_EXPIRED", data: {} });
 }
 
+// ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
+// All admin-only/internal, targeted at the assigned staff member (never sent
+// to the applicant) — uses notifyAdmins()'s assignedAdminId path, exactly
+// like every other assignment-facing notice in this codebase.
+export async function notifyCrmStageChanged(assignedAdminId: string | null | undefined, crmRecordId: string, toStage: string) {
+  if (!assignedAdminId) return;
+  await notifyAdmins({ assignedAdminId, type: "CRM_STAGE_CHANGED", data: { templateVars: { crmRecordId, toStage } } });
+}
+
+export async function notifyCrmFollowupDue(assignedAdminId: string, followUpId: string) {
+  await notifyAdmins({ assignedAdminId, type: "CRM_FOLLOWUP_DUE", data: { templateVars: { followUpId } } });
+}
+
+export async function notifyCrmFollowupOverdue(assignedAdminId: string, followUpId: string) {
+  await notifyAdmins({ assignedAdminId, type: "CRM_FOLLOWUP_OVERDUE", data: { templateVars: { followUpId } } });
+}
+
+export async function notifyCrmAssignedToYou(assignedAdminId: string, crmRecordId: string) {
+  await notifyAdmins({ assignedAdminId, type: "CRM_ASSIGNED_TO_YOU", data: { templateVars: { crmRecordId } } });
+}
+
+export async function notifyCrmSlaEscalated(assignedAdminId: string | null | undefined, crmRecordId: string) {
+  if (!assignedAdminId) return;
+  await notifyAdmins({ assignedAdminId, type: "CRM_SLA_ESCALATED", data: { templateVars: { crmRecordId } } });
+}
+
+export async function notifyLeadAssignedToYou(assignedAdminId: string, leadId: string) {
+  await notifyAdmins({ assignedAdminId, type: "LEAD_ASSIGNED_TO_YOU", data: { templateVars: { leadId } } });
+}
+
 export async function notifyInvoiceCreated(profileId: string) {
   await sendNotification({ profileId, type: "INVOICE_CREATED", data: {} });
 }
