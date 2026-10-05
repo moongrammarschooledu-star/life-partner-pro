@@ -479,7 +479,52 @@ export type Permission =
   | "sensitive:crm:communication:view"
   | "sensitive:crm:documents:view"
   | "sensitive:crm:risk:view"
-  | "ai:crm:use";
+  | "ai:crm:use"
+  // ---------- STEP 29 — Marketing, Campaigns, Landing Pages & Lead Capture ----------
+  | "marketing:view"
+  | "marketing:create"
+  | "marketing:edit"
+  | "marketing:approve"
+  | "marketing:launch"
+  | "marketing:pause"
+  | "marketing:archive"
+  | "marketing:budget:view"
+  | "marketing:budget:manage"
+  | "marketing:landing_pages:view"
+  | "marketing:landing_pages:create"
+  | "marketing:landing_pages:edit"
+  | "marketing:landing_pages:publish"
+  | "marketing:landing_pages:unpublish"
+  | "marketing:landing_pages:rollback"
+  | "marketing:forms:view"
+  | "marketing:forms:create"
+  | "marketing:forms:manage"
+  | "marketing:leads:view"
+  | "marketing:leads:manage"
+  | "marketing:leads:export"
+  | "sensitive:marketing:lead_contact:view"
+  | "marketing:attribution:view"
+  | "marketing:attribution:manage"
+  | "marketing:attribution:export"
+  | "marketing:ads:view"
+  | "marketing:ads:manage"
+  | "marketing:creatives:view"
+  | "marketing:creatives:create"
+  | "marketing:creatives:edit"
+  | "marketing:creatives:approve"
+  | "marketing:analytics:view"
+  | "marketing:analytics:export"
+  | "marketing:providers:view"
+  | "marketing:providers:manage"
+  | "marketing:automation:view"
+  | "marketing:automation:manage"
+  | "marketing:experiments:view"
+  | "marketing:experiments:manage"
+  | "marketing:suppression:view"
+  | "marketing:suppression:manage"
+  | "marketing:consent:view"
+  | "marketing:audit:view"
+  | "ai:marketing:use";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -515,6 +560,7 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "sensitive:documents:share",
   "sensitive:documents:export",
   "sensitive:identity_documents:view",
+  "sensitive:marketing:lead_contact:view",
 ];
 
 // STEP 17 §2/§19 — replaces every literal `role === "STAFF"` row-scoping
@@ -693,6 +739,81 @@ const CRM_ALL_PERMISSIONS: Permission[] = [
   "crm:sla:view",
   "crm:sla:manage",
   "crm:audit:view",
+];
+
+// STEP 29 — everything except sensitive:marketing:lead_contact:view (granted per role below, never implied).
+// No dedicated "Marketing Manager" role exists or is created; COMMUNICATION_MANAGER (broad) and
+// OPERATIONS_ADMIN own marketing, with COMMUNICATION_STAFF holding a strict subset.
+const MARKETING_ALL_PERMISSIONS: Permission[] = [
+  "marketing:view",
+  "marketing:create",
+  "marketing:edit",
+  "marketing:approve",
+  "marketing:launch",
+  "marketing:pause",
+  "marketing:archive",
+  "marketing:budget:view",
+  "marketing:budget:manage",
+  "marketing:landing_pages:view",
+  "marketing:landing_pages:create",
+  "marketing:landing_pages:edit",
+  "marketing:landing_pages:publish",
+  "marketing:landing_pages:unpublish",
+  "marketing:landing_pages:rollback",
+  "marketing:forms:view",
+  "marketing:forms:create",
+  "marketing:forms:manage",
+  "marketing:leads:view",
+  "marketing:leads:manage",
+  "marketing:leads:export",
+  "marketing:attribution:view",
+  "marketing:attribution:manage",
+  "marketing:attribution:export",
+  "marketing:ads:view",
+  "marketing:ads:manage",
+  "marketing:creatives:view",
+  "marketing:creatives:create",
+  "marketing:creatives:edit",
+  "marketing:creatives:approve",
+  "marketing:analytics:view",
+  "marketing:analytics:export",
+  "marketing:providers:view",
+  "marketing:providers:manage",
+  "marketing:automation:view",
+  "marketing:automation:manage",
+  "marketing:experiments:view",
+  "marketing:experiments:manage",
+  "marketing:suppression:view",
+  "marketing:suppression:manage",
+  "marketing:consent:view",
+  "marketing:audit:view",
+  "ai:marketing:use",
+];
+
+// STEP 29 — the day-to-day working subset: draft/edit content, view analytics and leads, no
+// approve/launch/budget/provider/export/publish authority (and no contact-detail visibility).
+const MARKETING_STAFF_PERMISSIONS: Permission[] = [
+  "marketing:view",
+  "marketing:create",
+  "marketing:edit",
+  "marketing:budget:view",
+  "marketing:landing_pages:view",
+  "marketing:landing_pages:create",
+  "marketing:landing_pages:edit",
+  "marketing:forms:view",
+  "marketing:forms:create",
+  "marketing:leads:view",
+  "marketing:leads:manage",
+  "marketing:attribution:view",
+  "marketing:ads:view",
+  "marketing:creatives:view",
+  "marketing:creatives:create",
+  "marketing:creatives:edit",
+  "marketing:analytics:view",
+  "marketing:experiments:view",
+  "marketing:suppression:view",
+  "marketing:consent:view",
+  "ai:marketing:use",
 ];
 
 const SYSTEM_ALL_PERMISSIONS: Permission[] = [
@@ -1092,6 +1213,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...COMMUNICATIONS_ALL_PERMISSIONS,
     ...DOCUMENTS_ALL_PERMISSIONS,
     ...CRM_ALL_PERMISSIONS,
+    ...MARKETING_ALL_PERMISSIONS,
+    "sensitive:marketing:lead_contact:view",
     "crm:notes:manager_view",
     "sensitive:crm:view",
     "sensitive:crm:export",
@@ -1313,6 +1436,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     // note tier and merge approval; sensitive:crm:* covers viewing/exporting
     // linked communication/document/risk data surfaced inside the CRM.
     ...CRM_ALL_PERMISSIONS,
+    // STEP 29 — marketing oversight also sits with Operations (no dedicated Marketing role).
+    ...MARKETING_ALL_PERMISSIONS,
+    "sensitive:marketing:lead_contact:view",
     "crm:notes:manager_view",
     "ai:crm:use",
     "sensitive:crm:view",
@@ -1561,6 +1687,10 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...MANAGER_SEARCH_PERMISSIONS,
     // STEP 28 — a superset of COMMUNICATION_STAFF's sole CRM grant (role-management's manager-superset invariant).
     "crm:view",
+    // STEP 29 — owns day-to-day marketing (a superset of COMMUNICATION_STAFF's marketing subset). Lacks provider
+    // management (Compliance/Super Admin) and sensitive:marketing:lead_contact:view. Launch/budget still need a
+    // second approver through the STEP 19 gate — the maker can never approve their own request.
+    ...MARKETING_ALL_PERMISSIONS.filter((p) => p !== "marketing:providers:manage"),
     // deliberately lacks sensitive:contact:view/contact:reveal (cannot access private contact
     // details unless separately granted), contact:reveal:override, profile:edit, verification:*, finance:*.
     // Spec §9 also lists proposals.view/proposal_communications.view/meetings.view: same disclosed
@@ -1643,6 +1773,25 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "security:approval:view",
     "security:approval:approve",
     ...MANAGER_SEARCH_PERMISSIONS,
+    // STEP 29 — independent compliance oversight of marketing: approve content/campaigns, manage provider connections,
+    // suppression and consent visibility. Never drafts or edits campaigns (maker-checker separation).
+    "marketing:view",
+    "marketing:approve",
+    "marketing:budget:view",
+    "marketing:landing_pages:view",
+    "marketing:forms:view",
+    "marketing:leads:view",
+    "marketing:attribution:view",
+    "marketing:ads:view",
+    "marketing:creatives:view",
+    "marketing:creatives:approve",
+    "marketing:analytics:view",
+    "marketing:providers:view",
+    "marketing:providers:manage",
+    "marketing:suppression:view",
+    "marketing:suppression:manage",
+    "marketing:consent:view",
+    "marketing:audit:view",
     // deliberately lacks admin:manage/roles:*, finance:*, verification:approve/reject
     // (identity-verification decisions stay with VERIFICATION_MANAGER), profile:edit,
     // documents:review/verify/reject (document REVIEW decisions stay with VERIFICATION_MANAGER).
@@ -1756,6 +1905,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     // deliberately lacks contact:reveal/sensitive:contact:view, profile:edit, verification:*, finance:*.
     // STEP 28 — read-only CRM context before sending a message; no note/follow-up authoring here.
     "crm:view",
+    // STEP 29 — drafting/working subset only (no approve/launch/budget/provider/export/publish, no contact details).
+    ...MARKETING_STAFF_PERMISSIONS,
   ],
 
   // ---------------------------------------------------------------- REPORTING_ANALYST (spec §15)
@@ -1780,6 +1931,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "crm:analytics:view",
     "crm:reports:view",
     "crm:export",
+    // STEP 29 — aggregate marketing analytics only (read-only).
+    "marketing:view",
+    "marketing:analytics:view",
   ],
 };
 

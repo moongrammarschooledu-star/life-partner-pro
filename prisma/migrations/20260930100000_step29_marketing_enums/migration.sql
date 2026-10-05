@@ -1,0 +1,71 @@
+-- AlterEnum
+-- This migration adds more than one value to an enum.
+-- With PostgreSQL versions 11 and earlier, this is not possible
+-- in a single migration. This can be worked around by creating
+-- multiple migrations, each migration adding only one value to
+-- the enum.
+
+
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_CREATED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_UPDATED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_SUBMITTED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_APPROVED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_REJECTED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_LAUNCHED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_PAUSED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_RESUMED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_COMPLETED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CAMPAIGN_ARCHIVED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_BUDGET_INCREASE_REQUESTED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_BUDGET_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_AD_NODE_SYNCED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CREATIVE_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CREATIVE_APPROVED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LANDING_VERSION_CREATED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LANDING_PUBLISHED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LANDING_UNPUBLISHED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LANDING_ROLLED_BACK';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_FORM_VERSION_CREATED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_FORM_PUBLISHED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LEAD_CAPTURED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LEAD_DEDUP_FLAGGED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LEAD_EXPORTED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_LEAD_CONTACT_VIEWED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CONSENT_RECORDED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CONSENT_WITHDRAWN';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_SUPPRESSION_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_PROVIDER_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_WEBHOOK_REJECTED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_AUTOMATION_RULE_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_AUTOMATION_RUN';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_EXPERIMENT_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_CONTENT_POLICY_BLOCKED';
+ALTER TYPE "AuditAction" ADD VALUE 'MARKETING_AI_COPY_GENERATED';
+
+-- AlterEnum
+-- This migration adds more than one value to an enum.
+-- With PostgreSQL versions 11 and earlier, this is not possible
+-- in a single migration. This can be worked around by creating
+-- multiple migrations, each migration adding only one value to
+-- the enum.
+
+
+ALTER TYPE "DataCategory" ADD VALUE 'MARKETING_LEAD_DATA';
+ALTER TYPE "DataCategory" ADD VALUE 'MARKETING_EVENT_DATA';
+
+-- AlterEnum
+-- This migration adds more than one value to an enum.
+-- With PostgreSQL versions 11 and earlier, this is not possible
+-- in a single migration. This can be worked around by creating
+-- multiple migrations, each migration adding only one value to
+-- the enum.
+
+
+ALTER TYPE "SecurityEventType" ADD VALUE 'MARKETING_LEAD_ABUSE_SUSPECTED';
+ALTER TYPE "SecurityEventType" ADD VALUE 'MARKETING_WEBHOOK_ANOMALY';
+
+-- AlterEnum
+ALTER TYPE "AiFeature" ADD VALUE 'MARKETING_ASSISTANT';
+
+-- AlterEnum
+ALTER TYPE "LeadStatus" ADD VALUE 'UNQUALIFIED';

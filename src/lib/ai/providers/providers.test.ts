@@ -184,7 +184,7 @@ describe("prompt templates", () => {
       expect(p.system).toMatch(/attractiveness/);
       expect(promptFor(f).checksum).toBe(p.checksum);
     }
-    // 10 matchmaking features + COMPLIANCE_SUMMARY + RISK_CASE_SUMMARY + CRM_SUMMARY (all three built-in-builder only).
-    expect(Object.keys(allPromptChecksums()).length).toBe(13);
+    // 10 matchmaking features + COMPLIANCE_SUMMARY + RISK_CASE_SUMMARY + CRM_SUMMARY + MARKETING_ASSISTANT (all built-in-builder only).
+    expect(Object.keys(allPromptChecksums()).length).toBe(14);
   });
 });

@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT" | "CRM";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT" | "CRM" | "MARKETING";
 
 export interface CatalogEntry {
   label: string;
@@ -166,6 +166,13 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   DOCUMENT_PROVIDER_CHANGE: { label: "Change or activate a document scan/OCR/signature provider", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   BULK_DOCUMENT_ACTION: { label: "Run a bulk document operation", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["VERIFICATION_MANAGER", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   DOCUMENT_DELETE: { label: "Permanently delete a document", domain: "DOCUMENT", sourceType: "DOCUMENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  // STEP 29 - marketing. sourceId is the campaign / landing page / provider id (loose reference, like communications).
+  // No marketing role exists — checkers are existing oversight roles; the maker (typically COMMUNICATION_MANAGER) can never approve their own request.
+  MARKETING_CAMPAIGN_LAUNCH: { label: "Launch a marketing campaign", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  MARKETING_BUDGET_INCREASE: { label: "Increase a marketing campaign budget", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["FINANCE_MANAGER", "OPERATIONS_ADMIN", "SUPER_ADMIN"] },
+  MARKETING_PROVIDER_CONNECTION_CHANGE: { label: "Connect, change or disconnect a marketing provider", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  MARKETING_LANDING_PAGE_PUBLISH: { label: "Publish a marketing landing page or lead form", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  MARKETING_LEAD_EXPORT: { label: "Export marketing leads including contact details", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
 };
 
 export function getCatalogEntry(actionType: string): CatalogEntry | null {

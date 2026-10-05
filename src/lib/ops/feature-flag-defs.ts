@@ -51,10 +51,18 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "referrals.enabled", description: "Referral code generation, linking, and reward granting", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
   { key: "promotions.enabled", description: "Promotional campaign eligibility and application at checkout", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
   { key: "credits.enabled", description: "Membership credit grants and use at checkout", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
+  // STEP 29 — marketing. Every key defaults OFF (see FEATURE_FLAG_DEFAULTS): nothing marketing-related is live until an admin enables it.
+  { key: "marketing.enabled", description: "Marketing center: campaign management, provider sync and marketing automation master switch", sensitive: true },
+  { key: "marketing.public_pages.enabled", description: "Publicly serve published marketing landing pages (/lp/...)", sensitive: true },
+  { key: "marketing.lead_capture.enabled", description: "Accept public marketing lead-form submissions", sensitive: true },
+  { key: "marketing.provider_sync.enabled", description: "Daily ad-provider metric sync and provider webhook processing", sensitive: true },
+  { key: "marketing.automation.enabled", description: "Run marketing automation rules (whitelisted actions only; never launches, spends or messages unconsented people)", sensitive: true },
+  { key: "marketing.conversion_api.enabled", description: "Send allow-listed server-side conversion events to an ad provider (never personal data)", sensitive: true },
+  { key: "ai.marketing_assistant.enabled", description: "AI marketing copy drafts from an approved phrase library (never launches, spends or approves; human review required)", sensitive: true },
 ];
 
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && d.key !== "documents.ocr.enabled"]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && d.key !== "documents.ocr.enabled"]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

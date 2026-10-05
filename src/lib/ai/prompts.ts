@@ -40,6 +40,7 @@ const TASKS: Record<AiFeatureKey, string> = {
   COMPLIANCE_SUMMARY: "Task: (not used with external providers)",
   RISK_CASE_SUMMARY: "Task: (not used with external providers)",
   CRM_SUMMARY: "Task: (not used with external providers)",
+  MARKETING_ASSISTANT: "Task: (not used with external providers)",
 };
 
 export interface PromptTemplate {

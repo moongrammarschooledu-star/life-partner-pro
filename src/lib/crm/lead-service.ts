@@ -4,7 +4,7 @@ import { nextSequenceCode } from "@/lib/privacy/codes";
 import { HttpError } from "@/lib/http-error";
 import { createFromEvent } from "@/lib/workflow/engine";
 import { notifyLeadAssignedToYou } from "@/lib/notifications/events";
-import type { LeadSource, LeadStatus } from "@prisma/client";
+import type { LeadSource, LeadStatus, Prisma } from "@prisma/client";
 
 // STEP 28 §7-12 — pre-registration lead intake. A Lead predates any
 // Profile/CrmRecord; conversion (below) is the only path that creates both.
@@ -29,12 +29,30 @@ export interface CreateLeadInput {
   referralId?: string;
   couponId?: string;
   promotionId?: string;
-  createdById: string;
+  // STEP 29 — optional for a public/system-originated lead (no acting admin). The lead event and audit entry are
+  // then written with a null actor, which both columns already allow.
+  createdById?: string;
+  // STEP 29 — marketing capture: additive columns, nested consent evidence and attribution, written in the SAME
+  // atomic create as the lead so a lead can never exist without its consent/attribution rows.
+  extra?: Pick<
+    Prisma.LeadUncheckedCreateInput,
+    | "campaignId" | "adNodeId" | "landingPageId" | "landingPageVersionId" | "formId" | "formVersionId" | "utmSource" | "utmMedium"
+    | "utmCampaign" | "utmContent" | "utmTerm" | "platform" | "providerLeadId" | "clickIdType" | "clickIdHash" | "preferredChannel"
+    | "preferredLanguage" | "emailHash" | "phoneHash" | "ipHash" | "capturedAt" | "privacyNoticeVersionId" | "marketingOptIn"
+    | "dedupeReason" | "duplicateOfLeadId"
+  >;
+  consents?: Array<Omit<Prisma.MarketingLeadConsentUncheckedCreateWithoutLeadInput, "id" | "recordedAt">>;
+  attribution?: Omit<Prisma.LeadAttributionUncheckedCreateWithoutLeadInput, "id" | "createdAt">;
+  initialStatus?: LeadStatus;
+  // The legacy loose phone/email check swallows its own failures (fail-open). The marketing path runs its own,
+  // awaited, fail-closed check beforehand and turns this off.
+  legacyDuplicateCheck?: boolean;
 }
 
 export async function createLead(input: CreateLeadInput) {
   if (!input.fullName.trim()) throw new HttpError(400, "A name is required.");
   const leadCode = await nextSequenceCode("LEAD");
+  const status: LeadStatus = input.initialStatus ?? "NEW";
   const lead = await prisma.lead.create({
     data: {
       leadCode,
@@ -50,12 +68,15 @@ export async function createLead(input: CreateLeadInput) {
       referralId: input.referralId,
       couponId: input.couponId,
       promotionId: input.promotionId,
-      status: "NEW",
-      events: { create: { toStatus: "NEW", actorId: input.createdById } },
+      status,
+      ...(input.extra ?? {}),
+      events: { create: { toStatus: status, actorId: input.createdById ?? null } },
+      ...(input.consents?.length ? { marketingConsents: { create: input.consents } } : {}),
+      ...(input.attribution ? { attribution: { create: input.attribution } } : {}),
     },
   });
-  await writeAudit({ action: "LEAD_CREATED", adminId: input.createdById, meta: { leadId: lead.id, leadCode } });
-  await runDuplicateCheckForLead(lead.id).catch(() => undefined);
+  await writeAudit({ action: "LEAD_CREATED", adminId: input.createdById ?? null, meta: { leadId: lead.id, leadCode, system: !input.createdById } });
+  if (input.legacyDuplicateCheck !== false) await runDuplicateCheckForLead(lead.id).catch(() => undefined);
   return lead;
 }
 
@@ -108,6 +129,8 @@ export async function updateLeadStatus(leadId: string, toStatus: LeadStatus, opt
     prisma.lead.update({ where: { id: leadId }, data: { status: toStatus } }),
   ]);
   await writeAudit({ action: "LEAD_STATUS_CHANGED", adminId: opts.actorId, meta: { leadId, fromStatus: lead.status, toStatus, reason: opts.reason } });
+  // STEP 29 — marketing event stream + automation for campaign/provider leads (never throws, no-op for other leads).
+  await (await import("@/lib/marketing/lead-progress")).onLeadProgress(leadId, toStatus);
   return updated;
 }
 
@@ -137,6 +160,7 @@ export async function convertLead(leadId: string, actorId: string, profileId: st
     prisma.lead.update({ where: { id: leadId }, data: { status: "CONVERTED", convertedProfileId: profileId, convertedCrmRecordId: crmRecord.id, convertedAt: new Date() } }),
   ]);
   await writeAudit({ action: "LEAD_CONVERTED", adminId: actorId, targetProfileId: profileId, meta: { leadId, crmRecordId: crmRecord.id } });
+  await (await import("@/lib/marketing/lead-progress")).onLeadProgress(leadId, "CONVERTED"); // STEP 29 — see updateLeadStatus
   return { lead: updatedLead, crmRecord };
 }
 

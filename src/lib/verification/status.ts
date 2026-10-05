@@ -174,7 +174,10 @@ export async function setVerificationStatus(profileId: string, newStatus: Verifi
     await notifyProfileVerificationChanged(profileId, notifyType);
   }
 
-  if (newStatus === "VERIFIED") await syncCrmStageOnVerification(profileId);
+  if (newStatus === "VERIFIED") {
+    await syncCrmStageOnVerification(profileId);
+    await (await import("@/lib/marketing/lead-progress")).onProfileVerified(profileId); // STEP 29 — marketing attribution timeline (never throws)
+  }
 
   return verification;
 }

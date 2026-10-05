@@ -196,6 +196,12 @@ export const FIELD_POLICY: Record<AiFeatureKey, FieldPolicy> = {
     optional: [],
     restricted: [...ALWAYS_RESTRICTED, "riskScore", "deviceIdentifiers", "networkIdentifiers"],
   },
+  // STEP 29 — marketing copy uses an approved phrase library and campaign-level metadata only; never any applicant data.
+  MARKETING_ASSISTANT: {
+    required: ["marketingBrief"],
+    optional: [],
+    restricted: [...ALWAYS_RESTRICTED, "individualProfiles", "riskScore", "leadContactDetails", "deviceIdentifiers", "networkIdentifiers"],
+  },
 };
 
 export function classificationOf(field: string): DataClassification {

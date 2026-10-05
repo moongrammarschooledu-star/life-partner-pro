@@ -1269,6 +1269,43 @@ enum AuditAction {
   CRM_BULK_ACTION
   CRM_SAVED_VIEW_CREATED
   CRM_AI_SUMMARY_GENERATED
+
+  // ---------- STEP 29 — Marketing, Campaigns, Landing Pages & Lead Capture ----------
+  MARKETING_CAMPAIGN_CREATED
+  MARKETING_CAMPAIGN_UPDATED
+  MARKETING_CAMPAIGN_SUBMITTED
+  MARKETING_CAMPAIGN_APPROVED
+  MARKETING_CAMPAIGN_REJECTED
+  MARKETING_CAMPAIGN_LAUNCHED
+  MARKETING_CAMPAIGN_PAUSED
+  MARKETING_CAMPAIGN_RESUMED
+  MARKETING_CAMPAIGN_COMPLETED
+  MARKETING_CAMPAIGN_ARCHIVED
+  MARKETING_BUDGET_INCREASE_REQUESTED
+  MARKETING_BUDGET_CHANGED
+  MARKETING_AD_NODE_SYNCED
+  MARKETING_CREATIVE_CHANGED
+  MARKETING_CREATIVE_APPROVED
+  MARKETING_LANDING_VERSION_CREATED
+  MARKETING_LANDING_PUBLISHED
+  MARKETING_LANDING_UNPUBLISHED
+  MARKETING_LANDING_ROLLED_BACK
+  MARKETING_FORM_VERSION_CREATED
+  MARKETING_FORM_PUBLISHED
+  MARKETING_LEAD_CAPTURED
+  MARKETING_LEAD_DEDUP_FLAGGED
+  MARKETING_LEAD_EXPORTED
+  MARKETING_LEAD_CONTACT_VIEWED
+  MARKETING_CONSENT_RECORDED
+  MARKETING_CONSENT_WITHDRAWN
+  MARKETING_SUPPRESSION_CHANGED
+  MARKETING_PROVIDER_CHANGED
+  MARKETING_WEBHOOK_REJECTED
+  MARKETING_AUTOMATION_RULE_CHANGED
+  MARKETING_AUTOMATION_RUN
+  MARKETING_EXPERIMENT_CHANGED
+  MARKETING_CONTENT_POLICY_BLOCKED
+  MARKETING_AI_COPY_GENERATED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1599,6 +1636,8 @@ enum DataCategory {
   GOVERNANCE_APPROVAL_DATA
   RISK_EVIDENCE // STEP 24 — risk cases, assessments and evidence; never auto-deleted while a case is open or a hold is active
   DOCUMENT_RECORDS // STEP 26 — the general Document store (VERIFICATION_DOCUMENTS above stays the STEP 8/23 identity-checklist category)
+  MARKETING_LEAD_DATA // STEP 29 — captured marketing leads, consent evidence and attribution; swept only under an admin-created policy
+  MARKETING_EVENT_DATA // STEP 29 — funnel/analytics events and provider webhook records
 }
 
 enum RetentionAction {
@@ -5976,6 +6015,10 @@ enum SecurityEventType {
   REFERRAL_ABUSE_SUSPECTED // self-referral, device reuse, reward-duplication attempt
   ENTITLEMENT_BYPASS_ATTEMPT // frontend claimed access the backend check denied
   UNUSUAL_TRANSACTION_PATTERN // rapid upgrade/downgrade/cancel cycling, proration abuse pattern
+
+  // ---------- STEP 29 — Marketing ----------
+  MARKETING_LEAD_ABUSE_SUSPECTED // repeated duplicate submissions, automated-looking form abuse, unusual submission volume
+  MARKETING_WEBHOOK_ANOMALY // repeated rejected/malformed provider webhook deliveries
 }
 
 enum SecurityIncidentControl {
@@ -6546,6 +6589,9 @@ enum AiFeature {
   // only). Built-in builder only, same as RISK_CASE_SUMMARY — see
   // src/lib/crm/ai-assistant.ts.
   CRM_SUMMARY
+  // STEP 29 — reviewable marketing copy drafts from an approved phrase library;
+  // never launches, spends or approves anything (see src/lib/ai/analysis/marketing-assistant.ts).
+  MARKETING_ASSISTANT
 }
 
 enum AiRequestStatus {
@@ -8602,11 +8648,44 @@ model Lead {
   updatedAt            DateTime   @updatedAt
   convertedAt          DateTime?
 
-  events LeadEvent[]
+  // ---------- STEP 29 — marketing capture (all nullable/defaulted: additive) ----------
+  marketingCampaign    MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId           String?
+  adNodeId             String?
+  landingPageId        String?
+  landingPageVersionId String?
+  formId               String?
+  formVersionId        String?
+  utmSource            String?    @db.VarChar(100)
+  utmMedium            String?    @db.VarChar(100)
+  utmCampaign          String?    @db.VarChar(100)
+  utmContent           String?    @db.VarChar(100)
+  utmTerm              String?    @db.VarChar(100)
+  platform             String?    @db.VarChar(40)
+  providerLeadId       String?    @db.VarChar(120)
+  clickIdType          String?    @db.VarChar(12)
+  clickIdHash          String?    @db.VarChar(64) // hash only — raw click ids are never stored
+  preferredChannel     String?    @db.VarChar(20)
+  preferredLanguage    String?    @db.VarChar(5)
+  emailHash            String?    @db.VarChar(64)
+  phoneHash            String?    @db.VarChar(64)
+  ipHash               String?    @db.VarChar(64)
+  capturedAt           DateTime?
+  privacyNoticeVersionId String?
+  marketingOptIn       Boolean    @default(false)
+  dedupeReason         String?    @db.VarChar(200)
 
+  events           LeadEvent[]
+  marketingConsents MarketingLeadConsent[]
+  attribution      LeadAttribution?
+
+  @@unique([platform, providerLeadId])
   @@index([status])
   @@index([assignedStaffId])
   @@index([source])
+  @@index([campaignId, createdAt])
+  @@index([emailHash])
+  @@index([phoneHash])
 }
 
 // Append-only, mirrors CrmLifecycleHistory's exact shape.
@@ -8651,6 +8730,7 @@ enum LeadStatus {
   REGISTERED
   CONVERTED
   NOT_INTERESTED
+  UNQUALIFIED // STEP 29 — marketing triage outcome: reviewed, does not meet service criteria (distinct from the person declining)
   INVALID
   DUPLICATE
   DO_NOT_CONTACT
@@ -8783,4 +8863,563 @@ enum CrmAssignmentRule {
   TEAM_BASED
   SPECIALIZATION
   GEOGRAPHIC
+}
+
+// =============================================================================
+// STEP 29 — Marketing, Campaigns, Landing Pages, Lead Capture & Attribution
+// Marketing leads ARE STEP 28 `Lead` rows (extended above); consent for a
+// Profile-less lead is evidence-only (MarketingLeadConsent) and is never
+// auto-copied into the profile-keyed STEP 13/25 consent tables. Actor and
+// audit-style columns are loose String ids (no AdminUser relation).
+// =============================================================================
+
+enum MarketingCampaignStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum MarketingObjective {
+  LEAD_GENERATION
+  WEBSITE_TRAFFIC
+  REGISTRATION
+  PROFILE_COMPLETION
+  VERIFICATION
+  MEMBERSHIP_PROMOTION
+  REFERRAL_GROWTH
+  AWARENESS
+  EVENT_PROMOTION
+  WHATSAPP_INQUIRY
+  CUSTOM
+}
+
+enum MarketingChannel {
+  WEBSITE
+  FACEBOOK
+  INSTAGRAM
+  META_ADS
+  WHATSAPP
+  TIKTOK
+  YOUTUBE
+  GOOGLE_ADS
+  SEARCH
+  EMAIL
+  SMS
+  REFERRAL
+  DIRECT
+  EVENT
+  OTHER
+}
+
+enum MarketingProviderKey {
+  SANDBOX
+  META
+  GOOGLE
+  TIKTOK
+}
+
+enum MarketingAdLevel {
+  AD_CAMPAIGN
+  AD_SET
+  AD_GROUP
+  AD
+}
+
+enum MarketingCreativeStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  ACTIVE
+  PAUSED
+  REJECTED
+  ARCHIVED
+}
+
+enum LandingPageStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+enum ContentVersionStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum LeadFormStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+enum MarketingConsentPurpose {
+  INQUIRY_FOLLOWUP
+  MARKETING_UPDATES
+  WHATSAPP_CONTACT
+}
+
+enum AttributionVerification {
+  VERIFIED
+  UNVERIFIED
+}
+
+enum MarketingEventType {
+  PAGE_VIEW
+  LANDING_PAGE_VIEW
+  CTA_CLICK
+  FORM_STARTED
+  FORM_SUBMITTED
+  LEAD_CREATED
+  LEAD_DUPLICATE_DETECTED
+  WHATSAPP_STARTED
+  REGISTRATION_STARTED
+  REGISTRATION_COMPLETED
+  PROFILE_COMPLETED
+  VERIFICATION_STARTED
+  VERIFICATION_COMPLETED
+  MEMBERSHIP_STARTED
+}
+
+enum SubmissionOutcome {
+  ACCEPTED
+  SUPPRESSED
+  DUPLICATE_REVIEW
+  REJECTED_VALIDATION
+  REJECTED_SPAM
+  REJECTED_CONSENT
+}
+
+enum MarketingBudgetEventType {
+  SET
+  INCREASE_REQUESTED
+  INCREASE_APPROVED
+  DECREASE
+  SPEND_SYNCED
+  ALERT
+}
+
+enum AutomationRunStatus {
+  PENDING
+  SUCCEEDED
+  SKIPPED
+  FAILED
+}
+
+enum ExperimentStatus {
+  DRAFT
+  RUNNING
+  STOPPED
+  ARCHIVED
+}
+
+enum MarketingConnectionStatus {
+  NOT_CONFIGURED
+  CONNECTED
+  ERROR
+  DISABLED
+}
+
+enum MarketingWebhookStatus {
+  RECEIVED
+  PROCESSED
+  SKIPPED
+  REJECTED
+  FAILED
+  PENDING_FETCH
+}
+
+model MarketingCampaign {
+  id                   String                  @id @default(cuid())
+  code                 String                  @unique // LPP-MCAMP-######
+  name                 String
+  description          String?
+  objective            MarketingObjective      @default(LEAD_GENERATION)
+  channel              MarketingChannel        @default(WEBSITE)
+  status               MarketingCampaignStatus @default(DRAFT)
+  providerKey          MarketingProviderKey    @default(SANDBOX)
+  // The value expected in utm_campaign; unique so attribution can resolve it.
+  campaignKey          String                  @unique
+  utmSource            String?                 @db.VarChar(100)
+  utmMedium            String?                 @db.VarChar(100)
+  contentIdentifier    String?                 @db.VarChar(100)
+  timezone             String                  @default("Asia/Karachi")
+  startAt              DateTime?
+  endAt                DateTime?
+  currencyCode         String                  @default("PKR")
+  budgetTotalMinor     Int                     @default(0)
+  budgetDailyMinor     Int?
+  alertThresholdPct    Int?
+  spendVerifiedMinor   Int                     @default(0)
+  spendVerified        Boolean                 @default(false)
+  attributionModel     String?                 @db.VarChar(20)
+  language             String                  @default("EN") @db.VarChar(5)
+  landingPageId        String?
+  formId               String?
+  routingDepartmentId  String?
+  assignedTeamId       String?
+  responsibleAdminId   String?
+  // Allow-listed targeting shape only — validated by the content policy; never sensitive attributes.
+  targeting            Json?
+  contentHash          String?
+  policyScanResult     Json?
+  policyScanAt         DateTime?
+  notes                String?
+  createdById          String
+  submittedById        String?
+  approvedById         String?
+  approvedAt           DateTime?
+  launchedAt           DateTime?
+  pausedReason         String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  leads        Lead[]
+  budgetEvents MarketingBudgetEvent[]
+  adNodes      MarketingAdNode[]
+  creatives    MarketingCreative[]
+
+  @@index([status])
+  @@index([providerKey, status])
+}
+
+// Append-only ledger of every budget change/spend sync.
+model MarketingBudgetEvent {
+  id                String                   @id @default(cuid())
+  campaign          MarketingCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId        String
+  type              MarketingBudgetEventType
+  amountMinor       Int
+  previousMinor     Int?
+  newMinor          Int?
+  currencyCode      String
+  approvalRequestId String?
+  actorId           String?
+  note              String?
+  createdAt         DateTime                 @default(now())
+
+  @@index([campaignId, createdAt])
+}
+
+// One row per provider. Secrets are env-var NAMES only (never values) — same
+// model as STEP 25's CommunicationProvider.secretRefs.
+model MarketingProviderConnection {
+  id                String                    @id @default(cuid())
+  providerKey       MarketingProviderKey      @unique
+  status            MarketingConnectionStatus @default(NOT_CONFIGURED)
+  accountExternalId String?
+  secretRefs        Json                      @default("[]")
+  environment       String                    @default("SANDBOX")
+  lastSyncAt        DateTime?
+  lastError         String?                   @db.VarChar(300)
+  webhookStatus     String?                   @db.VarChar(40)
+  lastWebhookAt     DateTime?
+  updatedById       String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+}
+
+// Provider-neutral ad hierarchy: one self-referential table (providers differ).
+model MarketingAdNode {
+  id              String               @id @default(cuid())
+  campaign        MarketingCampaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId      String
+  parent          MarketingAdNode?     @relation("AdNodeTree", fields: [parentId], references: [id], onDelete: SetNull)
+  parentId        String?
+  children        MarketingAdNode[]    @relation("AdNodeTree")
+  level           MarketingAdLevel
+  providerKey     MarketingProviderKey
+  externalId      String?
+  name            String
+  status          String               @default("PAUSED") @db.VarChar(30)
+  targeting       Json?
+  creativeId      String?
+  dailyBudgetMinor Int?
+  lastSyncedAt    DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([providerKey, externalId])
+  @@index([campaignId, level])
+}
+
+model MarketingCreative {
+  id               String                  @id @default(cuid())
+  code             String                  @unique // LPP-MCRE-######
+  campaign         MarketingCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId       String?
+  name             String
+  status           MarketingCreativeStatus @default(DRAFT)
+  headline         String                  @db.VarChar(120)
+  body             String                  @db.VarChar(600)
+  description      String?                 @db.VarChar(300)
+  ctaLabel         String                  @db.VarChar(40)
+  language         String                  @default("EN") @db.VarChar(5)
+  // A reference key only — there is no ad-image upload pipeline.
+  assetKey         String?                 @db.VarChar(200)
+  contentHash      String?
+  policyScanResult Json?
+  createdById      String
+  approvedById     String?
+  rejectReason     String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([campaignId, status])
+}
+
+model LandingPage {
+  id                 String            @id @default(cuid())
+  code               String            @unique // LPP-LP-######
+  slug               String            @unique
+  name               String
+  status             LandingPageStatus @default(DRAFT)
+  publishedVersionId String?
+  language           String            @default("EN") @db.VarChar(5)
+  sitemapInclude     Boolean           @default(false)
+  noindex            Boolean           @default(true)
+  campaignId         String?
+  createdById        String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  versions LandingPageVersion[]
+
+  @@index([status])
+}
+
+model LandingPageVersion {
+  id                String               @id @default(cuid())
+  page              LandingPage          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  pageId            String
+  version           Int
+  status            ContentVersionStatus @default(DRAFT)
+  title             String               @db.VarChar(160)
+  metaDescription   String?              @db.VarChar(300)
+  canonicalUrl      String?
+  ogTitle           String?              @db.VarChar(160)
+  ogDescription     String?              @db.VarChar(300)
+  socialImageUrl    String?
+  // Zod-validated section list (see src/lib/marketing/landing-schema.ts). Rendered by React only; no raw HTML.
+  sections          Json
+  contentHash       String
+  changeSummary     String?
+  clonedFromVersionId String?
+  policyScanResult  Json?
+  authorId          String
+  reviewerId        String?
+  reviewedAt        DateTime?
+  publishedAt       DateTime?
+  createdAt         DateTime             @default(now())
+
+  @@unique([pageId, version])
+}
+
+model LeadForm {
+  id                 String         @id @default(cuid())
+  code               String         @unique // LPP-FORM-######
+  name               String
+  status             LeadFormStatus @default(DRAFT)
+  publishedVersionId String?
+  campaignId         String?
+  createdById        String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  versions LeadFormVersion[]
+
+  @@index([status])
+}
+
+model LeadFormVersion {
+  id                     String               @id @default(cuid())
+  form                   LeadForm             @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId                 String
+  version                Int
+  status                 ContentVersionStatus @default(DRAFT)
+  // Allow-listed field definitions (src/lib/marketing/form-schema.ts) — sensitive matrimonial/identity keys are rejected.
+  fields                 Json
+  consentConfig          Json
+  privacyNoticeVersionId String
+  contentHash            String
+  changeSummary          String?
+  authorId               String
+  reviewerId             String?
+  reviewedAt             DateTime?
+  publishedAt            DateTime?
+  createdAt              DateTime             @default(now())
+
+  @@unique([formId, version])
+}
+
+// No raw PII: ids, hashes and outcome only. The Lead is the single PII store.
+model LeadFormSubmission {
+  id             String            @id @default(cuid())
+  formId         String
+  formVersionId  String
+  idempotencyKey String            @unique
+  outcome        SubmissionOutcome
+  leadId         String?
+  phoneHash      String?           @db.VarChar(64)
+  emailHash      String?           @db.VarChar(64)
+  ipHash         String            @db.VarChar(64)
+  elapsedMs      Int?
+  rejectReason   String?           @db.VarChar(120)
+  createdAt      DateTime          @default(now())
+
+  @@index([formId, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+// Append-only consent evidence for a Profile-less lead.
+model MarketingLeadConsent {
+  id                     String                  @id @default(cuid())
+  lead                   Lead                    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId                 String
+  purpose                MarketingConsentPurpose
+  // null = the one-to-one staff follow-up consent (not tied to a notification channel); marketing/WhatsApp rows name their channel.
+  channel                NotificationChannel?
+  granted                Boolean
+  textVersionHash        String
+  privacyNoticeVersionId String?
+  jurisdictionId         String?
+  method                 String                  @default("CHECKBOX") @db.VarChar(20)
+  ipHash                 String?                 @db.VarChar(64)
+  withdrawnAt            DateTime?
+  recordedAt             DateTime                @default(now())
+
+  @@index([leadId, purpose])
+}
+
+model LeadAttribution {
+  id                   String                  @id @default(cuid())
+  code                 String                  @unique // LPP-ATTR-######
+  lead                 Lead                    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId               String                  @unique
+  campaignId           String?
+  adNodeId             String?
+  landingPageVersionId String?
+  verification         AttributionVerification
+  utm                  Json
+  clickIdType          String?                 @db.VarChar(12)
+  clickIdHash          String?                 @db.VarChar(64)
+  referrerHost         String?                 @db.VarChar(120)
+  model                String?                 @db.VarChar(20)
+  touchedAt            DateTime?
+  createdAt            DateTime                @default(now())
+
+  @@index([campaignId])
+}
+
+// Append-only funnel/analytics events (retention-swept). subjectHash is never a raw IP.
+model MarketingEvent {
+  id            String             @id @default(cuid())
+  type          MarketingEventType
+  campaignId    String?
+  landingPageId String?
+  leadId        String?
+  variantKey    String?            @db.VarChar(40)
+  subjectHash   String?            @db.VarChar(64)
+  occurredAt    DateTime           @default(now())
+
+  @@index([campaignId, type, occurredAt])
+  @@index([occurredAt])
+}
+
+model MarketingMetricDaily {
+  id          String               @id @default(cuid())
+  date        DateTime             @db.Date
+  campaignId  String
+  // "CAMPAIGN" sentinel for campaign-level rows (a nullable column in a unique key would never conflict).
+  adNodeKey   String               @default("CAMPAIGN")
+  providerKey MarketingProviderKey
+  impressions Int                  @default(0)
+  reach       Int                  @default(0)
+  clicks      Int                  @default(0)
+  spendMinor  Int                  @default(0)
+  providerLeads Int                @default(0)
+  isSandbox   Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([campaignId, adNodeKey, date])
+  @@index([date])
+}
+
+model MarketingAutomationRule {
+  id          String   @id @default(cuid())
+  name        String
+  trigger     String   @db.VarChar(40)
+  conditions  Json     @default("{}")
+  // Whitelisted actions only (validated in src/lib/marketing/automation.ts).
+  actions     Json
+  version     Int      @default(1)
+  enabled     Boolean  @default(false)
+  createdById String
+  approvedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  runs MarketingAutomationRun[]
+}
+
+model MarketingAutomationRun {
+  id          String                  @id @default(cuid())
+  rule        MarketingAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId      String
+  ruleVersion Int
+  subjectType String                  @db.VarChar(20)
+  subjectId   String
+  status      AutomationRunStatus     @default(PENDING)
+  result      Json?
+  error       String?                 @db.VarChar(300)
+  createdAt   DateTime                @default(now())
+
+  @@unique([ruleId, subjectType, subjectId])
+}
+
+model MarketingExperiment {
+  id            String           @id @default(cuid())
+  campaignId    String?
+  landingPageId String?
+  name          String
+  status        ExperimentStatus @default(DRAFT)
+  // [{ key, label, trafficPct }] — deterministic hash assignment; outcomes are counted from MarketingEvent.variantKey.
+  variants      Json
+  primaryMetric String           @default("LEAD_CREATED") @db.VarChar(40)
+  minSampleSize Int              @default(100)
+  startedAt     DateTime?
+  stoppedAt     DateTime?
+  createdById   String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([status])
+}
+
+// Separate from the STEP 9/25 WebhookEvent, whose `channel` is typed to NotificationChannel.
+model MarketingWebhookEvent {
+  id             String                 @id @default(cuid())
+  providerKey    MarketingProviderKey
+  source         String                 @db.VarChar(30)
+  idempotencyKey String                 @unique
+  payloadHash    String
+  status         MarketingWebhookStatus @default(RECEIVED)
+  rejectReason   String?                @db.VarChar(120)
+  eventType      String?                @db.VarChar(40)
+  leadId         String?
+  receivedAt     DateTime               @default(now())
+  processedAt    DateTime?
+
+  @@index([providerKey, receivedAt])
+  @@index([status])
 }

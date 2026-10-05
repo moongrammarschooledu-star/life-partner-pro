@@ -15,6 +15,8 @@ import { verifyEvidenceRecord } from "@/lib/risk/evidence-service";
 import { assertCanSeeCrmRecord } from "@/lib/crm/access";
 import { buildCrmApplicantSummary, buildCrmTimelineSummary } from "@/lib/crm/ai-assistant";
 import { getCrmTimeline } from "@/lib/crm/timeline-service";
+import { buildMarketingAssist, type MarketingAssistInput, type MarketingAssistMode } from "@/lib/ai/analysis/marketing-assistant";
+import { computeCampaignRoi, computeMarketingAnalytics } from "@/lib/marketing/analytics";
 import { STANDARD_LIMITATIONS } from "@/lib/ai/analysis/summary";
 import { loadMatchConfig } from "@/lib/ai/match-config";
 import { executeTool } from "@/lib/ai/copilot/tools";
@@ -317,6 +319,43 @@ export async function runRiskCaseSummary(admin: SessionAdmin, input: { riskCaseI
         }),
       };
     },
+  });
+}
+
+// STEP 29 — marketing copy drafts / aggregate summaries. Built-in phrase-library builder only (no provider call, no
+// applicant data). The summary modes read only aggregate campaign numbers computed server-side from a campaign the
+// admin may view; the assistant cannot launch, spend, approve or send anything.
+export async function runMarketingAssistant(
+  admin: SessionAdmin,
+  input: { mode: MarketingAssistMode; language?: "EN" | "UR"; objective?: string; campaignId?: string; leadFirstName?: string },
+): Promise<AiOutcome> {
+  let summary: MarketingAssistInput["summary"];
+  if (input.mode === "CAMPAIGN_SUMMARY" || input.mode === "ANALYTICS_SUMMARY") {
+    if (!admin.permissions.includes("marketing:analytics:view")) {
+      await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature: "MARKETING_ASSISTANT", reason: "NO_ANALYTICS_ACCESS" });
+      return denied("You do not have access to marketing analytics.");
+    }
+    const campaign = input.campaignId ? await prisma.marketingCampaign.findUnique({ where: { id: input.campaignId } }) : null;
+    if (input.campaignId && !campaign) {
+      await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature: "MARKETING_ASSISTANT", reason: "UNKNOWN_CAMPAIGN" });
+      return denied("You do not have access to this campaign.");
+    }
+    const a = await computeMarketingAnalytics({ from: new Date("2000-01-01"), to: new Date(), campaignId: campaign?.id ?? null });
+    const stage = (k: string) => a.funnel.stages.find((s) => s.key === k)?.value ?? 0;
+    const roi = campaign ? await computeCampaignRoi(campaign.id) : null;
+    summary = {
+      campaignCode: campaign?.code, status: campaign?.status, leads: stage("LEADS"), registrations: stage("REGISTRATIONS"), verified: stage("VERIFIED_PROFILES"),
+      spendMinor: campaign?.spendVerified ? campaign.spendVerifiedMinor : null, currencyCode: campaign?.currencyCode ?? "PKR",
+      cplMinor: a.topCampaigns[0]?.cplMinor ?? null,
+      roiMessage: roi ? (roi.status === "CALCULATED" ? `Verified ROI: ${roi.roiPct}% (${roi.methodology})` : roi.message) : null,
+    };
+  }
+  return runAiRequest({
+    admin,
+    feature: "MARKETING_ASSISTANT",
+    profileIds: [],
+    extraCacheParts: { mode: input.mode, language: input.language ?? "EN", objective: input.objective ?? "", campaignId: input.campaignId ?? "", name: input.leadFirstName ?? "" },
+    build: async () => ({ payload: buildMarketingAssist({ mode: input.mode, language: input.language, objective: input.objective, summary, leadFirstName: input.leadFirstName }) }),
   });
 }
 

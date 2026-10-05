@@ -43,6 +43,9 @@ const PUBLIC_ROUTES = new Set([
   "/api/webhooks/payments/[provider]", "/api/webhooks/notifications", "/api/webhooks/verification/[provider]",
   "/api/webhooks/email", "/api/webhooks/sms", "/api/webhooks/whatsapp", // STEP 25 - signed provider delivery webhooks
   "/api/webhooks/document-provider", "/api/webhooks/signature-provider", // STEP 26 - signed, currently unconfigured (fail closed) provider webhooks
+  // STEP 29 - public marketing surface. All are flag-gated (default OFF), same-origin/rate-limited, and carry no session:
+  // the lead form needs a server-signed token, the event beacon needs a server-signed touch token, the webhook verifies a provider signature.
+  "/api/marketing/forms/[id]/token", "/api/marketing/forms/[id]/submit", "/api/marketing/events", "/api/marketing/webhooks/[provider]",
   "/api/cron/notifications", "/api/internal/ci-evidence",
   "/api/auth/[...nextauth]",
   "/api/my-billing/packages", // public package catalogue (no personal data)

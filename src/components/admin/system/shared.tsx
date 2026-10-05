@@ -69,9 +69,17 @@ const VARIANT: Record<string, "success" | "warning" | "danger" | "muted" | "info
   RUNNING: "info", ACKNOWLEDGED: "info", INVESTIGATING: "info", MITIGATING: "info", DEPLOYING: "info", INFO: "info", MEDIUM: "warning", LOW: "muted", CANCELLED: "muted",
 };
 
+// STEP 29 — lifecycle states used by the Marketing Center (campaigns, pages, forms, creatives, providers, leads, webhooks).
+const MARKETING_VARIANT: Record<string, "success" | "warning" | "danger" | "muted" | "info"> = {
+  DRAFT: "muted", IN_REVIEW: "info", REVIEW: "info", APPROVED: "success", SCHEDULED: "info", ACTIVE: "success", PAUSED: "warning", COMPLETED: "muted",
+  PUBLISHED: "success", UNPUBLISHED: "muted", ARCHIVED: "muted", REJECTED: "danger", SUPERSEDED: "muted", CONNECTED: "success", ERROR: "danger", DISABLED: "muted",
+  VERIFIED: "success", UNVERIFIED: "warning", STOPPED: "muted", DUPLICATE_REVIEW_REQUIRED: "warning", QUALIFIED: "success", CONVERTED: "success", UNQUALIFIED: "muted",
+  DO_NOT_CONTACT: "danger", INVALID: "danger", PENDING_FETCH: "warning", PROCESSED: "success", SKIPPED: "muted", SUCCEEDED: "success", LIFTED: "muted", RECEIVED: "info",
+};
+
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   if (!status) return <Badge variant="muted">—</Badge>;
-  return <Badge variant={VARIANT[status] ?? "muted"}>{status.replace(/_/g, " ")}</Badge>;
+  return <Badge variant={VARIANT[status] ?? MARKETING_VARIANT[status] ?? "muted"}>{status.replace(/_/g, " ")}</Badge>;
 }
 
 export function Card({ title, children, className, action }: { title?: string; children: ReactNode; className?: string; action?: ReactNode }) {

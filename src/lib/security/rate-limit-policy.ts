@@ -52,6 +52,12 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "my-documents-share-request": { limit: 10, windowMs: 60_000 },
   "my-referrals-link": { limit: 5, windowMs: 60_000 },
   "my-coupons-validate": { limit: 20, windowMs: 60_000 },
+  // STEP 29 — public marketing surface
+  "marketing-form-submit": { limit: 5, windowMs: 60_000 },
+  "marketing-form-submit-destination": { limit: 3, windowMs: 3_600_000 },
+  "marketing-form-token": { limit: 30, windowMs: 60_000 },
+  "marketing-events": { limit: 60, windowMs: 60_000 },
+  "marketing-webhook": { limit: 600, windowMs: 60_000 },
 };
 
 const CACHE_TTL_MS = 30_000;

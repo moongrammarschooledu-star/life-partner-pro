@@ -53,7 +53,12 @@ export type SequencePrefix =
   | "CRM"
   | "LEAD"
   | "FUP"
-  | "CRMV";
+  | "CRMV"
+  | "MCAMP"
+  | "ATTR"
+  | "MCRE"
+  | "LP"
+  | "FORM";
 
 export async function nextSequenceCode(prefix: SequencePrefix): Promise<string> {
   const counter = await prisma.sequenceCounter.upsert({

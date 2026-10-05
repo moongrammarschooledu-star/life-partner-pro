@@ -179,6 +179,7 @@ export async function runDueRetentionActions() {
   await runTaskRetentionActions().catch(() => {}); // STEP 18 §60 — archive stale completed/cancelled/expired tasks
   await (await import("@/lib/communications/retention")).safeSweepCommunicationData(); // STEP 25 §39 — redact old message bodies (hold/case aware)
   await (await import("@/lib/documents/retention")).safeSweepDocumentRetention(); // STEP 26 §53 — redact old document bytes (hold/case aware)
+  await (await import("@/lib/marketing/retention")).safeSweepMarketingRetention(); // STEP 29 §46 — anonymise stale unconverted leads / trim events (policy + hold aware)
   await flagUnautomatedCategories().catch(() => {});
   return { deletionsProcessed: dueDeletions.length };
 }

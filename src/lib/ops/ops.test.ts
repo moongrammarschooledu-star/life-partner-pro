@@ -200,7 +200,8 @@ describe("feature flag registry", () => {
     for (const [key, value] of Object.entries(FEATURE_FLAG_DEFAULTS)) {
       // STEP 25 - marketing / campaign flags also default to OFF (never implied by registration)
       // STEP 26 - OCR also defaults to OFF (no OCR vendor is configured)
-      expect(value, key).toBe(!key.startsWith("ai.") && !key.startsWith("communications.") && key !== "documents.ocr.enabled");
+      // STEP 29 - every marketing flag defaults to OFF (nothing public or outbound is live until an admin enables it)
+      expect(value, key).toBe(!key.startsWith("ai.") && !key.startsWith("communications.") && !key.startsWith("marketing.") && key !== "documents.ocr.enabled");
     }
     expect(Object.keys(FEATURE_FLAG_DEFAULTS).filter((k) => k.startsWith("ai.")).length).toBeGreaterThanOrEqual(9);
     // document analysis (spec §50) is not implemented, so it is deliberately not registered

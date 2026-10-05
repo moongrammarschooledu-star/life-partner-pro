@@ -14,6 +14,7 @@ import { runRiskBatch } from "@/lib/risk/batch";
 import { runCommunicationTick } from "@/lib/communications/tick";
 import { runDocumentTick } from "@/lib/documents/tick";
 import { runMembershipTick } from "@/lib/finance/membership-tick";
+import { runMarketingTick } from "@/lib/marketing/tick";
 
 // The single daily tick (Vercel Hobby allows exactly one cron job). Every
 // sub-task is isolated (one failing task no longer discards the others'
@@ -35,6 +36,7 @@ export const CRON_TASKS = [
   { name: "communication-queue", label: "Communication queue drain, campaign batches, follow-up automation, suppression expiry & provider-health alerts", schedule: "daily tick + manual" },
   { name: "document-lifecycle", label: "Document expiry reminders/re-verification, overdue requests, share & signature-request expiry", schedule: "daily tick + manual" },
   { name: "membership-lifecycle", label: "Coupon reservation expiry, entitlement override expiry, credit expiry", schedule: "daily tick + manual" },
+  { name: "marketing-lifecycle", label: "Scheduled campaign starts/ends, provider metric sync (verified spend, budget-cap pause), marketing automation sweep", schedule: "daily tick + manual" },
   { name: "enqueue-jobs", label: "Schedule daily background jobs", schedule: "daily tick" },
   { name: "job-worker", label: "Background job worker", schedule: "daily tick + manual" },
   { name: "alert-evaluation", label: "Monitoring alert evaluation", schedule: "daily tick" },
@@ -74,6 +76,7 @@ export async function runDailyTick(correlationId?: string) {
         runCronTask("communication-queue", () => runCommunicationTick(), opts),
         runCronTask("document-lifecycle", () => runDocumentTick(), opts),
         runCronTask("membership-lifecycle", () => runMembershipTick(), opts),
+        runCronTask("marketing-lifecycle", () => runMarketingTick(), opts),
       ]);
       const enqueue = await runCronTask("enqueue-jobs", enqueueDailyJobs, opts);
       const worker = await runCronTask("job-worker", () => runDueJobs({ limit: 8, budgetMs: 30_000 }), opts);
