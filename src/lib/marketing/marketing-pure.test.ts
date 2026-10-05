@@ -353,6 +353,11 @@ describe("ad platform events never carry personal or sensitive data", () => {
     expect(e!.eventId).not.toContain("LEAD");
     expect(buildAdPlatformEvent("LEAD_CREATED", { campaignRef: "bad ref with spaces & symbols" })).not.toHaveProperty("campaignRef");
   });
+  it("a random event id whose digits resemble a phone number is never rejected, but a non-UUID id is still scanned", () => {
+    expect(() => assertNoSensitiveAdPayload({ eventName: "Lead", eventId: "12345678-1234-4123-8123-123456789012" })).not.toThrow();
+    expect(() => assertNoSensitiveAdPayload({ eventName: "Lead", eventId: "call 0300 1234567" })).toThrow();
+    for (let i = 0; i < 2000; i++) expect(buildAdPlatformEvent("LEAD_CREATED")).not.toBeNull();
+  });
   it("the recursive scan rejects sensitive keys and values wherever they are nested", () => {
     for (const bad of [
       { email: "a@b.co" }, { user_data: {} }, { a: { b: { phone: "1" } } }, { list: [{ religion: "x" }] }, { note: "x" }, { leadId: "x" },

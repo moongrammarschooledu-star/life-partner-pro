@@ -34,6 +34,7 @@ export function buildAdPlatformEvent(type: MarketingEventType, opts: { campaignR
 
 const SENSITIVE_KEY = /(email|phone|mobile|whatsapp|name|address|city|religion|sect|caste|income|health|dob|birth|cnic|passport|photo|score|risk|note|proposal|match|document|inquiry|lead_?id|profile_?id|user_?data|ip|agent)/i;
 const EMAIL_VALUE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const UUID_VALUE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PHONE_VALUE = /\+?\d[\d\s().-]{8,}\d/;
 
 // Recursively refuses any key or value that looks like personal / sensitive matrimonial data. Used by the builder and
@@ -53,6 +54,9 @@ export function assertNoSensitiveAdPayload(payload: unknown, path = "event"): vo
     for (const [k, v] of Object.entries(payload as Record<string, unknown>)) {
       // "eventName"/"eventTime"/"eventId"/"actionSource"/"campaignRef" are the whole allowed vocabulary.
       if (SENSITIVE_KEY.test(k) && !["eventName"].includes(k)) throw new Error(`Sensitive key "${k}" in ad platform payload`);
+      // The event id is OUR random UUID; a run of its digits and dashes can look like a phone number, so it is accepted
+      // only when it is exactly a UUID (anything else in that slot is still scanned like any other value).
+      if (k === "eventId" && typeof v === "string" && UUID_VALUE.test(v)) continue;
       assertNoSensitiveAdPayload(v, `${path}.${k}`);
     }
   }
