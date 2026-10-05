@@ -15,7 +15,7 @@ interface EventRow {
   payload: Record<string, unknown> | null;
 }
 let events: Map<string, EventRow>;
-let failures: Array<Record<string, unknown>> = [];
+const failures: Array<Record<string, unknown>> = [];
 let failureRows: Map<string, { id: string; resolvedAt: Date | null }>;
 
 vi.mock("@/lib/prisma", () => ({

@@ -399,7 +399,8 @@ export async function markApprovalExecutionFailed(approvalRequestId: string, act
   return updated;
 }
 
-// ---------- useEmergencyOverride (spec §25) ----------
+// ---------- invokeEmergencyOverride (spec §25) ----------
+// (Named "invoke…", not "use…": a "use" prefix makes the React-hooks lint rule treat a server function as a hook.)
 
 export interface EmergencyOverrideParams {
   actionType: string;
@@ -417,7 +418,7 @@ export interface EmergencyOverrideParams {
 // permissions.ts). Requires fresh password re-confirmation, a mandatory
 // reason + category, is logged exactly like every other decision (never a
 // silent bypass), and always creates a mandatory post-action review task.
-export async function useEmergencyOverride(params: EmergencyOverrideParams): Promise<ApprovalRequest> {
+export async function invokeEmergencyOverride(params: EmergencyOverrideParams): Promise<ApprovalRequest> {
   const policy = await getApprovalPolicy(params.actionType);
   if (!policy?.emergencyOverrideAllowed) {
     throw new ApprovalError(403, `Emergency override is not enabled for "${params.actionType}".`);
@@ -495,3 +496,6 @@ async function withVersionedUpdate(request: ApprovalRequest, data: Record<string
   }
   return prisma.approvalRequest.findUniqueOrThrow({ where: { id: request.id } });
 }
+
+// Backwards-compatible alias for the original name.
+export const useEmergencyOverride = invokeEmergencyOverride;

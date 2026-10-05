@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
-import { useEmergencyOverride } from "@/lib/approvals/engine";
+import { invokeEmergencyOverride } from "@/lib/approvals/engine";
 import { requireReason } from "@/lib/ops/admin-route";
 import type { AssignmentResourceType } from "@prisma/client";
 
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     if (!body.category?.trim()) throw new ApiError(400, "An emergency category is required.");
     const reason = requireReason(body.reason, 10);
 
-    const request = await useEmergencyOverride({
+    const request = await invokeEmergencyOverride({
       actionType: body.actionType,
       sourceType: body.sourceType,
       sourceId: body.sourceId,

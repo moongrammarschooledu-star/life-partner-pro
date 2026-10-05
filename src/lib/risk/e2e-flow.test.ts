@@ -92,6 +92,9 @@ vi.mock("@/lib/verification/status", () => ({
 
 const { publishSecurityEvent } = await import("@/lib/security/event-bus");
 const { applyCaseAction, getRiskCaseForActor } = await import("./case-service");
+// The first event lazily loads a large module graph; under a full-suite run on a slow machine that exceeds the 5 s default.
+vi.setConfig({ testTimeout: 30_000 });
+
 const { clearRiskConfigCache } = await import("./config");
 const { listActiveRiskRestrictions } = await import("./restriction-service");
 
