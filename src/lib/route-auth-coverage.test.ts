@@ -27,7 +27,9 @@ const routes = walk(API_ROOT).map((file) => ({
 }));
 
 // Admin routes that are public BY DESIGN (the pre-authentication login flow).
-const PUBLIC_ADMIN = new Set(["/api/admin/auth/precheck", "/api/admin/auth/verify-otp"]);
+// Pre-authentication login/reset flow. forgot-password and reset-password are persistent-rate-limited and answer without revealing
+// whether an account exists (see src/lib/admin-password-reset.ts).
+const PUBLIC_ADMIN = new Set(["/api/admin/auth/precheck", "/api/admin/auth/verify-otp", "/api/admin/auth/forgot-password", "/api/admin/auth/reset-password"]);
 
 // Reviewed exception: uses auth() directly because requireAdmin() deliberately
 // refuses requests while View-As is active, and this endpoint is what tells the

@@ -15,7 +15,9 @@ const { auth } = NextAuth(authConfig);
 // they must stay reachable without req.auth. Every other /api/admin/* route
 // still requires a session here, and requireAdmin() re-checks permissions
 // server-side regardless (see src/lib/route-guard.ts).
-const PUBLIC_ADMIN_API_PATHS = ["/api/admin/auth/precheck", "/api/admin/auth/verify-otp"];
+const PUBLIC_ADMIN_API_PATHS = ["/api/admin/auth/precheck", "/api/admin/auth/verify-otp", "/api/admin/auth/forgot-password", "/api/admin/auth/reset-password"];
+// Pre-authentication admin pages (the sign-in page and the e-mail-code password reset page).
+const PUBLIC_ADMIN_PAGES = ["/admin/login", "/admin/forgot-password"];
 
 // ---- Correlation IDs (STEP 15 §15) ---------------------------------------
 function correlate(req: NextRequest): { cid: string; requestHeaders: Headers } {
@@ -39,7 +41,7 @@ function passThrough(req: NextRequest): NextResponse {
 // re-checks the session + role server-side (route-guard.ts).
 const adminAuth = auth((req) => {
   const { pathname } = req.nextUrl;
-  const isAdminArea = pathname.startsWith("/admin") && pathname !== "/admin/login";
+  const isAdminArea = pathname.startsWith("/admin") && !PUBLIC_ADMIN_PAGES.includes(pathname);
   const isAdminApi = pathname.startsWith("/api/admin") && !PUBLIC_ADMIN_API_PATHS.includes(pathname);
 
   if ((isAdminArea || isAdminApi) && !req.auth) {

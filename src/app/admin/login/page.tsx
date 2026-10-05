@@ -124,6 +124,11 @@ function LoginForm() {
       <Button type="submit" className="w-full" disabled={loading}>
         {loading && <Loader2 className="h-4 w-4 animate-spin" />} Sign In
       </Button>
+      <p className="text-center text-sm">
+        <Link href="/admin/forgot-password" className="text-primary hover:underline">
+          Forgot password?
+        </Link>
+      </p>
     </form>
   );
 }
