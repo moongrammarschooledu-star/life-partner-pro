@@ -81,7 +81,7 @@ describe("requesting a code", () => {
     expect(code).toMatch(/^\d{6}$/);
     expect(JSON.stringify(challenges())).not.toContain(code);
     expect(challenges()[0]).toMatchObject({ adminId: "a1", purpose: "PASSWORD_RESET", maxAttempts: 5 });
-    expect((challenges()[0].expiresAt as Date).valueOf() - Date.now()).toBeLessThanOrEqual(15 * 60_000);
+    expect((challenges()[0].expiresAt as Date).valueOf() - Date.now()).toBeLessThanOrEqual(60_000);
   });
 
   it("an unknown e-mail, an inactive admin and a malformed address send nothing and create nothing", async () => {
@@ -91,12 +91,19 @@ describe("requesting a code", () => {
     expect(challenges()).toHaveLength(0);
   });
 
+  it("a code is valid for one minute only", async () => {
+    await svc.requestAdminPasswordReset("boss@example.com");
+    const code = codeFromMail();
+    challenges()[0].expiresAt = new Date(Date.now() - 1); // one minute has passed
+    expect(await svc.completeAdminPasswordReset({ email: "boss@example.com", code, newPassword: "BrandNewPass#9" })).toEqual({ ok: false, reason: "invalid_code" });
+  });
+
   it("a new request supersedes the previous code, and a rapid repeat is ignored (cooldown)", async () => {
     await svc.requestAdminPasswordReset("boss@example.com");
     const first = codeFromMail();
-    await svc.requestAdminPasswordReset("boss@example.com"); // inside the cooldown: ignored
+    await svc.requestAdminPasswordReset("boss@example.com"); // inside the 30 s cooldown: ignored
     expect(sent).toHaveLength(1);
-    challenges()[0].createdAt = new Date(Date.now() - 5 * 60_000); // pretend it was 5 minutes ago
+    challenges()[0].createdAt = new Date(Date.now() - 45_000); // pretend it was 45 seconds ago (past the 30 s cooldown)
     await svc.requestAdminPasswordReset("boss@example.com");
     expect(sent).toHaveLength(2);
     const second = codeFromMail();

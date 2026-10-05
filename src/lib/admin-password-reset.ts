@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { notificationService } from "@/lib/notifications";
-import { generateOtpCode, expiresInMinutes, isExpired } from "@/lib/verification/otp";
+import { generateOtpCode, isExpired } from "@/lib/verification/otp";
 
 // Self-service admin password reset (e-mail one-time code). It reuses AdminOtpChallenge with its own `purpose`, so a
 // reset code can never be accepted as a login 2FA code or the other way round.
@@ -10,19 +10,21 @@ import { generateOtpCode, expiresInMinutes, isExpired } from "@/lib/verification
 // Properties that matter:
 //  • No account enumeration: the request step does the same visible thing (and takes similar time) whether or not the
 //    e-mail belongs to an active admin; the completion step returns one generic failure for every wrong-code case.
-//  • The code is stored only as a bcrypt hash, expires in 15 minutes, allows 5 wrong attempts, and is single-use (the
+//  • The code is stored only as a bcrypt hash, expires in 1 minute, allows 5 wrong attempts, and is single-use (the
 //    consume step is an atomic claim, so two parallel submissions cannot both succeed).
 //  • A new request supersedes earlier unused codes and is rate-limited per account (cooldown) as well as by the routes.
 //  • On success every existing admin session is revoked, the forced-reset flag is cleared, and the admin is told by e-mail.
 //  • 2FA is NOT bypassed: the next sign-in still goes through the normal login flow, including the login code.
 
 export const RESET_PURPOSE = "PASSWORD_RESET";
-export const RESET_CODE_TTL_MINUTES = 15;
+// Deliberately short (owner's requirement): a code that sits in a mailbox is a code that can be misused.
+export const RESET_CODE_TTL_SECONDS = 60;
 export const RESET_MAX_ATTEMPTS = 5;
-export const RESET_REQUEST_COOLDOWN_MS = 60_000;
+// Shorter than the code lifetime so a person whose code expired (or never arrived) can ask for another one promptly.
+export const RESET_REQUEST_COOLDOWN_MS = 30_000;
 export const MAX_PASSWORD_LENGTH = 128;
 
-export const GENERIC_REQUEST_MESSAGE = "If an admin account exists for that e-mail, a reset code has been sent. It expires in 15 minutes.";
+export const GENERIC_REQUEST_MESSAGE = "If an admin account exists for that e-mail, a reset code has been sent. It expires in 1 minute.";
 export const GENERIC_FAILURE_MESSAGE = "The code is invalid or has expired. Please request a new one.";
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}$/;
@@ -45,7 +47,7 @@ export async function requestAdminPasswordReset(rawEmail: unknown, ctx: { ipAddr
   const admin = await prisma.adminUser.findUnique({ where: { email } });
   if (!admin || !admin.active) return burnTime();
 
-  // Cooldown: a second request within a minute is ignored (prevents e-mail flooding of the real owner).
+  // Cooldown: a second request within 30 seconds is ignored (prevents e-mail flooding of the real owner).
   const recent = await prisma.adminOtpChallenge.findFirst({
     where: { adminId: admin.id, purpose: RESET_PURPOSE, createdAt: { gte: new Date(Date.now() - RESET_REQUEST_COOLDOWN_MS) } },
     select: { id: true },
@@ -58,7 +60,7 @@ export async function requestAdminPasswordReset(rawEmail: unknown, ctx: { ipAddr
   const code = generateOtpCode();
   const codeHash = await bcrypt.hash(code, 10);
   const challenge = await prisma.adminOtpChallenge.create({
-    data: { adminId: admin.id, purpose: RESET_PURPOSE, codeHash, maxAttempts: RESET_MAX_ATTEMPTS, expiresAt: expiresInMinutes(RESET_CODE_TTL_MINUTES) },
+    data: { adminId: admin.id, purpose: RESET_PURPOSE, codeHash, maxAttempts: RESET_MAX_ATTEMPTS, expiresAt: new Date(Date.now() + RESET_CODE_TTL_SECONDS * 1000) },
   });
 
   try {
@@ -66,7 +68,7 @@ export async function requestAdminPasswordReset(rawEmail: unknown, ctx: { ipAddr
       channel: "EMAIL",
       to: admin.email,
       subject: "Your Life Partner Pro admin password reset code",
-      body: `Your password reset code is ${code}. It expires in ${RESET_CODE_TTL_MINUTES} minutes and can be used once. If you did not ask to reset your password, ignore this e-mail — your password has not been changed.`,
+      body: `Your password reset code is ${code}. It expires in 1 minute and can be used once. If you did not ask to reset your password, ignore this e-mail — your password has not been changed.`,
     });
   } catch (error) {
     // A code nobody received is useless; remove it. The caller still gets the generic answer (no delivery oracle).
