@@ -58,6 +58,9 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "marketing-form-token": { limit: 30, windowMs: 60_000 },
   "marketing-events": { limit: 60, windowMs: 60_000 },
   "marketing-webhook": { limit: 600, windowMs: 60_000 },
+  // STEP 30 - applicant-side engagement writes (feedback, announcement dismissal, preference changes)
+  "engagement-feedback": { limit: 5, windowMs: 3_600_000 },
+  "engagement-preferences": { limit: 30, windowMs: 3_600_000 },
 };
 
 const CACHE_TTL_MS = 30_000;

@@ -12,6 +12,7 @@ import { Select, Textarea, Field, Input } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { formatEnumLabel } from "@/lib/utils";
 import { timeAgo, KV } from "@/components/admin/system/shared";
+import { ApplicantEngagementPanel } from "@/components/admin/engagement/applicant-engagement-panel";
 
 interface CrmDetail {
   id: string;
@@ -40,12 +41,13 @@ const TABS = [
   { value: "notes", label: "Notes" },
   { value: "followups", label: "Follow-Ups" },
   { value: "timeline", label: "Timeline" },
+  { value: "engagement", label: "Engagement" }, // STEP 30 - journey, reminders and events; the API enforces its own permission and assignment rule
 ];
 
 export default function CrmDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [record, setRecord] = useState<CrmDetail | null>(null);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "engagement" ? "engagement" : "overview"));
 
   const load = useCallback(() => {
     fetch(`/api/admin/crm/${id}`, { cache: "no-store" }).then((r) => r.json()).then(setRecord).catch(() => {});
@@ -73,6 +75,7 @@ export default function CrmDetailPage() {
       {tab === "notes" && <NotesTab crmRecordId={record.id} />}
       {tab === "followups" && <FollowUpsTab crmRecordId={record.id} profileId={record.profile.id} />}
       {tab === "timeline" && <TimelineTab crmRecordId={record.id} />}
+      {tab === "engagement" && <ApplicantEngagementPanel profileId={record.profile.id} canManage={false} />}
     </div>
   );
 }

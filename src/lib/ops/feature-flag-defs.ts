@@ -58,11 +58,20 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "marketing.provider_sync.enabled", description: "Daily ad-provider metric sync and provider webhook processing", sensitive: true },
   { key: "marketing.automation.enabled", description: "Run marketing automation rules (whitelisted actions only; never launches, spends or messages unconsented people)", sensitive: true },
   { key: "marketing.conversion_api.enabled", description: "Send allow-listed server-side conversion events to an ad provider (never personal data)", sensitive: true },
+  // STEP 30 — engagement. Every key defaults OFF (see FEATURE_FLAG_DEFAULTS): nothing engagement-related runs until an admin enables it.
+  { key: "engagement.enabled", description: "Engagement center master switch: journey, next actions, reminders and the admin engagement screens", sensitive: true },
+  { key: "engagement.events.enabled", description: "Record engagement events (ids and counts only) and keep per-applicant activity state", sensitive: true },
+  { key: "engagement.workflows.enabled", description: "Run published engagement workflows (reminders, tasks, notifications) - consent, suppression, frequency and quiet hours always apply", sensitive: true },
+  { key: "engagement.reengagement.enabled", description: "Re-engagement reminders for incomplete profile, stalled verification, pending proposal, inactivity and membership expiry", sensitive: true },
+  { key: "engagement.announcements.enabled", description: "Show approved in-app announcements to applicants", sensitive: true },
+  { key: "engagement.feedback.enabled", description: "Applicant feedback, meeting follow-up choices and optional satisfaction surveys", sensitive: true },
+  { key: "engagement.loyalty.enabled", description: "Referral link, referral history and reward granting through the existing referral/credit system", sensitive: true },
+  { key: "ai.engagement_assistant.enabled", description: "AI engagement summaries and reminder drafts from server-computed platform activity (never sends, approves or predicts; human review required)", sensitive: true },
   { key: "ai.marketing_assistant.enabled", description: "AI marketing copy drafts from an approved phrase library (never launches, spends or approves; human review required)", sensitive: true },
 ];
 
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && d.key !== "documents.ocr.enabled"]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && d.key !== "documents.ocr.enabled"]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

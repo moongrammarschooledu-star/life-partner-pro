@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT" | "CRM" | "MARKETING";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT" | "CRM" | "MARKETING" | "ENGAGEMENT";
 
 export interface CatalogEntry {
   label: string;
@@ -172,6 +172,10 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   MARKETING_BUDGET_INCREASE: { label: "Increase a marketing campaign budget", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["FINANCE_MANAGER", "OPERATIONS_ADMIN", "SUPER_ADMIN"] },
   MARKETING_PROVIDER_CONNECTION_CHANGE: { label: "Connect, change or disconnect a marketing provider", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   MARKETING_LANDING_PAGE_PUBLISH: { label: "Publish a marketing landing page or lead form", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  // STEP 30 - engagement. Publishing anything that is automatically or publicly shown to applicants needs an independent approver.
+  ENGAGEMENT_WORKFLOW_PUBLISH: { label: "Publish an engagement workflow (reminders, tasks, notifications)", domain: "ENGAGEMENT", sourceType: "CASE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  ENGAGEMENT_CONTENT_PUBLISH: { label: "Publish an applicant guide article", domain: "ENGAGEMENT", sourceType: "CASE", defaultRiskLevel: "LOW", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
+  ENGAGEMENT_ANNOUNCEMENT_PUBLISH: { label: "Publish an in-app announcement", domain: "ENGAGEMENT", sourceType: "CASE", defaultRiskLevel: "MEDIUM", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["COMMUNICATION_MANAGER", "OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
   MARKETING_LEAD_EXPORT: { label: "Export marketing leads including contact details", domain: "MARKETING", sourceType: "CASE", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_1", defaultAllowedRoles: ["OPERATIONS_ADMIN", "COMPLIANCE_MANAGER", "SUPER_ADMIN"] },
 };
 

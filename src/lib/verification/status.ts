@@ -4,6 +4,7 @@ import { notifyProfileVerificationChanged, notifyProfileSuspended } from "@/lib/
 import { syncCrmStageOnVerification, syncCrmStageFromProfileStatus } from "@/lib/crm/profile-status-sync";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
+import { engagementOnVerification, engagementOnCompleteness } from "@/lib/engagement/lifecycle-hooks";
 import type { VerificationStatus } from "@prisma/client";
 
 // Profile.profileCompletion is set once at registration and otherwise
@@ -41,6 +42,7 @@ export async function recomputeStoredCompleteness(profileId: string): Promise<vo
   });
 
   await prisma.profile.update({ where: { id: profileId }, data: { profileCompletion: percent } });
+  await engagementOnCompleteness(profileId, percent); // STEP 30 - event only when the profile reaches 100% (never throws)
 }
 
 // Profiles registered before STEP 8 have no ProfileVerification row at all
@@ -178,6 +180,8 @@ export async function setVerificationStatus(profileId: string, newStatus: Verifi
     await syncCrmStageOnVerification(profileId);
     await (await import("@/lib/marketing/lead-progress")).onProfileVerified(profileId); // STEP 29 — marketing attribution timeline (never throws)
   }
+
+  await engagementOnVerification(profileId, newStatus); // STEP 30 - engagement event (+ referral qualification on VERIFIED); never throws
 
   return verification;
 }

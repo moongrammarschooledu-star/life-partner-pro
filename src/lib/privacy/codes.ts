@@ -58,7 +58,13 @@ export type SequencePrefix =
   | "ATTR"
   | "MCRE"
   | "LP"
-  | "FORM";
+  | "FORM"
+  | "ENG" // STEP 30 - engagement workflow runs (LPP-ENG-######)
+  | "EWF" // STEP 30 - engagement workflows
+  | "ECN" // STEP 30 - guide content
+  | "EAN" // STEP 30 - announcements
+  | "EFB" // STEP 30 - applicant feedback
+  | "ESV"; // STEP 30 - surveys
 
 export async function nextSequenceCode(prefix: SequencePrefix): Promise<string> {
   const counter = await prisma.sequenceCounter.upsert({

@@ -11,6 +11,7 @@ import { writeAudit } from "@/lib/audit";
 import type { CaseType, CaseCategory } from "@prisma/client";
 import { blockedResponse } from "@/lib/ops/guards";
 import { attachUserReportToCase, REPORT_TYPE_FOR_CATEGORY } from "@/lib/risk/report-service";
+import { engagementOnSupportCase } from "@/lib/engagement/lifecycle-hooks";
 
 const VALID_TYPES: CaseType[] = ["SUPPORT", "COMPLAINT", "SAFETY_REPORT"];
 
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
 
   await writeAudit({ action: "CASE_CREATED", targetProfileId: profileId, meta: { caseId: created.id, caseNumber, type: caseType, category } });
   await notifyCaseCreated(created.id, profileId);
+  await engagementOnSupportCase(profileId, created.id); // STEP 30 (never throws)
 
   // STEP 24 — a Safety Concern also becomes a UserReport + a low-confidence allegation signal, so it reaches human risk
   // review. Fail-open: it can never block or fail the applicant's own request, and nothing here acts on the reported profile.

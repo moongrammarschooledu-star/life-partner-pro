@@ -17,6 +17,10 @@ import { buildCrmApplicantSummary, buildCrmTimelineSummary } from "@/lib/crm/ai-
 import { getCrmTimeline } from "@/lib/crm/timeline-service";
 import { buildMarketingAssist, type MarketingAssistInput, type MarketingAssistMode } from "@/lib/ai/analysis/marketing-assistant";
 import { computeCampaignRoi, computeMarketingAnalytics } from "@/lib/marketing/analytics";
+import { buildEngagementAssist, type EngagementAssistInput, type EngagementAssistMode } from "@/lib/ai/analysis/engagement-assistant";
+import { getEngagementOverview } from "@/lib/engagement/analytics";
+import { loadEngagementSnapshot } from "@/lib/engagement/read-model";
+import type { EngagementSnapshot } from "@/lib/engagement/types";
 import { STANDARD_LIMITATIONS } from "@/lib/ai/analysis/summary";
 import { loadMatchConfig } from "@/lib/ai/match-config";
 import { executeTool } from "@/lib/ai/copilot/tools";
@@ -415,5 +419,60 @@ export async function runCrmSummary(admin: SessionAdmin, input: { crmRecordId: s
         }),
       };
     },
+  });
+}
+
+// STEP 30 - engagement summaries / reminder drafts / content topics. Built-in deterministic builder only (no provider call).
+// Per-person modes require the admin to be able to see that person's CRM record (same rule as CRM_SUMMARY) and read a
+// server-built snapshot with counts only - never contact details, documents, notes, risk signals or the activity score.
+// Summary modes read aggregates. The assistant cannot send, schedule, approve or change anything.
+export async function runEngagementAssistant(
+  admin: SessionAdmin,
+  input: { mode: EngagementAssistMode; language?: "EN" | "UR"; crmRecordId?: string; reminderKind?: string; days?: number },
+): Promise<AiOutcome> {
+  const needsPerson = input.mode === "JOURNEY_SUMMARY" || input.mode === "NEXT_ACTION_EXPLANATION";
+  let snapshot: EngagementSnapshot | undefined;
+  let recordUpdatedAt = "";
+  if (needsPerson) {
+    const record = input.crmRecordId ? await prisma.crmRecord.findUnique({ where: { id: input.crmRecordId } }) : null;
+    try {
+      if (!record) throw new ApiError(403, "no access");
+      assertCanSeeCrmRecord(admin, record);
+    } catch {
+      await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature: "ENGAGEMENT_ASSISTANT", reason: "UNKNOWN_OR_HIDDEN_RECORD" });
+      return denied("You do not have access to this record.");
+    }
+    snapshot = (await loadEngagementSnapshot(record.profileId)) ?? undefined;
+    recordUpdatedAt = record.updatedAt.toISOString();
+  }
+  const days = Math.min(Math.max(Math.trunc(input.days ?? 30), 1), 365);
+  let feedback: EngagementAssistInput["feedback"];
+  let analytics: EngagementAssistInput["analytics"];
+  if (input.mode === "FEEDBACK_SUMMARY") {
+    if (!admin.permissions.includes("engagement:feedback:view")) {
+      await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature: "ENGAGEMENT_ASSISTANT", reason: "NO_FEEDBACK_ACCESS" });
+      return denied("You do not have access to engagement feedback.");
+    }
+    const since = new Date(Date.now() - days * 86_400_000);
+    const [byType, byStatus] = await Promise.all([
+      prisma.engagementFeedback.groupBy({ by: ["type"], where: { createdAt: { gte: since } }, _count: { type: true } }),
+      prisma.engagementFeedback.groupBy({ by: ["status"], where: { createdAt: { gte: since } }, _count: { status: true } }),
+    ]);
+    feedback = { total: byType.reduce((n, r) => n + r._count.type, 0), byType: Object.fromEntries(byType.map((r) => [r.type, r._count.type])), byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count.status])) };
+  }
+  if (input.mode === "ANALYTICS_SUMMARY") {
+    if (!admin.permissions.includes("engagement:analytics:view")) {
+      await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature: "ENGAGEMENT_ASSISTANT", reason: "NO_ANALYTICS_ACCESS" });
+      return denied("You do not have access to engagement analytics.");
+    }
+    const o = await getEngagementOverview(days);
+    analytics = { windowDays: days, registered: o.events.USER_REGISTERED ?? 0, profileCompleted: o.events.PROFILE_COMPLETED ?? 0, verified: o.events.VERIFICATION_COMPLETED ?? 0, remindersSent: o.reminders.SENT ?? 0, reengagementRate: o.reengagementResponseRate };
+  }
+  return runAiRequest({
+    admin,
+    feature: "ENGAGEMENT_ASSISTANT",
+    profileIds: [],
+    extraCacheParts: { mode: input.mode, language: input.language ?? "EN", crmRecordId: input.crmRecordId ?? "", reminderKind: input.reminderKind ?? "", days: String(days), updatedAt: recordUpdatedAt },
+    build: async () => ({ payload: buildEngagementAssist({ mode: input.mode, language: input.language, snapshot, reminderKind: input.reminderKind, feedback, analytics }) }),
   });
 }

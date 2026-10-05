@@ -33,6 +33,13 @@ export function buildActionUrl(
     if (type.startsWith("DOCUMENT_")) return "/dashboard/documents";
     // STEP 27 — membership/entitlements/coupons/referrals
     if (type === "REFERRAL_REWARD_GRANTED") return "/dashboard/referrals";
+    // STEP 30 — engagement reminders open the place where the applicant can act.
+    if (type === "ENGAGEMENT_PROFILE_REMINDER") return "/dashboard/profile/edit";
+    if (type === "ENGAGEMENT_VERIFICATION_REMINDER") return "/my-verification";
+    if (type === "ENGAGEMENT_PROPOSAL_REMINDER" || type === "ENGAGEMENT_MEETING_REMINDER") return "/my-proposals";
+    if (type === "ENGAGEMENT_MEMBERSHIP_REMINDER") return "/dashboard/membership";
+    if (type === "ENGAGEMENT_FEEDBACK_REQUEST") return "/dashboard/feedback";
+    if (type === "ENGAGEMENT_REENGAGEMENT" || type === "ENGAGEMENT_ANNOUNCEMENT") return "/dashboard/journey";
     if (["TRIAL_STARTED", "TRIAL_ENDING", "PACKAGE_CHANGED", "COUPON_APPLIED", "COUPON_EXPIRED", "ENTITLEMENT_EXPIRED"].includes(type)) return "/dashboard/membership";
     return "/my-notifications";
   }

@@ -4,6 +4,7 @@ import { nextProposalStatus } from "@/lib/proposal-workflow";
 import { writeAudit } from "@/lib/audit";
 import { notifyProposalResponseReceived } from "@/lib/notifications/events";
 import type { ProposalResponseType, ProposalDeclineReason } from "@prisma/client";
+import { engagementOnProposalResponse } from "@/lib/engagement/lifecycle-hooks";
 
 export class ProposalResponseError extends HttpError {
   constructor(status: number, message: string) {
@@ -79,6 +80,8 @@ export async function submitProposalResponse(
     newStatus,
     assignedToId: proposal.assignedToId,
   });
+
+  await engagementOnProposalResponse(profileId, proposal, newStatus); // STEP 30 - engagement event (never throws)
 
   return { ok: true };
 }

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import { writeAudit } from "@/lib/audit";
 import { notifyContactPermissionAction, notifyAdminContactPermissionRequest, notifyContactApproved } from "@/lib/notifications/events";
+import { engagementOnContactStep } from "@/lib/engagement/lifecycle-hooks";
 
 export class ProposalPermissionError extends HttpError {
   constructor(status: number, message: string) {
@@ -48,6 +49,7 @@ export async function applyContactPermissionAction(params: { proposalId: string;
     await writeAudit({ action: "CONTACT_PERMISSION_REQUESTED", adminId, targetProfileId: profileId, meta: { proposalId } });
     await notifyContactPermissionAction(profileId, proposalId, "request");
     await notifyAdminContactPermissionRequest(proposalId, proposal.assignedToId);
+    await engagementOnContactStep(proposal, "CONTACT_PERMISSION_PENDING", `${profileId}:requested`); // STEP 30 (never throws)
   } else if (action === "approve") {
     await prisma.contactPermission.upsert({
       where: { proposalId_profileId: { proposalId, profileId } },
@@ -87,6 +89,7 @@ export async function applyContactPermissionAction(params: { proposalId: string;
       },
     });
     await notifyContactApproved(proposal.profileAId, proposal.profileBId, proposalId);
+    await engagementOnContactStep(proposal, "CONTACT_APPROVED", "approved"); // STEP 30 (never throws)
   }
 
   return { permissions, bothApproved };

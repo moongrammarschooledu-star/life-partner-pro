@@ -9,6 +9,7 @@ import { notifyProposalCreated } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { blockedResponse } from "@/lib/ops/guards";
 import { hasBroadRecordAccess } from "@/lib/permissions";
+import { engagementOnProposalPair } from "@/lib/engagement/lifecycle-hooks";
 
 const proposalListInclude = {
   profileA: { select: { id: true, profileCode: true, fullName: true, gender: true, city: true } },
@@ -154,6 +155,7 @@ export async function POST(req: Request) {
     }
 
     await notifyProposalCreated({ id: proposal.id, profileAId, profileBId });
+    await engagementOnProposalPair({ id: proposal.id, profileAId, profileBId }, "PROPOSAL_RECEIVED", "created"); // STEP 30 (never throws)
 
     return NextResponse.json(proposal);
   } catch (error) {

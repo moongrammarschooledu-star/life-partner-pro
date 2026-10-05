@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { publishSecurityEvent } from "@/lib/security/event-bus";
+import { engagementOnLogin } from "@/lib/engagement/lifecycle-hooks";
 
 // Spec §10/§32 — makes "Active Sessions"/"Log Out Other Sessions" real for
 // applicant accounts, mirroring AdminSession's shape (STEP 11). Applicants
@@ -14,6 +15,7 @@ export async function createProfileSession(profileId: string, deviceInfo?: strin
   // STEP 24 — informational only (feeds the OFF-by-default shared device/network rules; never a
   // signal by itself). IP/user-agent are stored by the bus only as salted hashes, and only when enabled.
   await publishSecurityEvent({ eventType: "NEW_DEVICE_SESSION", profileId, ip: ipAddress, userAgent, source: "profile-session", evaluate: false });
+  await engagementOnLogin(profileId); // STEP 30 - at most one LOGIN event per day (never throws)
   return session;
 }
 

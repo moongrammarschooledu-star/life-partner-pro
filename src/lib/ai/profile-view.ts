@@ -202,6 +202,13 @@ export const FIELD_POLICY: Record<AiFeatureKey, FieldPolicy> = {
     optional: [],
     restricted: [...ALWAYS_RESTRICTED, "individualProfiles", "riskScore", "leadContactDetails", "deviceIdentifiers", "networkIdentifiers"],
   },
+  // STEP 30 — engagement summaries use server-computed platform activity (counts, stages, dates) and an approved phrase library;
+  // never contact details, documents, notes, risk signals or any quality/compatibility score.
+  ENGAGEMENT_ASSISTANT: {
+    required: ["engagementBrief"],
+    optional: [],
+    restricted: [...ALWAYS_RESTRICTED, "riskScore", "activityScore", "leadContactDetails", "deviceIdentifiers", "networkIdentifiers", "documents", "staffNotes"],
+  },
 };
 
 export function classificationOf(field: string): DataClassification {

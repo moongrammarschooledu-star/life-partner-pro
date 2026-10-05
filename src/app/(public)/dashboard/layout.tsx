@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, UserCircle, Heart, Users, Activity, Sparkles } from "lucide-react";
+import { LayoutDashboard, UserCircle, Users, Activity, Sparkles, Route, BookOpen, MessageSquareHeart, BellRing, Gift } from "lucide-react";
 import { ApplicantGate } from "@/components/public/applicant-gate";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,11 @@ const NAV = [
   { href: "/dashboard/family", label: "Family Interaction", icon: Users },
   { href: "/dashboard/activity", label: "Activity Timeline", icon: Activity },
   { href: "/dashboard/ai-assistant", label: "Profile Assistant", icon: Sparkles },
+  { href: "/dashboard/journey", label: "My Journey", icon: Route },
+  { href: "/dashboard/guide", label: "Guide", icon: BookOpen },
+  { href: "/dashboard/feedback", label: "Feedback", icon: MessageSquareHeart },
+  { href: "/dashboard/settings/notifications", label: "Notification Settings", icon: BellRing },
+  { href: "/dashboard/referrals", label: "Referrals", icon: Gift },
 ];
 
 // STEP 21 — local layout for the new applicant dashboard hub. Wraps only the

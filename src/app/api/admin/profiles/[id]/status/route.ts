@@ -4,6 +4,7 @@ import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { notifyProfileApproved } from "@/lib/notifications/events";
 import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
+import { engagementOnProfileStatus } from "@/lib/engagement/lifecycle-hooks";
 import type { ProfileStatus } from "@prisma/client";
 
 const VALID_STATUSES: ProfileStatus[] = [
@@ -42,6 +43,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (status === "ACTIVE") {
       await notifyProfileApproved(id);
     }
+
+    await engagementOnProfileStatus(id, profile.status); // STEP 30 - engagement event + CRM stage sync (never throws)
 
     return NextResponse.json({ status: profile.status });
   } catch (error) {

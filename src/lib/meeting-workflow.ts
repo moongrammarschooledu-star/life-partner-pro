@@ -4,6 +4,7 @@ import { writeAudit } from "@/lib/audit";
 import { notifyMeetingUpdated, notifyFamilyMeetingUpdated } from "@/lib/notifications/events";
 import { getSharedRecord, hasFamilyPermission } from "@/lib/family/access-control";
 import type { MeetingStatus } from "@prisma/client";
+import { engagementOnMeeting } from "@/lib/engagement/lifecycle-hooks";
 
 export class MeetingWorkflowError extends HttpError {
   constructor(status: number, message: string) {
@@ -153,6 +154,7 @@ export async function applyMeetingUpdate(proposalId: string, meetingId: string, 
   });
 
   if (changes.status) {
+    await engagementOnMeeting(proposal, meetingId, changes.status); // STEP 30 (never throws)
     await notifyMeetingUpdated(proposal.profileAId, proposal.profileBId, proposalId, changes.status, proposal.assignedToId);
 
     const familyShares = await prisma.familySharedRecord.findMany({ where: { recordType: "MEETING", recordId: meetingId, status: "ACTIVE" }, select: { familyMemberId: true } });

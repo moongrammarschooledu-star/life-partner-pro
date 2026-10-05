@@ -236,6 +236,17 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   ENTITLEMENT_EXPIRED: ESSENTIAL,
   ADMIN_REFERRAL_REVIEW_REQUIRED: ESSENTIAL,
 
+  // STEP 30 — engagement reminders/announcements. All are preference-gated (FOLLOWUP category, never ESSENTIAL): an
+  // applicant can switch them off, and the engagement preflight additionally enforces suppression, frequency and quiet hours.
+  ENGAGEMENT_PROFILE_REMINDER: FOLLOWUP,
+  ENGAGEMENT_VERIFICATION_REMINDER: FOLLOWUP,
+  ENGAGEMENT_PROPOSAL_REMINDER: FOLLOWUP,
+  ENGAGEMENT_MEETING_REMINDER: FOLLOWUP,
+  ENGAGEMENT_MEMBERSHIP_REMINDER: FOLLOWUP,
+  ENGAGEMENT_REENGAGEMENT: FOLLOWUP,
+  ENGAGEMENT_ANNOUNCEMENT: FOLLOWUP,
+  ENGAGEMENT_FEEDBACK_REQUEST: FOLLOWUP,
+
   // STEP 28 — CRM, Applicant Lifecycle & Lead Management — admin-only,
   // internal (assignment/SLA notices via notifyAdmins), never sent to a profile.
   CRM_FOLLOWUP_DUE: ESSENTIAL,

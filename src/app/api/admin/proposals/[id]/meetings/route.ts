@@ -6,6 +6,7 @@ import { assertProposalAccess } from "@/lib/proposal-access";
 import { notifyMeetingScheduled } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import type { MeetingType } from "@prisma/client";
+import { engagementOnMeeting } from "@/lib/engagement/lifecycle-hooks";
 
 const VALID_TYPES: MeetingType[] = ["FAMILY_MEETING", "INITIAL_MEETING", "ONLINE_MEETING", "PHONE_DISCUSSION", "IN_PERSON_MEETING", "OTHER"];
 
@@ -54,6 +55,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await writeAudit({ action: "MEETING_CREATED", adminId: admin.id, targetProfileId: proposal.profileAId, meta: { proposalId: id, meetingId: meeting.id } });
 
     await notifyMeetingScheduled(proposal.profileAId, proposal.profileBId, id);
+    await engagementOnMeeting(proposal, meeting.id, meeting.status); // STEP 30 (never throws)
 
     return NextResponse.json(meeting);
   } catch (error) {

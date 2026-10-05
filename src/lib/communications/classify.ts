@@ -28,6 +28,12 @@ export function describeNotification(type: NotificationType): NotificationDescri
   if (starts(t, "FAMILY_")) return { messageType: "FAMILY", purpose: "FAMILY_ACCESS", category: "FAMILY", priority: "NORMAL" };
   if (starts(t, "ADMIN_", "TASK_", "APPROVAL_", "COMPLIANCE_", "COMMUNICATION_") || ["HIGH_RISK_DETECTED", "CRITICAL_RISK_DETECTED", "DUPLICATE_REVIEW_REQUIRED", "VERIFICATION_RISK", "CONTACT_BYPASS_DETECTED", "SAFETY_REPORT_RECEIVED", "RISK_REVIEW_DUE", "RISK_CASE_ESCALATED", "EMERGENCY_OVERRIDE_USED", "PROVIDER_VERIFICATION_FAILURE"].includes(t))
     return { messageType: "ADMIN_INTERNAL", purpose: "ADMIN_INTERNAL", category: "SYSTEM", priority: "NORMAL" };
+  // STEP 30 — engagement reminders are operational TRANSACTIONAL/FOLLOWUP messages (not promotional), always LOW priority:
+  // an engagement message is never URGENT/HIGH, and it never bypasses quiet hours (those exceptions are SECURITY/VERIFICATION types).
+  if (starts(t, "ENGAGEMENT_")) {
+    const category = t === "ENGAGEMENT_VERIFICATION_REMINDER" ? "VERIFICATION" : t === "ENGAGEMENT_PROPOSAL_REMINDER" ? "PROPOSAL" : t === "ENGAGEMENT_MEETING_REMINDER" ? "MEETING" : t === "ENGAGEMENT_MEMBERSHIP_REMINDER" ? "PAYMENT" : t === "ENGAGEMENT_FEEDBACK_REQUEST" ? "SUPPORT" : "SYSTEM";
+    return { messageType: "TRANSACTIONAL", purpose: "FOLLOWUP", category, priority: "LOW" };
+  }
   if (t === "ACCOUNT_REGISTERED" || starts(t, "PROFILE_")) return { messageType: "TRANSACTIONAL", purpose: "ACCOUNT", category: "SYSTEM", priority: "NORMAL" };
   // STEP 26 — document management (ADMIN_DOCUMENT_* is already caught by the ADMIN_ branch above).
   if (t === "DOCUMENT_EXPIRING_SOON") return { messageType: "TRANSACTIONAL", purpose: "FOLLOWUP", category: "SUPPORT", priority: "LOW" };

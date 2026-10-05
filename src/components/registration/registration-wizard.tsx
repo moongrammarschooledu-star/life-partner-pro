@@ -164,7 +164,9 @@ function WizardBody() {
     setSubmitting(true);
     try {
       const formData = new FormData();
-      formData.append("payload", JSON.stringify(data));
+      // STEP 30 - an optional referral code from a share link (/register?ref=CODE); the server ignores it silently if it is not valid.
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      formData.append("payload", JSON.stringify(ref ? { ...data, referralCode: ref.slice(0, 40) } : data));
       if (photoFile) formData.append("photo", photoFile);
 
       const res = await fetch("/api/register", { method: "POST", body: formData });

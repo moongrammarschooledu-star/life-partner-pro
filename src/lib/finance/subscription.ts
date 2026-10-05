@@ -7,6 +7,7 @@ import { subtractMoney } from "@/lib/finance/money";
 import { grantCredit } from "@/lib/finance/credits";
 import { getPaymentFeatureFlags } from "@/lib/finance/rollout";
 import type { SubscriptionStatus } from "@prisma/client";
+import { engagementOnMembershipStarted } from "@/lib/engagement/lifecycle-hooks";
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -65,6 +66,7 @@ export async function activateSubscription(params: {
   await prisma.subscriptionEvent.create({ data: { subscriptionId: subscription.id, toStatus: subscription.status, reason: "Activated after confirmed payment" } });
   await writeAudit({ action: "SUBSCRIPTION_CREATED", targetProfileId: params.profileId, meta: { subscriptionId: subscription.id, subscriptionCode } });
   await notifySubscriptionStarted(params.profileId);
+  await engagementOnMembershipStarted(params.profileId, subscription.id); // STEP 30 (never throws)
   return subscription;
 }
 

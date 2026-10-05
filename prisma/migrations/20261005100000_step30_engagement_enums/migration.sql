@@ -1,0 +1,67 @@
+-- AlterEnum
+-- This migration adds more than one value to an enum.
+-- With PostgreSQL versions 11 and earlier, this is not possible
+-- in a single migration. This can be worked around by creating
+-- multiple migrations, each migration adding only one value to
+-- the enum.
+
+
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_EVENT_RECORDED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_CREATED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_UPDATED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_SUBMITTED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_APPROVED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_REJECTED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_PUBLISHED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_PAUSED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_RESUMED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_ARCHIVED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_ROLLED_BACK';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_WORKFLOW_RUN';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_REMINDER_SCHEDULED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_REMINDER_CANCELLED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_REENGAGEMENT_SENT';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_CONTENT_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_CONTENT_PUBLISHED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_ANNOUNCEMENT_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_ANNOUNCEMENT_PUBLISHED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_PREFERENCE_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_SETTINGS_CHANGED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_FEEDBACK_SUBMITTED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_FEEDBACK_HANDLED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_REFERRAL_ACTION';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_EXPORT';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_AI_GENERATED';
+ALTER TYPE "AuditAction" ADD VALUE 'ENGAGEMENT_CONTENT_POLICY_BLOCKED';
+
+-- AlterEnum
+-- This migration adds more than one value to an enum.
+-- With PostgreSQL versions 11 and earlier, this is not possible
+-- in a single migration. This can be worked around by creating
+-- multiple migrations, each migration adding only one value to
+-- the enum.
+
+
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_PROFILE_REMINDER';
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_VERIFICATION_REMINDER';
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_PROPOSAL_REMINDER';
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_MEETING_REMINDER';
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_MEMBERSHIP_REMINDER';
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_REENGAGEMENT';
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_ANNOUNCEMENT';
+ALTER TYPE "NotificationType" ADD VALUE 'ENGAGEMENT_FEEDBACK_REQUEST';
+
+-- AlterEnum
+-- This migration adds more than one value to an enum.
+-- With PostgreSQL versions 11 and earlier, this is not possible
+-- in a single migration. This can be worked around by creating
+-- multiple migrations, each migration adding only one value to
+-- the enum.
+
+
+ALTER TYPE "DataCategory" ADD VALUE 'ENGAGEMENT_EVENT_DATA';
+ALTER TYPE "DataCategory" ADD VALUE 'ENGAGEMENT_FEEDBACK_DATA';
+
+-- AlterEnum
+ALTER TYPE "AiFeature" ADD VALUE 'ENGAGEMENT_ASSISTANT';
+

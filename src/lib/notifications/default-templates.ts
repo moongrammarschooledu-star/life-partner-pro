@@ -648,6 +648,40 @@ export const DEFAULT_TEMPLATES: Dict = {
     UR: { title: "ریفرل کا جائزہ درکار ہے", body: "ایک ریفرل کو اہلیت/فراڈ کے جائزے کے لیے نشان زد کیا گیا ہے۔" },
   },
 
+  // ---------- STEP 30 — engagement reminders (neutral, no urgency, no outcome claims) ----------
+  ENGAGEMENT_PROFILE_REMINDER: {
+    EN: { title: "Your profile is waiting for you", body: "Some profile sections are still empty. Open your profile when you are ready to complete it." },
+    UR: { title: "آپ کی پروفائل مکمل ہونے کی منتظر ہے", body: "پروفائل کے کچھ حصے ابھی خالی ہیں۔ جب آپ تیار ہوں تو اپنی پروفائل کھول کر مکمل کریں۔" },
+  },
+  ENGAGEMENT_VERIFICATION_REMINDER: {
+    EN: { title: "Verification step available", body: "A verification step is still open on your account. You can continue it from your verification page." },
+    UR: { title: "تصدیق کا مرحلہ دستیاب ہے", body: "آپ کے اکاؤنٹ پر تصدیق کا ایک مرحلہ ابھی کھلا ہے۔ آپ اسے اپنے تصدیقی صفحے سے جاری رکھ سکتے ہیں۔" },
+  },
+  ENGAGEMENT_PROPOSAL_REMINDER: {
+    EN: { title: "A proposal is awaiting your response", body: "You have a proposal to review. Take the time you need; you can respond from your proposals page." },
+    UR: { title: "ایک پروپوزل آپ کے جواب کا منتظر ہے", body: "آپ کے پاس جائزے کے لیے ایک پروپوزل ہے۔ اپنی سہولت سے وقت لیں اور اپنے پروپوزلز کے صفحے سے جواب دیں۔" },
+  },
+  ENGAGEMENT_MEETING_REMINDER: {
+    EN: { title: "A meeting is waiting for your confirmation", body: "A meeting request is waiting for your reply. You can confirm or ask for a change from your proposals page." },
+    UR: { title: "ایک ملاقات آپ کی تصدیق کی منتظر ہے", body: "ایک ملاقات کی درخواست آپ کے جواب کی منتظر ہے۔ آپ اپنے پروپوزلز کے صفحے سے تصدیق یا تبدیلی کی درخواست کر سکتے ہیں۔" },
+  },
+  ENGAGEMENT_MEMBERSHIP_REMINDER: {
+    EN: { title: "About your membership", body: "Your membership includes certain platform features. Open your membership page to see what is included and your dates." },
+    UR: { title: "آپ کی ممبرشپ کے بارے میں", body: "آپ کی ممبرشپ میں پلیٹ فارم کی کچھ خصوصیات شامل ہیں۔ شامل چیزیں اور تاریخیں دیکھنے کے لیے اپنا ممبرشپ صفحہ کھولیں۔" },
+  },
+  ENGAGEMENT_REENGAGEMENT: {
+    EN: { title: "Welcome back whenever you are ready", body: "There is no deadline. Your journey page shows where things stand and what the next step could be." },
+    UR: { title: "جب چاہیں واپس تشریف لائیں", body: "کوئی آخری تاریخ نہیں ہے۔ آپ کا سفر کا صفحہ بتاتا ہے کہ معاملات کہاں ہیں اور اگلا قدم کیا ہو سکتا ہے۔" },
+  },
+  ENGAGEMENT_ANNOUNCEMENT: {
+    EN: { title: "A notice from Life Partner Pro", body: "There is a new notice for you on your journey page." },
+    UR: { title: "لائف پارٹنر پرو کی طرف سے اطلاع", body: "آپ کے سفر کے صفحے پر آپ کے لیے ایک نئی اطلاع ہے۔" },
+  },
+  ENGAGEMENT_FEEDBACK_REQUEST: {
+    EN: { title: "Would you like to share feedback?", body: "If you wish, you can tell us about your experience with the platform. It is optional." },
+    UR: { title: "کیا آپ رائے دینا چاہیں گے؟", body: "اگر آپ چاہیں تو پلیٹ فارم کے بارے میں اپنا تجربہ ہمیں بتا سکتے ہیں۔ یہ اختیاری ہے۔" },
+  },
+
   // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
   CRM_FOLLOWUP_DUE: {
     EN: { title: "Follow-Up Due", body: "A follow-up you're assigned is due soon. Open the CRM record to review it." },

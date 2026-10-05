@@ -5,7 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { getProvider } from "@/lib/finance/providers/registry";
 import { generateInvoice } from "@/lib/finance/invoice";
 import { activateSubscription, isEligibleForTrial } from "@/lib/finance/subscription";
-import { evaluateQualifyingEvent } from "@/lib/referrals/referral-service";
+import { processReferralQualifyingEvent } from "@/lib/engagement/referral-extension";
 import { notifyPaymentSuccess, notifyPaymentFailed } from "@/lib/notifications/events";
 import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { getPaymentFeatureFlags } from "@/lib/finance/rollout";
@@ -109,7 +109,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
               // event; REGISTRATION already fires at account creation
               // (not from here) and VERIFICATION_COMPLETE from the
               // verification flow — neither belongs in this webhook.
-              await evaluateQualifyingEvent(payment.profileId, "FIRST_PAYMENT").catch(() => undefined);
+              await processReferralQualifyingEvent(payment.profileId, "FIRST_PAYMENT").catch(() => undefined); // STEP 30: same qualification as before; reward grant only when engagement.loyalty is on
             }
           }
         } else if (event.status === "FAILED" && payment.status !== "FAILED") {

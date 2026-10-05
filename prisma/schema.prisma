@@ -1306,6 +1306,34 @@ enum AuditAction {
   MARKETING_EXPERIMENT_CHANGED
   MARKETING_CONTENT_POLICY_BLOCKED
   MARKETING_AI_COPY_GENERATED
+  // STEP 30 — customer engagement, reminders, re-engagement and lifecycle automation
+  ENGAGEMENT_EVENT_RECORDED
+  ENGAGEMENT_WORKFLOW_CREATED
+  ENGAGEMENT_WORKFLOW_UPDATED
+  ENGAGEMENT_WORKFLOW_SUBMITTED
+  ENGAGEMENT_WORKFLOW_APPROVED
+  ENGAGEMENT_WORKFLOW_REJECTED
+  ENGAGEMENT_WORKFLOW_PUBLISHED
+  ENGAGEMENT_WORKFLOW_PAUSED
+  ENGAGEMENT_WORKFLOW_RESUMED
+  ENGAGEMENT_WORKFLOW_ARCHIVED
+  ENGAGEMENT_WORKFLOW_ROLLED_BACK
+  ENGAGEMENT_WORKFLOW_RUN
+  ENGAGEMENT_REMINDER_SCHEDULED
+  ENGAGEMENT_REMINDER_CANCELLED
+  ENGAGEMENT_REENGAGEMENT_SENT
+  ENGAGEMENT_CONTENT_CHANGED
+  ENGAGEMENT_CONTENT_PUBLISHED
+  ENGAGEMENT_ANNOUNCEMENT_CHANGED
+  ENGAGEMENT_ANNOUNCEMENT_PUBLISHED
+  ENGAGEMENT_PREFERENCE_CHANGED
+  ENGAGEMENT_SETTINGS_CHANGED
+  ENGAGEMENT_FEEDBACK_SUBMITTED
+  ENGAGEMENT_FEEDBACK_HANDLED
+  ENGAGEMENT_REFERRAL_ACTION
+  ENGAGEMENT_EXPORT
+  ENGAGEMENT_AI_GENERATED
+  ENGAGEMENT_CONTENT_POLICY_BLOCKED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1550,6 +1578,16 @@ enum NotificationType {
   REFERRAL_REWARD_GRANTED
   ENTITLEMENT_EXPIRED
   ADMIN_REFERRAL_REVIEW_REQUIRED // admin-only - a referral needs fraud/eligibility review
+  // STEP 30 — engagement reminders and announcements. Reminder types are classified FOLLOWUP (preference-gated), never ESSENTIAL;
+  // none of them uses urgency wording.
+  ENGAGEMENT_PROFILE_REMINDER
+  ENGAGEMENT_VERIFICATION_REMINDER
+  ENGAGEMENT_PROPOSAL_REMINDER
+  ENGAGEMENT_MEETING_REMINDER
+  ENGAGEMENT_MEMBERSHIP_REMINDER
+  ENGAGEMENT_REENGAGEMENT
+  ENGAGEMENT_ANNOUNCEMENT
+  ENGAGEMENT_FEEDBACK_REQUEST
 
   // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
   // Admin-only, internal (staff assignment/SLA notices) — never sent to an applicant.
@@ -1638,6 +1676,8 @@ enum DataCategory {
   DOCUMENT_RECORDS // STEP 26 — the general Document store (VERIFICATION_DOCUMENTS above stays the STEP 8/23 identity-checklist category)
   MARKETING_LEAD_DATA // STEP 29 — captured marketing leads, consent evidence and attribution; swept only under an admin-created policy
   MARKETING_EVENT_DATA // STEP 29 — funnel/analytics events and provider webhook records
+  ENGAGEMENT_EVENT_DATA // STEP 30 — engagement events, reminders, workflow runs; swept only under an admin-created policy
+  ENGAGEMENT_FEEDBACK_DATA // STEP 30 — applicant feedback and survey responses; swept only under an admin-created policy
 }
 
 enum RetentionAction {
@@ -6592,6 +6632,9 @@ enum AiFeature {
   // STEP 29 — reviewable marketing copy drafts from an approved phrase library;
   // never launches, spends or approves anything (see src/lib/ai/analysis/marketing-assistant.ts).
   MARKETING_ASSISTANT
+  // STEP 30 — reviewable engagement drafts/summaries from server-computed platform activity and an approved phrase
+  // library; never sends, approves, suspends or predicts anything (see src/lib/ai/analysis/engagement-assistant.ts).
+  ENGAGEMENT_ASSISTANT
 }
 
 enum AiRequestStatus {
@@ -9422,4 +9465,420 @@ model MarketingWebhookEvent {
 
   @@index([providerKey, receivedAt])
   @@index([status])
+}
+
+// =====================================================================================================================
+// STEP 30 — Customer engagement, reminders, re-engagement and lifecycle automation.
+// Loose string pointers (profileId, adminId, refId) are used instead of foreign keys so the large Profile/AdminUser
+// relation blocks are untouched. Tasks, CRM, referral, membership, consent, suppression and notification tables are REUSED.
+// =====================================================================================================================
+
+enum EngagementEventType {
+  USER_REGISTERED
+  PROFILE_STARTED
+  PROFILE_COMPLETED
+  PROFILE_SUBMITTED
+  VERIFICATION_STARTED
+  VERIFICATION_COMPLETED
+  PROFILE_ACTIVATED
+  MATCH_AVAILABLE
+  MATCH_REVIEW_REQUIRED
+  PROPOSAL_RECEIVED
+  PROPOSAL_SENT
+  PROPOSAL_RESPONSE_PENDING
+  PROPOSAL_RESPONSE_RECEIVED
+  MUTUAL_INTEREST
+  CONTACT_PERMISSION_PENDING
+  CONTACT_APPROVED
+  MEETING_REQUESTED
+  MEETING_SCHEDULED
+  MEETING_COMPLETED
+  FOLLOWUP_DUE
+  PROFILE_UPDATE_REQUESTED
+  SUPPORT_CASE_CREATED
+  MEMBERSHIP_STARTED
+  MEMBERSHIP_EXPIRING
+  SUBSCRIPTION_RENEWAL_DUE
+  REFERRAL_CREATED
+  REFERRAL_REWARDED
+  INACTIVE_USER
+  REENGAGEMENT_ELIGIBLE
+  LOGIN
+}
+
+enum EngagementWorkflowStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum EngagementRunStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  SKIPPED
+  FAILED
+}
+
+enum ReengagementState {
+  NOT_ELIGIBLE
+  ELIGIBLE
+  SCHEDULED
+  SENT
+  RESPONDED
+  COMPLETED
+  OPTED_OUT
+  SUPPRESSED
+  EXPIRED
+  CANCELLED
+}
+
+enum EngagementActivityState {
+  ACTIVE
+  LOW_ACTIVITY
+  INACTIVE
+  REENGAGEMENT_ELIGIBLE
+  SUPPRESSED
+}
+
+enum EngagementContentStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+enum EngagementAnnouncementStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+  ARCHIVED
+}
+
+enum EngagementFeedbackType {
+  PLATFORM
+  FEATURE_REQUEST
+  SUPPORT
+  EXPERIENCE
+  BUG_REPORT
+  MEETING_FOLLOWUP
+}
+
+enum EngagementFeedbackStatus {
+  NEW
+  IN_REVIEW
+  RESOLVED
+  ARCHIVED
+}
+
+// Append-only. `eventKey` (= type:profileId:sourceKey) is the idempotency key: the same business event recorded twice
+// is stored once, so no workflow, task, reminder or reward can be started twice from a replay.
+model EngagementEvent {
+  id         String              @id @default(cuid())
+  eventKey   String              @unique
+  profileId  String
+  type       EngagementEventType
+  refType    String?             @db.VarChar(40)
+  refId      String?             @db.VarChar(60)
+  // ids / counts only - never names, contact details, free text or scores
+  payload    Json?
+  occurredAt DateTime            @default(now())
+  createdAt  DateTime            @default(now())
+
+  @@index([profileId, occurredAt])
+  @@index([type, occurredAt])
+  @@index([occurredAt])
+}
+
+// One row per applicant: read model for inactivity / re-engagement, so no dashboard or sweep scans the event table.
+model EngagementProfileState {
+  id                   String                  @id @default(cuid())
+  profileId            String                  @unique
+  lastActivityAt       DateTime?
+  lastLoginDay         DateTime?               @db.Date
+  activityState        EngagementActivityState @default(ACTIVE)
+  reengagementAttempts Int                     @default(0)
+  lastReengagementAt   DateTime?
+  reengagementOptOut   Boolean                 @default(false)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@index([activityState])
+  @@index([lastActivityAt])
+}
+
+// Singleton (id = 1). Every limit that governs how much we may contact someone lives here and is admin-editable.
+model EngagementSettings {
+  id                       Int      @id @default(1)
+  maxDailyNotifications    Int      @default(5)
+  maxWeeklyReengagement    Int      @default(2)
+  maxFollowupAttempts      Int      @default(3)
+  maxReengagementAttempts  Int      @default(3)
+  lowActivityAfterDays     Int      @default(14)
+  inactiveAfterDays        Int      @default(30)
+  reengagementCooldownDays Int      @default(14)
+  reminderMinGapHours      Int      @default(24)
+  quietHoursStart          Int      @default(22)
+  quietHoursEnd            Int      @default(8)
+  defaultTimezone          String   @default("Asia/Karachi") @db.VarChar(40)
+  updatedById              String?
+  updatedAt                DateTime @updatedAt
+}
+
+// Per-applicant engagement controls. Does NOT replace NotificationPreference / CommunicationConsent (which stay authoritative
+// for channels and marketing opt-in); it adds quiet hours, a personal daily cap and reminder / re-engagement switches.
+model EngagementPreference {
+  id                      String   @id @default(cuid())
+  profileId               String   @unique
+  quietHoursEnabled       Boolean  @default(false)
+  quietHoursStart         Int?
+  quietHoursEnd           Int?
+  timezone                String?  @db.VarChar(40)
+  maxDailyNotifications   Int?
+  remindersEnabled        Boolean  @default(true)
+  reengagementEnabled     Boolean  @default(true)
+  feedbackRequestsEnabled Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model EngagementWorkflow {
+  id                 String                   @id @default(cuid())
+  code               String                   @unique // LPP-EWF-######
+  name               String                   @db.VarChar(120)
+  description        String?                  @db.VarChar(400)
+  trigger            EngagementEventType
+  status             EngagementWorkflowStatus @default(DRAFT)
+  currentVersion     Int                      @default(1)
+  publishedVersionId String?
+  createdById        String
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  versions EngagementWorkflowVersion[]
+  runs     EngagementWorkflowRun[]
+
+  @@index([status, trigger])
+}
+
+model EngagementWorkflowVersion {
+  id                  String               @id @default(cuid())
+  workflow            EngagementWorkflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId          String
+  version             Int
+  status              ContentVersionStatus @default(DRAFT)
+  // { conditions, steps } validated by src/lib/engagement/workflow-schema.ts (closed vocabulary)
+  definition          Json
+  contentHash         String
+  policyScanResult    Json?
+  changeSummary       String?              @db.VarChar(300)
+  clonedFromVersionId String?
+  authorId            String
+  reviewerId          String?
+  reviewedAt          DateTime?
+  publishedAt         DateTime?
+  createdAt           DateTime             @default(now())
+
+  @@unique([workflowId, version])
+}
+
+// One run per (workflow, triggering event): replays of the same event cannot start a second run.
+model EngagementWorkflowRun {
+  id          String              @id @default(cuid())
+  code        String              @unique // LPP-ENG-######
+  workflow    EngagementWorkflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId  String
+  versionId   String
+  profileId   String
+  eventKey    String
+  status      EngagementRunStatus @default(ACTIVE)
+  stepIndex   Int                 @default(0)
+  nextRunAt   DateTime?
+  attempts    Int                 @default(0)
+  lastNote    String?             @db.VarChar(200)
+  startedAt   DateTime            @default(now())
+  completedAt DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([workflowId, eventKey])
+  @@index([status, nextRunAt])
+  @@index([profileId])
+}
+
+// A scheduled reminder or re-engagement message. `dedupKey` makes scheduling idempotent.
+model EngagementReminder {
+  id           String            @id @default(cuid())
+  profileId    String
+  kind         String            @db.VarChar(40)
+  state        ReengagementState @default(SCHEDULED)
+  dueAt        DateTime
+  sentAt       DateTime?
+  respondedAt  DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?           @db.VarChar(120)
+  runId        String?
+  refType      String?           @db.VarChar(40)
+  refId        String?           @db.VarChar(60)
+  attempt      Int               @default(1)
+  dedupKey     String            @unique
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([state, dueAt])
+  @@index([profileId, kind])
+}
+
+model EngagementContent {
+  id                 String                  @id @default(cuid())
+  code               String                  @unique // LPP-ECN-######
+  slug               String                  @unique @db.VarChar(80)
+  category           String                  @db.VarChar(40)
+  status             EngagementContentStatus @default(DRAFT)
+  currentVersion     Int                     @default(1)
+  publishedVersionId String?
+  publishAt          DateTime?
+  expiresAt          DateTime?
+  createdById        String
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  versions EngagementContentVersion[]
+
+  @@index([status, category])
+}
+
+model EngagementContentVersion {
+  id               String               @id @default(cuid())
+  content          EngagementContent    @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId        String
+  version          Int
+  status           ContentVersionStatus @default(DRAFT)
+  title            String               @db.VarChar(160)
+  description      String?              @db.VarChar(300)
+  // plain-text paragraphs; no raw HTML anywhere
+  body             String               @db.Text
+  language         String               @default("EN") @db.VarChar(2)
+  imageUrl         String?
+  authorName       String?              @db.VarChar(80)
+  contentHash      String
+  policyScanResult Json?
+  authorId         String
+  reviewerId       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime             @default(now())
+
+  @@unique([contentId, version])
+}
+
+model EngagementAnnouncement {
+  id               String                       @id @default(cuid())
+  code             String                       @unique // LPP-EAN-######
+  title            String                       @db.VarChar(160)
+  body             String                       @db.VarChar(1200)
+  language         String                       @default("EN") @db.VarChar(2)
+  status           EngagementAnnouncementStatus @default(DRAFT)
+  // { audience: ALL | NEW_USERS | VERIFIED | PACKAGE | LIFECYCLE_STAGE, value?: string } - closed vocabulary, no sensitive targeting
+  targeting        Json
+  startAt          DateTime?
+  endAt            DateTime?
+  contentHash      String?
+  policyScanResult Json?
+  createdById      String
+  reviewerId       String?
+  approvedAt       DateTime?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  dismissals EngagementAnnouncementDismissal[]
+
+  @@index([status, startAt])
+}
+
+model EngagementAnnouncementDismissal {
+  id             String                 @id @default(cuid())
+  announcement   EngagementAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  announcementId String
+  profileId      String
+  createdAt      DateTime               @default(now())
+
+  @@unique([announcementId, profileId])
+}
+
+model EngagementFeedback {
+  id           String                   @id @default(cuid())
+  code         String                   @unique // LPP-EFB-######
+  profileId    String
+  type         EngagementFeedbackType
+  subject      String?                  @db.VarChar(120)
+  message      String                   @db.VarChar(2000)
+  // 1-5 satisfaction on platform / support / onboarding feedback only - never a matrimonial outcome
+  rating       Int?
+  refType      String?                  @db.VarChar(40)
+  refId        String?                  @db.VarChar(60)
+  // fixed choice for meeting follow-up: FURTHER_DISCUSSION | NEED_MORE_INFORMATION | NOT_INTERESTED | CONTACT_ADMIN | NO_DECISION_YET
+  choice       String?                  @db.VarChar(40)
+  status       EngagementFeedbackStatus @default(NEW)
+  handledById  String?
+  // staff-only; never returned to applicants
+  internalNote String?                  @db.VarChar(500)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([type, createdAt])
+  @@index([profileId, createdAt])
+  @@index([status])
+}
+
+model EngagementSurvey {
+  id          String                  @id @default(cuid())
+  code        String                  @unique // LPP-ESV-######
+  title       String                  @db.VarChar(160)
+  // SUPPORT_SATISFACTION | ONBOARDING_SATISFACTION | PLATFORM_USABILITY (closed; no outcome surveys)
+  kind        String                  @db.VarChar(40)
+  // [{ id, text, type: RATING | TEXT }]
+  questions   Json
+  status      EngagementContentStatus @default(DRAFT)
+  createdById String
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  responses EngagementSurveyResponse[]
+
+  @@index([status, kind])
+}
+
+model EngagementSurveyResponse {
+  id        String           @id @default(cuid())
+  survey    EngagementSurvey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  surveyId  String
+  profileId String
+  // context key (e.g. the support case id) so there is one response per context
+  refKey    String           @default("") @db.VarChar(60)
+  answers   Json
+  createdAt DateTime         @default(now())
+
+  @@unique([surveyId, profileId, refKey])
+}
+
+// Daily aggregates for dashboards, retention and cohorts. Rates are derived from value/denominator at read time.
+model EngagementDailySnapshot {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  metric      String   @db.VarChar(60)
+  dimension   String   @default("ALL") @db.VarChar(80)
+  value       Int      @default(0)
+  denominator Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([date, metric, dimension])
+  @@index([metric, date])
 }

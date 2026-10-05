@@ -9,6 +9,7 @@ import { signProfileToken, signSessionId, APPLICANT_COOKIE, APPLICANT_SESSION_ID
 import { createProfileSession } from "@/lib/profile-session";
 import { blockedResponse } from "@/lib/ops/guards";
 import { withRequestMetrics } from "@/lib/observability/metrics";
+import { engagementOnRegistered } from "@/lib/engagement/lifecycle-hooks";
 
 const GENERIC_ERROR = "Your profile could not be submitted. Please check the highlighted fields.";
 
@@ -76,6 +77,9 @@ async function postHandler(req: Request) {
       }
       throw err;
     }
+
+    // STEP 30 - engagement event + CRM record + optional referral code. Never throws and never changes this response.
+    await engagementOnRegistered(profile.id, { referralCode: typeof parsed.referralCode === "string" ? parsed.referralCode : undefined });
 
     // Powers the private /my-status page for this browser — no accounts,
     // no URL/ID exposure, just a signed cookie scoped to this one profile.

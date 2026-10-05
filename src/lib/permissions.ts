@@ -524,7 +524,33 @@ export type Permission =
   | "marketing:suppression:manage"
   | "marketing:consent:view"
   | "marketing:audit:view"
-  | "ai:marketing:use";
+  | "ai:marketing:use"
+  | "engagement:view"
+  | "engagement:manage"
+  | "engagement:approve"
+  | "engagement:events:view"
+  | "engagement:workflows:view"
+  | "engagement:workflows:create"
+  | "engagement:workflows:edit"
+  | "engagement:workflows:publish"
+  | "engagement:workflows:pause"
+  | "engagement:reminders:view"
+  | "engagement:reminders:manage"
+  | "engagement:reengagement:view"
+  | "engagement:reengagement:manage"
+  | "engagement:content:view"
+  | "engagement:content:create"
+  | "engagement:content:edit"
+  | "engagement:content:publish"
+  | "engagement:announcements:view"
+  | "engagement:announcements:create"
+  | "engagement:announcements:publish"
+  | "engagement:analytics:view"
+  | "engagement:analytics:export"
+  | "engagement:feedback:view"
+  | "engagement:feedback:manage"
+  | "engagement:audit:view"
+  | "ai:engagement:use";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -814,6 +840,55 @@ const MARKETING_STAFF_PERMISSIONS: Permission[] = [
   "marketing:suppression:view",
   "marketing:consent:view",
   "ai:marketing:use",
+];
+
+// STEP 30 — everything for engagement. Activity data about an applicant is not contact data, so no sensitive:* permission is
+// involved; contact details and documents are never part of the engagement read model.
+const ENGAGEMENT_ALL_PERMISSIONS: Permission[] = [
+  "engagement:view",
+  "engagement:manage",
+  "engagement:approve",
+  "engagement:events:view",
+  "engagement:workflows:view",
+  "engagement:workflows:create",
+  "engagement:workflows:edit",
+  "engagement:workflows:publish",
+  "engagement:workflows:pause",
+  "engagement:reminders:view",
+  "engagement:reminders:manage",
+  "engagement:reengagement:view",
+  "engagement:reengagement:manage",
+  "engagement:content:view",
+  "engagement:content:create",
+  "engagement:content:edit",
+  "engagement:content:publish",
+  "engagement:announcements:view",
+  "engagement:announcements:create",
+  "engagement:announcements:publish",
+  "engagement:analytics:view",
+  "engagement:analytics:export",
+  "engagement:feedback:view",
+  "engagement:feedback:manage",
+  "engagement:audit:view",
+  "ai:engagement:use",
+];
+
+// STEP 30 — day-to-day working subset: view, draft content/announcements, handle feedback. No approve/publish/pause/manage/export.
+const ENGAGEMENT_STAFF_PERMISSIONS: Permission[] = [
+  "engagement:view",
+  "engagement:events:view",
+  "engagement:workflows:view",
+  "engagement:reminders:view",
+  "engagement:reengagement:view",
+  "engagement:content:view",
+  "engagement:content:create",
+  "engagement:content:edit",
+  "engagement:announcements:view",
+  "engagement:announcements:create",
+  "engagement:analytics:view",
+  "engagement:feedback:view",
+  "engagement:feedback:manage",
+  "ai:engagement:use",
 ];
 
 const SYSTEM_ALL_PERMISSIONS: Permission[] = [
@@ -1214,6 +1289,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...DOCUMENTS_ALL_PERMISSIONS,
     ...CRM_ALL_PERMISSIONS,
     ...MARKETING_ALL_PERMISSIONS,
+    ...ENGAGEMENT_ALL_PERMISSIONS,
     "sensitive:marketing:lead_contact:view",
     "crm:notes:manager_view",
     "sensitive:crm:view",
@@ -1438,6 +1514,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...CRM_ALL_PERMISSIONS,
     // STEP 29 — marketing oversight also sits with Operations (no dedicated Marketing role).
     ...MARKETING_ALL_PERMISSIONS,
+    ...ENGAGEMENT_ALL_PERMISSIONS,
     "sensitive:marketing:lead_contact:view",
     "crm:notes:manager_view",
     "ai:crm:use",
@@ -1691,6 +1768,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     // management (Compliance/Super Admin) and sensitive:marketing:lead_contact:view. Launch/budget still need a
     // second approver through the STEP 19 gate — the maker can never approve their own request.
     ...MARKETING_ALL_PERMISSIONS.filter((p) => p !== "marketing:providers:manage"),
+    // STEP 30 — owns day-to-day engagement (a superset of COMMUNICATION_STAFF's engagement subset).
+    ...ENGAGEMENT_ALL_PERMISSIONS,
     // deliberately lacks sensitive:contact:view/contact:reveal (cannot access private contact
     // details unless separately granted), contact:reveal:override, profile:edit, verification:*, finance:*.
     // Spec §9 also lists proposals.view/proposal_communications.view/meetings.view: same disclosed
@@ -1907,6 +1986,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "crm:view",
     // STEP 29 — drafting/working subset only (no approve/launch/budget/provider/export/publish, no contact details).
     ...MARKETING_STAFF_PERMISSIONS,
+    // STEP 30 — drafting/working subset (a subset of the manager grant below).
+    ...ENGAGEMENT_STAFF_PERMISSIONS,
   ],
 
   // ---------------------------------------------------------------- REPORTING_ANALYST (spec §15)
@@ -1934,6 +2015,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     // STEP 29 — aggregate marketing analytics only (read-only).
     "marketing:view",
     "marketing:analytics:view",
+    // STEP 30 — aggregate engagement analytics only (read-only; no per-applicant data).
+    "engagement:view",
+    "engagement:analytics:view",
   ],
 };
 
