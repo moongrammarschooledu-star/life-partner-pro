@@ -74,6 +74,11 @@ describe("content policy", () => {
   ])("blocks %s", (_label, text) => {
     expect(scan(text).pass).toBe(false);
   });
+  it("allows a disclaimer that DENIES a guarantee, but still blocks real guarantee claims", () => {
+    for (const ok of ["We do not guarantee any outcome.", "There is no guarantee of a match.", "Nothing here is guaranteed — we cannot guarantee results.", "We don't guarantee anything."]) expect(scan(ok).pass, ok).toBe(true);
+    for (const bad of ["We guarantee a match.", "Guaranteed rishta in 30 days", "We do not hide it: we guarantee success.", "We guarantee results. No refunds."]) expect(scan(bad).pass, bad).toBe(false);
+    expect(scan("We do not guarantee anything, but 100% of profiles are checked").pass).toBe(false);
+  });
   it("blocks Roman-Urdu and Urdu-script guarantees", () => {
     expect(scan("Rishta ki guarantee, 100% pakka").pass).toBe(false);
     expect(scan("رشتے کی ضمانت").pass).toBe(false);

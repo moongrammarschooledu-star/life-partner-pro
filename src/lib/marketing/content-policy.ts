@@ -118,6 +118,20 @@ const PHONE_RE = /(\+?\d[\d\s().-]{8,}\d)/g;
 // A quoted statement attributed to a named person ("..." — Ayesha) reads as a testimonial.
 const NAMED_TESTIMONIAL_RE = /["“”][^"“”]{15,}["“”]\s*[—–-]\s*[A-Z؀-ۿ][\w؀-ۿ.'-]+/;
 
+// A disclaimer that DENIES a guarantee ("we do not guarantee any outcome", "there is no guarantee") is the opposite of a
+// guarantee claim and must pass. Only the plain English word is exempted, and only when a negation sits just before it in
+// the same sentence; every other guarantee phrase (100%, "sure match", Roman Urdu / Urdu terms) is still blocked outright.
+const NEGATION_BEFORE = /\b(?:no|not|nothing|never|cannot|can't|cant|don't|dont|doesn't|doesnt|won't|wont|without)\b[^.!?;:,—–]{0,24}$/i;
+
+function firstBlockingMatch(text: string, pattern: RegExp, rule: PolicyRule): RegExpMatchArray | null {
+  const flags = pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g";
+  for (const m of text.matchAll(new RegExp(pattern.source, flags))) {
+    if (rule === "GUARANTEED_OUTCOME" && /^guarantee/i.test(m[0]) && m.index !== undefined && NEGATION_BEFORE.test(text.slice(Math.max(0, m.index - 40), m.index))) continue;
+    return m;
+  }
+  return null;
+}
+
 function snippetOf(text: string, match: RegExpMatchArray | null): string {
   if (!match || match.index === undefined) return "";
   return text.slice(Math.max(0, match.index - 8), match.index + match[0].length + 8).replace(/\s+/g, " ").trim().slice(0, 60);
@@ -182,7 +196,7 @@ export function scanMarketingContent(input: ScanInput): PolicyScanResult {
     if (!text) continue;
     for (const r of TEXT_RULES) {
       for (const p of r.patterns) {
-        const m = text.match(p);
+        const m = firstBlockingMatch(text, p, r.rule);
         if (m) {
           findings.push({ rule: r.rule, severity: r.severity, field, snippet: snippetOf(text, m) });
           break;
