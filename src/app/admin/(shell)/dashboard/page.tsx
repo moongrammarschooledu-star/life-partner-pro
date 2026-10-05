@@ -131,12 +131,41 @@ function greeting(): string {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | StaffDashboardData | null>(null);
   const [period, setPeriod] = useState("6m");
+  // "restricted": the role has no access to the organisation-wide dashboard (403). "failed": any other error. Both are
+  // shown as a friendly message; a non-OK JSON body must never be treated as dashboard data (it crashed the page).
+  const [problem, setProblem] = useState<"restricted" | "failed" | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/admin/dashboard?period=${period}`)
-      .then((r) => r.json())
-      .then(setData);
+      .then(async (r) => {
+        if (cancelled) return;
+        if (r.status === 403) return setProblem("restricted");
+        if (!r.ok) return setProblem("failed");
+        setProblem(null);
+        setData(await r.json());
+      })
+      .catch(() => !cancelled && setProblem("failed"));
+    return () => {
+      cancelled = true;
+    };
   }, [period]);
+
+  if (problem) {
+    return (
+      <div className="space-y-4">
+        <h1 className="font-heading text-2xl font-semibold">{greeting()}</h1>
+        <EmptyState
+          title={problem === "restricted" ? "This dashboard is not part of your role" : "The dashboard could not be loaded"}
+          description={
+            problem === "restricted"
+              ? "Organisation-wide statistics are available to roles that can view applicant profiles. Use the menu on the left to open the areas you have access to."
+              : "Please reload the page. If it keeps happening, tell your administrator."
+          }
+        />
+      </div>
+    );
+  }
 
   if (data && isStaffDashboard(data)) {
     return <StaffWorkloadDashboard data={data} />;
