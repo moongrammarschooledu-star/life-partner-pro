@@ -209,6 +209,13 @@ export const FIELD_POLICY: Record<AiFeatureKey, FieldPolicy> = {
     optional: [],
     restricted: [...ALWAYS_RESTRICTED, "riskScore", "activityScore", "leadContactDetails", "deviceIdentifiers", "networkIdentifiers", "documents", "staffNotes"],
   },
+  // STEP 31 — analytics answers come from the validated metric catalog (aggregates only, small groups suppressed); never any
+  // individual applicant, contact detail, document, note, risk score or income value.
+  ANALYTICS_ASSISTANT: {
+    required: ["analyticsBrief"],
+    optional: [],
+    restricted: [...ALWAYS_RESTRICTED, "riskScore", "activityScore", "individualProfiles", "leadContactDetails", "deviceIdentifiers", "networkIdentifiers", "documents", "staffNotes", "incomeValues"],
+  },
 };
 
 export function classificationOf(field: string): DataClassification {

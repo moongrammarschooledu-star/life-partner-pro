@@ -65,13 +65,21 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "engagement.reengagement.enabled", description: "Re-engagement reminders for incomplete profile, stalled verification, pending proposal, inactivity and membership expiry", sensitive: true },
   { key: "engagement.announcements.enabled", description: "Show approved in-app announcements to applicants", sensitive: true },
   { key: "engagement.feedback.enabled", description: "Applicant feedback, meeting follow-up choices and optional satisfaction surveys", sensitive: true },
+  // STEP 31 — analytics / BI. Every key defaults OFF.
+  { key: "analytics.enabled", description: "Analytics & BI master switch: executive dashboard, section dashboards, metric catalog, KPIs and saved dashboards", sensitive: true },
+  { key: "analytics.pipeline.enabled", description: "Build and refresh the analytics data marts (daily job and manual run); derived data only", sensitive: true },
+  { key: "analytics.reports.enabled", description: "Saved analytics reports, the report builder and exports", sensitive: true },
+  { key: "analytics.scheduled_reports.enabled", description: "Deliver scheduled analytics reports (in-app notice) to recipients who still hold access", sensitive: true },
+  { key: "analytics.alerts.enabled", description: "Evaluate analytics alert rules and notify recipients", sensitive: true },
+  { key: "analytics.forecast.enabled", description: "Forecast estimates (statistical, aggregate only, never about an individual)", sensitive: true },
+  { key: "ai.analytics_assistant.enabled", description: "AI analytics assistant: answers questions from the validated metric catalog (never SQL)", sensitive: true },
   { key: "engagement.loyalty.enabled", description: "Referral link, referral history and reward granting through the existing referral/credit system", sensitive: true },
   { key: "ai.engagement_assistant.enabled", description: "AI engagement summaries and reminder drafts from server-computed platform activity (never sends, approves or predicts; human review required)", sensitive: true },
   { key: "ai.marketing_assistant.enabled", description: "AI marketing copy drafts from an approved phrase library (never launches, spends or approves; human review required)", sensitive: true },
 ];
 
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && d.key !== "documents.ocr.enabled"]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && d.key !== "documents.ocr.enabled"]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

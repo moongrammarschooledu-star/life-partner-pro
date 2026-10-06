@@ -24,6 +24,7 @@ const HANDLER_LOADERS: Record<string, () => Promise<JobHandler>> = {
   ENCRYPT_LEGACY_PHOTOS: async () => (await import("@/lib/ops/job-handlers")).encryptLegacyPhotosHandler,
   CLEANUP_EXPORT_BLOBS: async () => (await import("@/lib/ops/job-handlers")).cleanupExportBlobsHandler,
   CLEANUP_RATE_LIMITS: async () => (await import("@/lib/ops/job-handlers")).cleanupRateLimitsHandler,
+  ANALYTICS_REBUILD: async () => (await import("@/lib/ops/job-handlers")).analyticsRebuildHandler,
 };
 
 export const JOB_TYPES = Object.keys(HANDLER_LOADERS);

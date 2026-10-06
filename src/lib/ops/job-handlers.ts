@@ -50,6 +50,17 @@ export async function alertEvaluationHandler(): Promise<void> {
   await evaluateAndSyncAlerts();
 }
 
+// STEP 31 - rebuild analytics data-mart rows from source (derived data only). The payload is validated here; the job can never write
+// to an operational table.
+export async function analyticsRebuildHandler(job: BackgroundJob): Promise<void> {
+  const p = (job.payload ?? {}) as { metricKey?: string; martKey?: string; fromDay?: string; toDay?: string; actorId?: string; reason?: string };
+  const { isDayKey } = await import("@/lib/analytics/time");
+  if (!isDayKey(p.fromDay) || !isDayKey(p.toDay) || !p.actorId || (!p.metricKey && !p.martKey)) throw new Error("Invalid analytics rebuild payload");
+  const { rebuildMetrics } = await import("@/lib/analytics/pipeline");
+  const out = await rebuildMetrics(p.actorId, { metricKey: p.metricKey, martKey: p.martKey, fromDay: p.fromDay, toDay: p.toDay }, p.reason ?? "Scheduled rebuild");
+  if (out.status === "FAILED") throw new Error("Analytics rebuild failed");
+}
+
 export async function cleanupRateLimitsHandler(): Promise<void> {
   await cleanupRateLimitBuckets();
 }

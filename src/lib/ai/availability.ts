@@ -21,6 +21,7 @@ export const FEATURE_FLAG_FOR: Record<AiFeature, string> = {
   CRM_SUMMARY: "ai.crm_summary.enabled",
   MARKETING_ASSISTANT: "ai.marketing_assistant.enabled",
   ENGAGEMENT_ASSISTANT: "ai.engagement_assistant.enabled",
+  ANALYTICS_ASSISTANT: "ai.analytics_assistant.enabled",
 };
 
 export const PERMISSION_FOR: Record<AiFeature, Permission> = {
@@ -48,6 +49,7 @@ export const PERMISSION_FOR: Record<AiFeature, Permission> = {
   MARKETING_ASSISTANT: "ai:marketing:use",
   // STEP 30 — its own permission, never bundled into "ai:use".
   ENGAGEMENT_ASSISTANT: "ai:engagement:use",
+  ANALYTICS_ASSISTANT: "ai:analytics:use",
 };
 
 export type UnavailableReason = "KILL_SWITCH" | "PHASE_DISABLED" | "NOT_IN_ROLLOUT" | "FLAG_OFF" | "PROVIDER_DISABLED" | "NO_PERMISSION";

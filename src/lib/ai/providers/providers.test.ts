@@ -185,6 +185,6 @@ describe("prompt templates", () => {
       expect(promptFor(f).checksum).toBe(p.checksum);
     }
     // 10 matchmaking features + COMPLIANCE_SUMMARY + RISK_CASE_SUMMARY + CRM_SUMMARY + MARKETING_ASSISTANT + ENGAGEMENT_ASSISTANT (all built-in-builder only).
-    expect(Object.keys(allPromptChecksums()).length).toBe(15);
+    expect(Object.keys(allPromptChecksums()).length).toBe(16);
   });
 });

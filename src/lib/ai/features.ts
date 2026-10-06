@@ -19,6 +19,11 @@ import { buildMarketingAssist, type MarketingAssistInput, type MarketingAssistMo
 import { computeCampaignRoi, computeMarketingAnalytics } from "@/lib/marketing/analytics";
 import { buildEngagementAssist, type EngagementAssistInput, type EngagementAssistMode } from "@/lib/ai/analysis/engagement-assistant";
 import { getEngagementOverview } from "@/lib/engagement/analytics";
+import { buildAnalyticsAnswer, buildExecutiveSummaryPayload } from "@/lib/ai/analysis/analytics-assistant";
+import { explainResult, parseQuestion } from "@/lib/analytics/assistant";
+import { collectExecutiveFacts } from "@/lib/analytics/executive";
+import { runAnalyticsQuery } from "@/lib/analytics/query";
+import { PERIOD_PRESETS } from "@/lib/analytics/time";
 import { loadEngagementSnapshot } from "@/lib/engagement/read-model";
 import type { EngagementSnapshot } from "@/lib/engagement/types";
 import { STANDARD_LIMITATIONS } from "@/lib/ai/analysis/summary";
@@ -474,5 +479,40 @@ export async function runEngagementAssistant(
     profileIds: [],
     extraCacheParts: { mode: input.mode, language: input.language ?? "EN", crmRecordId: input.crmRecordId ?? "", reminderKind: input.reminderKind ?? "", days: String(days), updatedAt: recordUpdatedAt },
     build: async () => ({ payload: buildEngagementAssist({ mode: input.mode, language: input.language, snapshot, reminderKind: input.reminderKind, feedback, analytics }) }),
+  });
+}
+
+// STEP 31 - analytics assistant. Two modes. QUESTION: a plain-language question is parsed (no model, no SQL) into a structured query over
+// the metric catalog, run through the same engine and permission checks as every dashboard, and explained with citations.
+// EXECUTIVE_SUMMARY: an AI-assisted summary built from the same engine's results with observed / calculated / interpretation /
+// recommendation lines labelled. It sees only what the asking admin may see, and it cannot run SQL, send, approve or predict anything.
+export async function runAnalyticsAssistant(
+  admin: SessionAdmin,
+  input: { mode: "QUESTION" | "EXECUTIVE_SUMMARY"; question?: string; period?: string },
+): Promise<AiOutcome> {
+  return runAiRequest({
+    admin,
+    feature: "ANALYTICS_ASSISTANT",
+    profileIds: [],
+    extraCacheParts: { mode: input.mode, q: (input.question ?? "").slice(0, 300), period: input.period ?? "", day: new Date().toISOString().slice(0, 13) },
+    build: async () => {
+      const viewer = { id: admin.id, permissions: admin.permissions as string[] };
+      if (input.mode === "EXECUTIVE_SUMMARY") {
+        const preset = ((input.period ?? "LAST_30_DAYS") as import("@/lib/analytics/time").PeriodPreset);
+        const facts = await collectExecutiveFacts(viewer, PERIOD_PRESETS.includes(preset) && preset !== "CUSTOM" ? preset : "LAST_30_DAYS");
+        return { payload: buildExecutiveSummaryPayload(facts) };
+      }
+      const question = (input.question ?? "").trim();
+      const parsed = parseQuestion(question);
+      if (!parsed.ok) return { payload: buildAnalyticsAnswer({ question, ...(parsed.kind === "REFUSED" ? { refused: parsed.reason } : { unsupported: parsed.reason }) }) };
+      try {
+        const res = await runAnalyticsQuery(viewer, parsed.query, { resource: "assistant" });
+        const explanation = explainResult(res.results, res.period.label, res.comparison?.label ?? null, res.dimension, { assumptions: parsed.assumptions, causal: parsed.causal });
+        return { payload: buildAnalyticsAnswer({ question, explanation, period: res.period.label, freshness: res.freshness.label }) };
+      } catch (error) {
+        const denied = error instanceof Error && /do not have access/i.test(error.message);
+        return { payload: buildAnalyticsAnswer({ question, ...(denied ? { denied: "You do not have access to that metric, so I cannot answer it." } : { unsupported: "I can't answer that from the available data." }) }) };
+      }
+    },
   });
 }

@@ -57,6 +57,8 @@ export function buildActionUrl(
   if (type === "ADMIN_REFERRAL_REVIEW_REQUIRED") return "/admin/membership/referrals";
   if (["CRM_FOLLOWUP_DUE", "CRM_FOLLOWUP_OVERDUE", "CRM_STAGE_CHANGED", "CRM_ASSIGNED_TO_YOU", "CRM_SLA_ESCALATED"].includes(type)) return "/admin/crm";
   if (type === "LEAD_ASSIGNED_TO_YOU") return "/admin/crm/leads";
+  if (type === "ANALYTICS_ALERT") return "/admin/analytics/governance";
+  if (type === "ANALYTICS_REPORT_READY") return "/admin/reports/builder";
   if (["HIGH_RISK_DETECTED", "CRITICAL_RISK_DETECTED", "VERIFICATION_RISK", "ACCOUNT_SECURITY_ALERT", "CONTACT_BYPASS_DETECTED", "ADMIN_ACCESS_ANOMALY", "SAFETY_REPORT_RECEIVED", "RISK_REVIEW_DUE", "RISK_CASE_ESCALATED"].includes(type)) return "/admin/risk-center";
   if (type === "ADMIN_PROFILE_UPDATE_PENDING" && ids.profileId) return `/admin/profiles/${ids.profileId}`;
   if (type === "ADMIN_ASSIGNMENT_CHANGED" && ids.proposalId) return `/admin/proposals/${ids.proposalId}`;

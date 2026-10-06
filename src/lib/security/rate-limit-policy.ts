@@ -61,6 +61,10 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   // STEP 30 - applicant-side engagement writes (feedback, announcement dismissal, preference changes)
   "engagement-feedback": { limit: 5, windowMs: 3_600_000 },
   "engagement-preferences": { limit: 30, windowMs: 3_600_000 },
+  // STEP 31 - admin analytics reads/exports/assistant
+  "analytics-query": { limit: 600, windowMs: 3_600_000 },
+  "analytics-export": { limit: 20, windowMs: 3_600_000 },
+  "analytics-assistant": { limit: 60, windowMs: 3_600_000 },
 };
 
 const CACHE_TTL_MS = 30_000;

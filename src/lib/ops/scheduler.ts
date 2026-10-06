@@ -16,6 +16,7 @@ import { runDocumentTick } from "@/lib/documents/tick";
 import { runMembershipTick } from "@/lib/finance/membership-tick";
 import { runMarketingTick } from "@/lib/marketing/tick";
 import { runEngagementTick } from "@/lib/engagement/tick";
+import { runAnalyticsTick } from "@/lib/analytics/tick";
 
 // The single daily tick (Vercel Hobby allows exactly one cron job). Every
 // sub-task is isolated (one failing task no longer discards the others'
@@ -39,6 +40,7 @@ export const CRON_TASKS = [
   { name: "membership-lifecycle", label: "Coupon reservation expiry, entitlement override expiry, credit expiry", schedule: "daily tick + manual" },
   { name: "marketing-lifecycle", label: "Scheduled campaign starts/ends, provider metric sync (verified spend, budget-cap pause), marketing automation sweep", schedule: "daily tick + manual" },
   { name: "engagement-lifecycle", label: "Inactivity & membership-expiry detection, due engagement workflow steps, due reminders (full no-spam gate), announcement windows, daily engagement snapshot", schedule: "daily tick + manual" },
+  { name: "analytics-pipeline", label: "Analytics data-mart refresh, data-quality checks, reconciliation, alert evaluation and scheduled report delivery", schedule: "daily tick + manual" },
   { name: "enqueue-jobs", label: "Schedule daily background jobs", schedule: "daily tick" },
   { name: "job-worker", label: "Background job worker", schedule: "daily tick + manual" },
   { name: "alert-evaluation", label: "Monitoring alert evaluation", schedule: "daily tick" },
@@ -80,6 +82,7 @@ export async function runDailyTick(correlationId?: string) {
         runCronTask("membership-lifecycle", () => runMembershipTick(), opts),
         runCronTask("marketing-lifecycle", () => runMarketingTick(), opts),
         runCronTask("engagement-lifecycle", () => runEngagementTick(), opts),
+        runCronTask("analytics-pipeline", () => runAnalyticsTick(), opts),
       ]);
       const enqueue = await runCronTask("enqueue-jobs", enqueueDailyJobs, opts);
       const worker = await runCronTask("job-worker", () => runDueJobs({ limit: 8, budgetMs: 30_000 }), opts);

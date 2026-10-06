@@ -55,6 +55,8 @@ import {
   Workflow,
   Megaphone,
   HeartHandshake,
+  Gauge,
+  LineChart,
 } from "lucide-react";
 import { cn, formatEnumLabel } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -78,6 +80,8 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/crm", label: "CRM & Applicant Lifecycle", icon: Workflow, permission: "crm:view" },
   { href: "/admin/marketing", label: "Marketing & Lead Generation", icon: Megaphone, permission: "marketing:view" },
   { href: "/admin/engagement", label: "Engagement & Retention", icon: HeartHandshake, permission: "engagement:view" },
+  { href: "/admin/executive", label: "Executive Dashboard", icon: Gauge, permission: "analytics:dashboard:view" },
+  { href: "/admin/analytics", label: "Analytics & BI", icon: LineChart, permission: "analytics:view" },
   { href: "/admin/matching", label: "Matching Center", icon: Sparkles, permission: "match:run" },
   { href: "/admin/candidate-discovery", label: "Candidate Discovery", icon: SearchCheck, permission: "search:view" },
   { href: "/admin/matchmaking", label: "Matchmaking Workspace", icon: Layers, permission: "candidate:recommend" },

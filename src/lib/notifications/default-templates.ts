@@ -707,4 +707,13 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Lead Assigned To You", body: "A new lead has been assigned to you." },
     UR: { title: "لیڈ آپ کو تفویض", body: "ایک نئی لیڈ آپ کو تفویض کی گئی ہے۔" },
   },
+  // STEP 31 — admin-only analytics notices
+  ANALYTICS_ALERT: {
+    EN: { title: "Analytics alert", body: "An analytics alert needs your attention. Open the analytics alerts page for details." },
+    UR: { title: "اینالیٹکس الرٹ", body: "ایک اینالیٹکس الرٹ آپ کی توجہ چاہتا ہے۔ تفصیل کے لیے الرٹس کا صفحہ کھولیں۔" },
+  },
+  ANALYTICS_REPORT_READY: {
+    EN: { title: "Scheduled report ready", body: "A scheduled analytics report is ready. Open it from the reports page." },
+    UR: { title: "شیڈول رپورٹ تیار ہے", body: "ایک شیڈول اینالیٹکس رپورٹ تیار ہے۔ رپورٹس کے صفحے سے کھولیں۔" },
+  },
 };

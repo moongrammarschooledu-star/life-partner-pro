@@ -1334,6 +1334,29 @@ enum AuditAction {
   ENGAGEMENT_EXPORT
   ENGAGEMENT_AI_GENERATED
   ENGAGEMENT_CONTENT_POLICY_BLOCKED
+
+  // ---------- STEP 31 — analytics / BI (scrubbed meta, never data values) ----------
+  ANALYTICS_METRIC_CHANGED
+  ANALYTICS_METRIC_REVIEWED
+  ANALYTICS_KPI_CHANGED
+  ANALYTICS_DASHBOARD_CHANGED
+  ANALYTICS_DASHBOARD_SHARED
+  ANALYTICS_REPORT_CHANGED
+  ANALYTICS_REPORT_RUN
+  ANALYTICS_REPORT_EXPORTED
+  ANALYTICS_REPORT_SCHEDULED
+  ANALYTICS_REPORT_DELIVERED
+  ANALYTICS_SENSITIVE_ACCESS
+  ANALYTICS_PIPELINE_RUN
+  ANALYTICS_REBUILD
+  ANALYTICS_SETTINGS_CHANGED
+  ANALYTICS_DATA_QUALITY_CHANGED
+  ANALYTICS_RECONCILIATION_RUN
+  ANALYTICS_ALERT_RULE_CHANGED
+  ANALYTICS_ALERT_TRIGGERED
+  ANALYTICS_FORECAST_GENERATED
+  ANALYTICS_AI_GENERATED
+  ANALYTICS_ACCESS_DENIED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1589,6 +1612,10 @@ enum NotificationType {
   ENGAGEMENT_ANNOUNCEMENT
   ENGAGEMENT_FEEDBACK_REQUEST
 
+  // ---------- STEP 31 — analytics (admin-only, in-app; never sent to an applicant) ----------
+  ANALYTICS_ALERT
+  ANALYTICS_REPORT_READY
+
   // ---------- STEP 28 — CRM, Applicant Lifecycle & Lead Management ----------
   // Admin-only, internal (staff assignment/SLA notices) — never sent to an applicant.
   CRM_FOLLOWUP_DUE
@@ -1678,6 +1705,7 @@ enum DataCategory {
   MARKETING_EVENT_DATA // STEP 29 — funnel/analytics events and provider webhook records
   ENGAGEMENT_EVENT_DATA // STEP 30 — engagement events, reminders, workflow runs; swept only under an admin-created policy
   ENGAGEMENT_FEEDBACK_DATA // STEP 30 — applicant feedback and survey responses; swept only under an admin-created policy
+  ANALYTICS_ACCESS_DATA // STEP 31 — who viewed/exported which analytics (no data values); swept only under an admin-created policy
 }
 
 enum RetentionAction {
@@ -6635,6 +6663,9 @@ enum AiFeature {
   // STEP 30 — reviewable engagement drafts/summaries from server-computed platform activity and an approved phrase
   // library; never sends, approves, suspends or predicts anything (see src/lib/ai/analysis/engagement-assistant.ts).
   ENGAGEMENT_ASSISTANT
+  // STEP 31 — answers analytics questions by translating them into a validated structured query over the metric catalog (never SQL)
+  // and explaining the result; cites metric + version + period; predicts nothing about any individual (src/lib/ai/analysis/analytics-assistant.ts).
+  ANALYTICS_ASSISTANT
 }
 
 enum AiRequestStatus {
@@ -9881,4 +9912,494 @@ model EngagementDailySnapshot {
 
   @@unique([date, metric, dimension])
   @@index([metric, date])
+}
+
+// =====================================================================================================================
+// STEP 31 — Advanced reporting, BI, KPI management, data marts and decision support.
+// Everything below is DERIVED or GOVERNANCE data: the operational tables stay the source of truth and every mart row can be
+// rebuilt from them. Money is always an integer in minor units per currency (never summed across currencies).
+// tenantId is optional/unused today (multi-tenancy readiness); an empty string means "the single organisation".
+// =====================================================================================================================
+
+enum AnalyticsMetricStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+enum AnalyticsRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
+enum AnalyticsIssueStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  IGNORED_WITH_REASON
+}
+
+enum AnalyticsSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AnalyticsShareScope {
+  PRIVATE
+  TEAM
+  DEPARTMENT
+  ORGANIZATION
+}
+
+enum AnalyticsObjectStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum AnalyticsReconStatus {
+  RECONCILED
+  VARIANCE
+  ERROR
+}
+
+enum AnalyticsAlertEventStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum AnalyticsKpiFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+// Singleton (id = 1) — business timezone, small-group threshold and the configurable definition of an "active" applicant.
+model AnalyticsSettings {
+  id            Int      @id @default(1)
+  timezone      String   @default("Asia/Karachi") @db.VarChar(40)
+  minGroupSize  Int      @default(5)
+  // qualifying platform actions that make an applicant "active" in a period (EngagementEventType names)
+  activeEvents  Json
+  freshnessSlaHours Int  @default(30)
+  tenantId      String   @default("") @db.VarChar(40)
+  updatedById   String?
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+// ---------- metric catalog (governance; the compute implementations live in code, versioned) ----------
+model AnalyticsMetricDefinition {
+  id             String                @id @default(cuid())
+  key            String                @unique @db.VarChar(80)
+  code           String                @unique // LPP-MET-######
+  name           String                @db.VarChar(120)
+  description    String                @db.VarChar(600)
+  category       String                @db.VarChar(40)
+  unit           String                @db.VarChar(20) // COUNT | MINOR_MONEY | PERCENT | HOURS | RATIO
+  kind           String                @db.VarChar(20) // PERIOD | SNAPSHOT
+  ownerAdminId   String?
+  ownerLabel     String?               @db.VarChar(80)
+  reviewerId     String?
+  reviewedAt     DateTime?
+  status         AnalyticsMetricStatus @default(DRAFT)
+  currentVersion Int                   @default(1)
+  tenantId       String                @default("") @db.VarChar(40)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  versions AnalyticsMetricVersion[]
+
+  @@index([category, status])
+}
+
+model AnalyticsMetricVersion {
+  id            String                    @id @default(cuid())
+  metric        AnalyticsMetricDefinition @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  metricId      String
+  version       Int
+  status        AnalyticsMetricStatus     @default(DRAFT)
+  formula       String                    @db.VarChar(600)
+  source        String                    @db.VarChar(200)
+  filters       Json?
+  exclusions    Json?
+  // which compute implementation in code produced this version ("v1", "v2" ...)
+  computeVersion String                   @db.VarChar(10)
+  changeSummary String?                   @db.VarChar(300)
+  authorId      String
+  reviewerId    String?
+  reviewedAt    DateTime?
+  effectiveFrom DateTime?                 @db.Date
+  createdAt     DateTime                  @default(now())
+
+  @@unique([metricId, version])
+}
+
+// ---------- the generic fact table (derived; rebuildable) ----------
+model AnalyticsDailyMetric {
+  id             String   @id @default(cuid())
+  date           DateTime @db.Date
+  metricKey      String   @db.VarChar(80)
+  metricVersion  Int      @default(1)
+  dimensionKey   String   @default("ALL") @db.VarChar(40)
+  dimensionValue String   @default("ALL") @db.VarChar(120)
+  currencyCode   String   @default("") @db.VarChar(3)
+  value          BigInt   @default(0)
+  denominator    BigInt?
+  tenantId       String   @default("") @db.VarChar(40)
+  computedAt     DateTime @default(now())
+
+  @@unique([date, metricKey, metricVersion, dimensionKey, dimensionValue, currencyCode, tenantId])
+  @@index([metricKey, date])
+  @@index([date])
+}
+
+model AnalyticsMart {
+  id              String             @id @default(cuid())
+  key             String             @unique @db.VarChar(40)
+  name            String             @db.VarChar(120)
+  description     String?            @db.VarChar(300)
+  metricKeys      Json
+  status          AnalyticsRunStatus @default(SUCCEEDED)
+  lastRefreshedAt DateTime?
+  lastCoveredDate DateTime?          @db.Date
+  lastError       String?            @db.VarChar(300)
+  tenantId        String             @default("") @db.VarChar(40)
+  updatedAt       DateTime           @updatedAt
+  createdAt       DateTime           @default(now())
+}
+
+model AnalyticsRefreshRun {
+  id              String             @id @default(cuid())
+  kind            String             @db.VarChar(20) // DAILY | REBUILD | BACKFILL
+  martKey         String?            @db.VarChar(40)
+  metricKey       String?            @db.VarChar(80)
+  rangeFrom       DateTime           @db.Date
+  rangeTo         DateTime           @db.Date
+  cursorDate      DateTime?          @db.Date
+  status          AnalyticsRunStatus @default(RUNNING)
+  metricsComputed Int                @default(0)
+  rowsWritten     Int                @default(0)
+  error           String?            @db.VarChar(300)
+  triggeredBy     String?            @db.VarChar(40)
+  startedAt       DateTime           @default(now())
+  finishedAt      DateTime?
+
+  @@index([status, startedAt])
+}
+
+// ---------- KPIs (closed formula grammar, versioned, targets per frequency) ----------
+model AnalyticsKpi {
+  id             String                @id @default(cuid())
+  code           String                @unique // LPP-KPI-######
+  key            String                @unique @db.VarChar(80)
+  name           String                @db.VarChar(120)
+  description    String                @db.VarChar(600)
+  category       String                @db.VarChar(40)
+  unit           String                @db.VarChar(20)
+  ownerAdminId   String?
+  // permission a viewer must hold to see this KPI (null = analytics:kpi:view)
+  visibility     String?               @db.VarChar(60)
+  status         AnalyticsMetricStatus @default(DRAFT)
+  currentVersion Int                   @default(1)
+  createdById    String
+  tenantId       String                @default("") @db.VarChar(40)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  versions AnalyticsKpiVersion[]
+  targets  AnalyticsKpiTarget[]
+
+  @@index([category, status])
+}
+
+model AnalyticsKpiVersion {
+  id            String       @id @default(cuid())
+  kpi           AnalyticsKpi @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  kpiId         String
+  version       Int
+  // { kind: "METRIC", metric } | { kind: "RATIO", numerator, denominator, scale }
+  formula       Json
+  formulaText   String       @db.VarChar(300)
+  direction     String       @default("HIGHER_BETTER") @db.VarChar(16)
+  frequency     AnalyticsKpiFrequency @default(MONTHLY)
+  changeSummary String?      @db.VarChar(300)
+  authorId      String
+  reviewerId    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime     @default(now())
+
+  @@unique([kpiId, version])
+}
+
+model AnalyticsKpiTarget {
+  id                String                @id @default(cuid())
+  kpi               AnalyticsKpi          @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  kpiId             String
+  frequency         AnalyticsKpiFrequency
+  targetValue       Float
+  warningThreshold  Float?
+  criticalThreshold Float?
+  setById           String
+  updatedAt         DateTime              @updatedAt
+  createdAt         DateTime              @default(now())
+
+  @@unique([kpiId, frequency])
+}
+
+// ---------- dashboards ----------
+model AnalyticsDashboard {
+  id             String                @id @default(cuid())
+  code           String                @unique // LPP-DASH-######
+  name           String                @db.VarChar(120)
+  description    String?               @db.VarChar(300)
+  ownerId        String
+  // validated widget list: [{ id, type, title, query }] - the query is an AnalyticsQuery, never SQL
+  widgets        Json
+  currentVersion Int                   @default(1)
+  status         AnalyticsObjectStatus @default(ACTIVE)
+  tenantId       String                @default("") @db.VarChar(40)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  versions AnalyticsDashboardVersion[]
+  shares   AnalyticsDashboardShare[]
+
+  @@index([ownerId, status])
+}
+
+model AnalyticsDashboardVersion {
+  id          String             @id @default(cuid())
+  dashboard   AnalyticsDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  dashboardId String
+  version     Int
+  widgets     Json
+  authorId    String
+  createdAt   DateTime           @default(now())
+
+  @@unique([dashboardId, version])
+}
+
+model AnalyticsDashboardShare {
+  id          String              @id @default(cuid())
+  dashboard   AnalyticsDashboard  @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  dashboardId String
+  scope       AnalyticsShareScope
+  // role name (TEAM), department id (DEPARTMENT), or empty (ORGANIZATION)
+  scopeValue  String              @default("") @db.VarChar(60)
+  sharedById  String
+  createdAt   DateTime            @default(now())
+
+  @@unique([dashboardId, scope, scopeValue])
+}
+
+// ---------- saved reports, schedules, deliveries ----------
+model AnalyticsReport {
+  id             String                @id @default(cuid())
+  code           String                @unique // LPP-REPORT-######
+  name           String                @db.VarChar(120)
+  description    String?               @db.VarChar(300)
+  ownerId        String
+  currentVersion Int                   @default(1)
+  status         AnalyticsObjectStatus @default(ACTIVE)
+  visibility     AnalyticsShareScope   @default(PRIVATE)
+  visibilityValue String               @default("") @db.VarChar(60)
+  tenantId       String                @default("") @db.VarChar(40)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  versions  AnalyticsReportVersion[]
+  schedules AnalyticsReportSchedule[]
+
+  @@index([ownerId, status])
+}
+
+model AnalyticsReportVersion {
+  id         String          @id @default(cuid())
+  report     AnalyticsReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId   String
+  version    Int
+  // validated closed definition: dataset, metrics, dimension, range preset, filters, columns, sort
+  definition Json
+  authorId   String
+  createdAt  DateTime        @default(now())
+
+  @@unique([reportId, version])
+}
+
+model AnalyticsReportSchedule {
+  id               String                @id @default(cuid())
+  report           AnalyticsReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId         String
+  frequency        ReportFrequency
+  dayOfWeek        Int?
+  dayOfMonth       Int?
+  hourLocal        Int                   @default(8)
+  recipientAdminIds Json
+  status           AnalyticsObjectStatus @default(ACTIVE)
+  pausedReason     String?               @db.VarChar(200)
+  nextRunAt        DateTime?
+  lastRunAt        DateTime?
+  createdById      String
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  deliveries AnalyticsReportDelivery[]
+
+  @@index([status, nextRunAt])
+}
+
+model AnalyticsReportDelivery {
+  id          String                  @id @default(cuid())
+  schedule    AnalyticsReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  scheduleId  String
+  reportId    String
+  recipientId String
+  // SENT | SKIPPED_NO_ACCESS | SKIPPED_INACTIVE | FAILED
+  outcome     String                  @db.VarChar(24)
+  reason      String?                 @db.VarChar(200)
+  createdAt   DateTime                @default(now())
+
+  @@index([scheduleId, createdAt])
+}
+
+// ---------- data quality & reconciliation ----------
+model AnalyticsDataQualityIssue {
+  id           String               @id @default(cuid())
+  checkKey     String               @db.VarChar(60)
+  // opaque reference (record id / "GLOBAL"); never contains personal data
+  subjectRef   String               @db.VarChar(80)
+  subjectType  String               @db.VarChar(40)
+  severity     AnalyticsSeverity    @default(WARNING)
+  detail       Json?
+  status       AnalyticsIssueStatus @default(OPEN)
+  ignoreReason String?              @db.VarChar(300)
+  assignedToId String?
+  handledById  String?
+  detectedAt   DateTime             @default(now())
+  lastSeenAt   DateTime             @default(now())
+  resolvedAt   DateTime?
+  tenantId     String               @default("") @db.VarChar(40)
+
+  @@unique([checkKey, subjectRef])
+  @@index([status, severity])
+}
+
+model AnalyticsReconciliationRun {
+  id          String             @id @default(cuid())
+  status      AnalyticsRunStatus @default(RUNNING)
+  rangeFrom   DateTime           @db.Date
+  rangeTo     DateTime           @db.Date
+  triggeredBy String?            @db.VarChar(40)
+  summary     Json?
+  startedAt   DateTime           @default(now())
+  finishedAt  DateTime?
+
+  items AnalyticsReconciliationItem[]
+
+  @@index([startedAt])
+}
+
+model AnalyticsReconciliationItem {
+  id               String                     @id @default(cuid())
+  run              AnalyticsReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId            String
+  domain           String                     @db.VarChar(30)
+  label            String                     @db.VarChar(120)
+  operationalValue BigInt
+  analyticsValue   BigInt
+  variance         BigInt
+  currencyCode     String                     @default("") @db.VarChar(3)
+  status           AnalyticsReconStatus
+  note             String?                    @db.VarChar(200)
+
+  @@index([runId])
+}
+
+// ---------- alerts ----------
+model AnalyticsAlertRule {
+  id               String                @id @default(cuid())
+  name             String                @db.VarChar(120)
+  metricKey        String                @db.VarChar(80)
+  // GT | GTE | LT | LTE
+  operator         String                @db.VarChar(4)
+  threshold        Float
+  windowHours      Int                   @default(24)
+  minSample        Int                   @default(20)
+  severity         AnalyticsSeverity     @default(WARNING)
+  recipientAdminIds Json
+  cooldownMinutes  Int                   @default(720)
+  status           AnalyticsObjectStatus @default(ACTIVE)
+  createdById      String
+  lastEvaluatedAt  DateTime?
+  lastTriggeredAt  DateTime?
+  tenantId         String                @default("") @db.VarChar(40)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  events AnalyticsAlertEvent[]
+
+  @@index([status, metricKey])
+}
+
+model AnalyticsAlertEvent {
+  id            String                    @id @default(cuid())
+  rule          AnalyticsAlertRule        @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId        String
+  observedValue Float
+  sample        Int
+  severity      AnalyticsSeverity
+  status        AnalyticsAlertEventStatus @default(OPEN)
+  message       String                    @db.VarChar(300)
+  notified      Int                       @default(0)
+  createdAt     DateTime                  @default(now())
+  resolvedAt    DateTime?
+
+  @@index([ruleId, createdAt])
+  @@index([status, createdAt])
+}
+
+// ---------- forecasts (stored snapshots of a transparent statistical estimate; never about an individual) ----------
+model AnalyticsForecast {
+  id           String   @id @default(cuid())
+  metricKey    String   @db.VarChar(80)
+  currencyCode String   @default("") @db.VarChar(3)
+  model        String   @db.VarChar(40)
+  historyFrom  DateTime @db.Date
+  historyTo    DateTime @db.Date
+  horizonDays  Int
+  points       Json
+  assumptions  Json
+  limitations  Json
+  generatedById String?
+  generatedAt  DateTime @default(now())
+
+  @@index([metricKey, generatedAt])
+}
+
+// ---------- access log (who looked at what; never the data values) ----------
+model AnalyticsAccessLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  // VIEW | QUERY | EXPORT | SHARE | RUN | DENIED
+  action     String   @db.VarChar(16)
+  resource   String   @db.VarChar(60)
+  resourceId String?  @db.VarChar(60)
+  sensitive  Boolean  @default(false)
+  outcome    String   @default("ALLOWED") @db.VarChar(10)
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([sensitive, createdAt])
+  @@index([createdAt])
 }

@@ -550,13 +550,54 @@ export type Permission =
   | "engagement:feedback:view"
   | "engagement:feedback:manage"
   | "engagement:audit:view"
-  | "ai:engagement:use";
+  | "ai:engagement:use"
+  | "analytics:view"
+  | "analytics:manage"
+  | "analytics:cross_domain:view"
+  | "analytics:dashboard:view"
+  | "analytics:dashboard:create"
+  | "analytics:dashboard:edit"
+  | "analytics:dashboard:share"
+  | "analytics:metrics:view"
+  | "analytics:metrics:create"
+  | "analytics:metrics:manage"
+  | "analytics:kpi:view"
+  | "analytics:kpi:create"
+  | "analytics:kpi:manage"
+  | "analytics:reports:view"
+  | "analytics:reports:create"
+  | "analytics:reports:edit"
+  | "analytics:reports:run"
+  | "analytics:reports:export"
+  | "analytics:reports:schedule"
+  | "analytics:reports:share"
+  | "analytics:data_quality:view"
+  | "analytics:data_quality:manage"
+  | "analytics:reconciliation:view"
+  | "analytics:reconciliation:manage"
+  | "analytics:pipeline:view"
+  | "analytics:pipeline:manage"
+  | "analytics:forecast:view"
+  | "analytics:alerts:view"
+  | "analytics:alerts:manage"
+  | "analytics:sensitive:view"
+  | "analytics:finance:view"
+  | "analytics:risk:view"
+  | "analytics:security:view"
+  | "analytics:staff:view"
+  | "analytics:audit:view"
+  | "ai:analytics:use";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
 // Permission Matrix's "S" annotation. Never automatically implied by holding
 // a manager/broad role; always granted (or not) independently per role below.
 export const SENSITIVE_PERMISSIONS: Permission[] = [
+  "analytics:sensitive:view", // STEP 31
+  "analytics:finance:view",
+  "analytics:risk:view",
+  "analytics:security:view",
+  "analytics:staff:view",
   "sensitive:contact:view",
   "sensitive:income:view",
   "sensitive:family:view",
@@ -874,6 +915,68 @@ const ENGAGEMENT_ALL_PERMISSIONS: Permission[] = [
 ];
 
 // STEP 30 — day-to-day working subset: view, draft content/announcements, handle feedback. No approve/publish/pause/manage/export.
+// STEP 31 — analytics / BI. Section access additionally requires the matching DOMAIN permission (e.g. cases:view for support
+// analytics) or analytics:cross_domain:view; finance/risk/security/staff/sensitive sections always need their own explicit permission.
+const ANALYTICS_VIEW_PERMISSIONS: Permission[] = [
+  "analytics:view",
+  "analytics:dashboard:view",
+  "analytics:metrics:view",
+  "analytics:kpi:view",
+  "analytics:reports:view",
+  "analytics:reports:run",
+  "analytics:forecast:view",
+  "analytics:alerts:view",
+];
+
+// Working subset for domain managers: build dashboards/reports, export non-sensitive aggregates. No settings, pipeline,
+// metric/KPI governance, alert rules, scheduling or any sensitive/finance/risk/security/staff view.
+const ANALYTICS_MANAGER_PERMISSIONS: Permission[] = [
+  ...ANALYTICS_VIEW_PERMISSIONS,
+  "analytics:dashboard:create",
+  "analytics:dashboard:edit",
+  "analytics:dashboard:share",
+  "analytics:reports:create",
+  "analytics:reports:edit",
+  "analytics:reports:export",
+  "analytics:reports:share",
+];
+
+const ANALYTICS_OPERATIONS_PERMISSIONS: Permission[] = [
+  ...ANALYTICS_MANAGER_PERMISSIONS,
+  "analytics:manage",
+  "analytics:cross_domain:view",
+  "analytics:metrics:create",
+  "analytics:metrics:manage",
+  "analytics:kpi:create",
+  "analytics:kpi:manage",
+  "analytics:reports:schedule",
+  "analytics:data_quality:view",
+  "analytics:data_quality:manage",
+  "analytics:reconciliation:view",
+  "analytics:reconciliation:manage",
+  "analytics:pipeline:view",
+  "analytics:pipeline:manage",
+  "analytics:alerts:manage",
+  "analytics:staff:view",
+  "ai:analytics:use",
+];
+
+const ANALYTICS_ALL_PERMISSIONS: Permission[] = [
+  ...ANALYTICS_OPERATIONS_PERMISSIONS,
+  "analytics:sensitive:view",
+  "analytics:finance:view",
+  "analytics:risk:view",
+  "analytics:security:view",
+  "analytics:audit:view",
+];
+
+const ANALYTICS_ANALYST_PERMISSIONS: Permission[] = [
+  ...ANALYTICS_MANAGER_PERMISSIONS,
+  "analytics:cross_domain:view",
+  "analytics:reports:schedule",
+  "ai:analytics:use",
+];
+
 const ENGAGEMENT_STAFF_PERMISSIONS: Permission[] = [
   "engagement:view",
   "engagement:events:view",
@@ -1208,6 +1311,7 @@ const STAFF_SEARCH_PERMISSIONS: Permission[] = ["search:view", "candidate:view",
 export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // ---------------------------------------------------------------- SUPER_ADMIN (spec §4)
   SUPER_ADMIN: [
+    ...ANALYTICS_ALL_PERMISSIONS, // STEP 31
     "profile:view",
     "profile:edit",
     "profile:delete",
@@ -1461,10 +1565,11 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // bundled into match:run/proposal:create, which also let the holder act, not just view) —
   // disclosed gap, not silently worked around by granting an action permission to a
   // read-only role. system:view is read-only (System Health/Config pages; no system:*:manage).
-  VIEWER: ["profile:view", "audit:view", "verification:view", "communication:view", "documents:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view", "search:view", "crm:view"],
+  VIEWER: ["analytics:dashboard:view", "profile:view", "audit:view", "verification:view", "communication:view", "documents:view", "reports:view", "system:view", "tasks:view", "tasks:view:own", "approvals:view", "search:view", "crm:view"],
 
   // ---------------------------------------------------------------- OPERATIONS_ADMIN (spec §5)
   OPERATIONS_ADMIN: [
+    ...ANALYTICS_OPERATIONS_PERMISSIONS, // STEP 31
     "profile:view",
     "profile:edit",
     "profile:archive",
@@ -1534,6 +1639,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 
   // ---------------------------------------------------------------- MATCHMAKING_MANAGER (spec §6)
   MATCHMAKING_MANAGER: [
+    ...ANALYTICS_MANAGER_PERMISSIONS, // STEP 31
     "profile:view",
     "profile:edit",
     "match:run",
@@ -1577,6 +1683,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 
   // ---------------------------------------------------------------- VERIFICATION_MANAGER (spec §7)
   VERIFICATION_MANAGER: [
+    ...ANALYTICS_MANAGER_PERMISSIONS, // STEP 31
     "profile:view",
     "profile:edit",
     "verification:view",
@@ -1656,6 +1763,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 
   // ---------------------------------------------------------------- SUPPORT_MANAGER (spec §8)
   SUPPORT_MANAGER: [
+    ...ANALYTICS_MANAGER_PERMISSIONS, // STEP 31
     "support:view",
     "support:create",
     "support:manage",
@@ -1733,6 +1841,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 
   // ---------------------------------------------------------------- COMMUNICATION_MANAGER (spec §9)
   COMMUNICATION_MANAGER: [
+    ...ANALYTICS_MANAGER_PERMISSIONS, // STEP 31
     "communication:view",
     "communication:send",
     "communication:message:view",
@@ -1778,6 +1887,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 
   // ---------------------------------------------------------------- FINANCE_MANAGER (spec §10)
   FINANCE_MANAGER: [
+    ...ANALYTICS_MANAGER_PERMISSIONS, "analytics:finance:view", // STEP 31
     ...FINANCE_ALL_PERMISSIONS,
     "reports:view",
     "reports:export",
@@ -1801,6 +1911,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // their own approver on the same ApprovalRequest), not by withholding a
   // permission from this role.
   COMPLIANCE_MANAGER: [
+    ...ANALYTICS_VIEW_PERMISSIONS, "analytics:risk:view", "analytics:security:view", "analytics:audit:view", // STEP 31
     "profile:view",
     ...COMPLIANCE_ALL_PERMISSIONS,
     "ai:compliance:use",
@@ -1992,6 +2103,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 
   // ---------------------------------------------------------------- REPORTING_ANALYST (spec §15)
   REPORTING_ANALYST: [
+    ...ANALYTICS_ANALYST_PERMISSIONS, // STEP 31
     "profile:view", // aggregate dashboards/reports are built from this; sensitive:* fields stay independently gated
     "reports:view",
     "reports:export",

@@ -255,6 +255,9 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   CRM_ASSIGNED_TO_YOU: ESSENTIAL,
   CRM_SLA_ESCALATED: ESSENTIAL,
   LEAD_ASSIGNED_TO_YOU: ESSENTIAL,
+  // STEP 31 — admin-only, in-app (never sent to an applicant)
+  ANALYTICS_ALERT: ESSENTIAL,
+  ANALYTICS_REPORT_READY: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

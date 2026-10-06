@@ -8,6 +8,9 @@ import { prisma } from "@/lib/prisma";
 // atomic-upsert pattern with a reusable key instead of many near-identical
 // single-purpose tables.
 export type SequencePrefix =
+  | "KPI" // STEP 31 — analytics KPIs (LPP-KPI-######)
+  | "MET" // STEP 31 — analytics metric definitions
+  | "DASH" // STEP 31 — analytics dashboards
   | "DEL"
   | "PRIV"
   | "PAY"
