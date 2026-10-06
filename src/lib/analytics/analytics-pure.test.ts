@@ -441,3 +441,16 @@ describe("executive summary rules", () => {
     for (const f of facts) expect(f.text).not.toMatch(/will (grow|rise|increase|marry)|forecast|predict|likely to/i);
   });
 });
+
+describe("a section dashboard is a single query", () => {
+  it("fits within the query's metric cap for every section, and for the executive set", async () => {
+    const { MAX_QUERY_METRICS, querySchema } = await import("./query");
+    const { EXECUTIVE_METRICS } = await import("./dashboard-service");
+    const { listMetrics } = await import("./metrics/registry");
+    for (const s of SECTIONS) {
+      const keys = (s === "executive" ? EXECUTIVE_METRICS.slice() : listMetrics(s).map((m) => m.key));
+      expect(keys.length, s).toBeLessThanOrEqual(MAX_QUERY_METRICS);
+      if (keys.length) expect(querySchema.safeParse({ metrics: keys, period: { preset: "LAST_30_DAYS" }, compare: "PREVIOUS_PERIOD" }).success, s).toBe(true);
+    }
+  });
+});

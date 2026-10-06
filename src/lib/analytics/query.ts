@@ -17,8 +17,11 @@ import type { Freshness, MetricComputeContext, MetricDefinition, MetricRange, Me
 // Nothing here accepts SQL or a column name: a query names catalog metrics and allow-listed dimensions only.
 
 export const MAX_LIVE_DAYS = 400;
+// a whole section dashboard is one query, so the cap must cover the largest section (a test enforces it)
+export const MAX_QUERY_METRICS = 60;
+
 export const querySchema = z.object({
-  metrics: z.array(z.string().min(1).max(80)).min(1).max(16),
+  metrics: z.array(z.string().min(1).max(80)).min(1).max(MAX_QUERY_METRICS),
   period: z.object({ preset: z.enum(PERIOD_PRESETS as [PeriodPreset, ...PeriodPreset[]]), from: z.string().max(10).optional(), to: z.string().max(10).optional() }).strict(),
   compare: z.enum(COMPARE_MODES as [CompareMode, ...CompareMode[]]).optional(),
   dimension: z.string().max(40).optional(),
