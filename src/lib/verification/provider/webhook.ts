@@ -38,13 +38,15 @@ function mapProviderStatusToInternal(status: VerificationResultStatus): Verifica
 // (src/app/api/webhooks/payments/[provider]/route.ts) but as a reusable
 // function, following this codebase's established route-logic-extraction
 // discipline (e.g. submitProposalResponse).
-export async function processVerificationWebhook(rawBody: string, signatureHeader: string | null): Promise<WebhookOutcome> {
+export async function processVerificationWebhook(rawBody: string, signatureHeader: string | null, headers?: Headers): Promise<WebhookOutcome> {
   const provider = getVerificationProvider();
   const payloadHash = createHash("sha256").update(rawBody).digest("hex");
 
   const signatureValid = provider.verifyWebhook(rawBody, signatureHeader);
   if (!signatureValid) {
     await writeAudit({ action: "PROVIDER_WEBHOOK_REJECTED", meta: { provider: provider.name, reason: "invalid_signature", payloadHash } });
+    // STEP 32 — also a signal for the SOC detection rules (provider name + hashed network only; fail-open).
+    await import("@/lib/soc/events").then((m) => m.publishWebhookSignatureFailure({ provider: `verification-${provider.name}`, headers, reason: "BAD_SIGNATURE" })).catch(() => undefined);
     return { ok: false, status: 401, error: "Invalid signature" };
   }
 

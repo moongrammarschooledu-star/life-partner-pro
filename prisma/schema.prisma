@@ -10532,8 +10532,11 @@ model SocSettings {
   sessionIdleMinutes       Int? // null = no idle timeout (nothing changes until an admin sets it)
   maxConcurrentSessions    Int? // null = no cap
   stepUpForHighRisk        Boolean  @default(true) // containment approval, rule disable and configuration changes ask for re-authentication
+  enforceMfaPrivileged     Boolean  @default(false) // privileged administrators must complete the one-time-code step at every sign-in (off until the owner turns it on)
   accessLogRetentionDays   Int      @default(365)
   alertRetentionDays       Int      @default(730)
+  lastDetectionAt          DateTime? // end of the window the last detection run covered (the next run starts here)
+  lastDetectionSummary     Json? // counts only: rules evaluated, findings, alerts created / repeated / suppressed, truncated sources, errors
   updatedById              String?
   updatedAt                DateTime @updatedAt
 }

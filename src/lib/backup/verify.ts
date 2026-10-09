@@ -115,4 +115,8 @@ async function finish(testId: string, backupId: string, passed: boolean, checks:
   await prisma.restoreTest.update({ where: { id: testId }, data: { status: passed ? "PASSED" : "FAILED", completedAt: new Date(), result: checks as unknown as Prisma.InputJsonValue } });
   await prisma.backupRun.update({ where: { id: backupId }, data: { verifiedAt: new Date(), verificationStatus: passed ? "PASSED" : "FAILED" } });
   await writeAudit({ action: "BACKUP_VERIFIED", adminId: actorId, meta: { backupCode, passed } });
+  if (!passed) {
+    const reason = "VERIFICATION_FAILED";
+    void import("@/lib/soc/events").then((m) => m.publishBackupFailure({ kind: "VERIFY", reason })).catch(() => undefined); // STEP 32 — SOC signal (fail-open)
+  }
 }

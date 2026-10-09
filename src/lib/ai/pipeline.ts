@@ -44,6 +44,9 @@ export interface AiRunSpec {
   forMatching?: boolean;
   extraCacheParts?: unknown;
   extraForbidden?: string[];
+  // STEP 32 — free text a person typed into this feature (copilot message, analytics question). Scanned for prompt-injection and
+  // restricted-action requests; only a PATTERN CODE is ever recorded, never the text. Advisory: it does not change the outcome.
+  userText?: string;
   build: (ctx: BuildContext) => Promise<ProviderResult>;
 }
 
@@ -58,6 +61,20 @@ const HTTP_FOR_REASON: Record<UnavailableReason, number> = {
 
 function fail(status: number, code: AiFailureCode, message: string, requestId?: string): AiOutcome {
   return { ok: false, status, code, message, requestId };
+}
+
+async function monitorUserText(adminId: string, feature: string, text: string): Promise<void> {
+  try {
+    const { detectPromptInjection, detectRestrictedActionRequest } = await import("@/lib/soc/ai-security");
+    const injection = detectPromptInjection(text);
+    const action = detectRestrictedActionRequest(text);
+    if (!injection && !action) return;
+    const events = await import("@/lib/soc/events");
+    if (injection) await events.publishAiInjection({ adminId, feature, pattern: injection });
+    if (action) await events.publishAiUnauthorizedAction({ adminId, feature, action });
+  } catch {
+    /* fail-open: monitoring never changes an AI outcome */
+  }
 }
 
 export async function runAiRequest(spec: AiRunSpec): Promise<AiOutcome> {
@@ -91,6 +108,9 @@ export async function runAiRequest(spec: AiRunSpec): Promise<AiOutcome> {
     if (denied) await auditAi("AI_DATA_ACCESS_DENIED", admin.id, { feature, reason: avail.reason, requestId });
     return fail(HTTP_FOR_REASON[avail.reason], denied ? "FORBIDDEN" : "DISABLED", UNAVAILABLE_MESSAGE[avail.reason], requestId);
   }
+
+  // 1b. STEP 32 — security monitoring of the typed text (non-blocking, fail-open, pattern code only).
+  if (spec.userText) await monitorUserText(admin.id, feature, spec.userText);
 
   // 2. Rate limit (per admin × feature) and configured request quotas.
   const rule = rateLimitFor(config, admin.role, feature);

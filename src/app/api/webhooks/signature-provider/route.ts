@@ -16,7 +16,11 @@ export async function POST(req: Request) {
   const headers: Record<string, string | undefined> = {};
   req.headers.forEach((value, key) => (headers[key.toLowerCase()] = value));
   const verified = verifyEnvelope(headers, rawBody, secret);
-  if (!verified.valid) return NextResponse.json({ ok: false, error: verified.reason }, { status: 401 });
+  if (!verified.valid) {
+    // STEP 32 — a failed signature is a SOC signal (fail-open).
+    await import("@/lib/soc/events").then((m) => m.publishWebhookSignatureFailure({ provider: "signature-provider", headers: req.headers, reason: String(verified.reason ?? "BAD_SIGNATURE") })).catch(() => undefined);
+    return NextResponse.json({ ok: false, error: verified.reason }, { status: 401 });
+  }
 
   return NextResponse.json({ ok: true, processed: 0 });
 }

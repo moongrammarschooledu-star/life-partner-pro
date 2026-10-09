@@ -53,7 +53,15 @@ export async function fetchBackupObject(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-export async function deleteBackupObject(url: string): Promise<void> {
+// STEP 32 — deletion protection. A backup object can only be removed by the retention policy (pruneBackups). Any other caller is refused and the
+// attempt becomes a security event, so a backup can never be quietly deleted through a new code path. A structure test pins the one caller.
+export type BackupDeletionAuthority = "RETENTION_POLICY";
+
+export async function deleteBackupObject(url: string, authority: BackupDeletionAuthority): Promise<void> {
+  if (authority !== "RETENTION_POLICY") {
+    void import("@/lib/soc/events").then((m) => m.publishBackupDeletionAttempt({ reason: "NOT_RETENTION_POLICY" })).catch(() => undefined);
+    throw new Error("Backups can only be deleted by the retention policy.");
+  }
   if (url.startsWith("file://")) {
     if (usingLocalSink()) await rm(fileURLToPath(url), { force: true });
     return;

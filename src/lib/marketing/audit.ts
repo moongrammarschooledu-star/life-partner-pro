@@ -5,7 +5,8 @@ import type { AuditAction } from "@prisma/client";
 // the convention — put them in `meta` — is applied here once, with a scrub so contact details, tokens and secrets can
 // never be written into the audit trail by a careless caller.
 
-const SENSITIVE_KEY = /(email|phone|mobile|whatsapp|token|secret|password|authorization|cookie|inquiry|address|fullname|ip(hash)?$)/i;
+// api[_-]?key / private key / credential / passwd / bearer cover the camelCase and snake_case spellings of secrets (STEP 32).
+const SENSITIVE_KEY = /(email|phone|mobile|whatsapp|token|secret|password|passwd|api[_-]?key|private[_-]?key|credential|bearer|authorization|cookie|inquiry|address|fullname|ip(hash)?$)/i;
 const MAX_VALUE = 300;
 
 export function scrubForAudit(value: unknown, depth = 0): unknown {

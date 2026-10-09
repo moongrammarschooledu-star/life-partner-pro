@@ -45,13 +45,30 @@ export function tooManyRequests(retryAfterSeconds = 60): NextResponse {
 // over the limit (per client IP, plus optionally per subject such as an
 // e-mail), otherwise null.
 export async function enforcePersistentLimit(req: Request, name: string, limit: number, windowMs: number, subject?: string): Promise<NextResponse | null> {
-  const ip = await rateLimitPersistent(`${name}:ip:${clientKeyFromRequest(req)}`, limit, windowMs);
-  if (!ip.allowed) return tooManyRequests(Math.round(windowMs / 1000));
+  const clientKey = clientKeyFromRequest(req);
+  const ip = await rateLimitPersistent(`${name}:ip:${clientKey}`, limit, windowMs);
+  if (!ip.allowed) {
+    // STEP 32 — a refused request is a security signal, recorded ONCE per window (the first refusal), never per request.
+    if (ip.count === limit + 1 && clientKey !== "unknown") void reportRateLimit(name, clientKey, null);
+    return tooManyRequests(Math.round(windowMs / 1000));
+  }
   if (subject) {
     const sub = await rateLimitPersistent(`${name}:sub:${subject.toLowerCase()}`, limit, windowMs);
-    if (!sub.allowed) return tooManyRequests(Math.round(windowMs / 1000));
+    if (!sub.allowed) {
+      if (sub.count === limit + 1) void reportRateLimit(name, null, subject.toLowerCase());
+      return tooManyRequests(Math.round(windowMs / 1000));
+    }
   }
   return null;
+}
+
+async function reportRateLimit(name: string, ip: string | null, subject: string | null): Promise<void> {
+  try {
+    const { publishRateLimitExceeded } = await import("@/lib/soc/events");
+    await publishRateLimitExceeded({ name, ip, subject });
+  } catch {
+    /* fail-open: monitoring never changes the 429 */
+  }
 }
 
 export async function cleanupRateLimitBuckets(): Promise<number> {

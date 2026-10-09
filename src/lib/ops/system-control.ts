@@ -28,7 +28,7 @@ export async function getPublicState(): Promise<PublicState> {
 export type EmergencySwitch =
   | "payments" | "registrations" | "profileSubmissions" | "matching" | "proposals" | "notifications" | "uploads" | "publicAccess";
 
-const SWITCH_FIELD: Record<EmergencySwitch, keyof SystemControl> = {
+export const SWITCH_FIELD: Record<EmergencySwitch, keyof SystemControl> = {
   payments: "emergencyPaymentsDisabled",
   registrations: "emergencyRegistrationsDisabled",
   profileSubmissions: "emergencyProfileSubmissionsDisabled",
