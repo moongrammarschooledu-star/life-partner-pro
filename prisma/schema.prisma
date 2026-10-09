@@ -1357,6 +1357,25 @@ enum AuditAction {
   ANALYTICS_FORECAST_GENERATED
   ANALYTICS_AI_GENERATED
   ANALYTICS_ACCESS_DENIED
+
+  // ---------- STEP 32 — Security Operations Center ----------
+  SOC_ALERT_CREATED
+  SOC_ALERT_UPDATED
+  SOC_ALERT_ESCALATED
+  SOC_RULE_CHANGED
+  SOC_RULE_DRY_RUN
+  SOC_DETECTION_RUN
+  SOC_INCIDENT_CREATED
+  SOC_INCIDENT_UPDATED
+  SOC_CONTAINMENT_REQUESTED
+  SOC_CONTAINMENT_DECIDED
+  SOC_CONTAINMENT_EXECUTED
+  SOC_CONFIG_CHANGED
+  SOC_RESTORE_DRILL_RECORDED
+  SOC_RESTORE_DRILL_REVIEWED
+  SOC_DR_PLAN_CHANGED
+  SOC_DR_TEST_RECORDED
+  SOC_ACCESS_DENIED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -1624,6 +1643,11 @@ enum NotificationType {
   CRM_ASSIGNED_TO_YOU
   CRM_SLA_ESCALATED
   LEAD_ASSIGNED_TO_YOU
+
+  // ---------- STEP 32 — Security Operations Center ----------
+  // Admin-only. The text carries a code, a severity and a category — never applicant details.
+  SOC_ALERT
+  SOC_INCIDENT
 }
 
 // ---------- Data Privacy, Consent, Account Management & Retention (STEP 13) ----------
@@ -1706,6 +1730,7 @@ enum DataCategory {
   ENGAGEMENT_EVENT_DATA // STEP 30 — engagement events, reminders, workflow runs; swept only under an admin-created policy
   ENGAGEMENT_FEEDBACK_DATA // STEP 30 — applicant feedback and survey responses; swept only under an admin-created policy
   ANALYTICS_ACCESS_DATA // STEP 31 — who viewed/exported which analytics (no data values); swept only under an admin-created policy
+  SOC_ACCESS_DATA // STEP 32 — who opened which security-operations screen (no data values); swept only under an admin-created policy
 }
 
 enum RetentionAction {
@@ -6087,6 +6112,22 @@ enum SecurityEventType {
   // ---------- STEP 29 — Marketing ----------
   MARKETING_LEAD_ABUSE_SUSPECTED // repeated duplicate submissions, automated-looking form abuse, unusual submission volume
   MARKETING_WEBHOOK_ANOMALY // repeated rejected/malformed provider webhook deliveries
+
+  // ---------- STEP 32 — Security Operations Center ----------
+  ADMIN_PRIVILEGE_CHANGE // a role / custom role / permission was changed for an admin
+  ADMIN_SESSION_ANOMALY // an admin session was refused or ended by the session policy (idle / too many)
+  BREAK_GLASS_USED // a break-glass emergency access grant was used
+  WEBHOOK_SIGNATURE_FAILURE // an inbound webhook failed signature or timestamp verification
+  WEBHOOK_REPLAY_ATTEMPT // an inbound webhook delivery was a replay of one already processed
+  RATE_LIMIT_EXCEEDED // a request was refused by a rate limit
+  BULK_EXPORT // a data export was produced (counts only, never the data)
+  SENSITIVE_RECORD_ACCESS // contact details / documents were opened by staff
+  PROFILE_SEARCH // a staff profile search ran (volume signal only)
+  BACKUP_FAILED // a backup or backup-verification job failed
+  BACKUP_DELETION_ATTEMPT // a backup deletion outside the retention policy was attempted
+  AI_PROMPT_INJECTION_SUSPECTED // AI input matched a prompt-injection pattern (pattern code only, never the text)
+  AI_UNAUTHORIZED_ACTION_ATTEMPT // AI output or input asked for an action the AI is never allowed to take
+  SECURITY_CONFIG_CHANGED // a security configuration was changed
 }
 
 enum SecurityIncidentControl {
@@ -10402,4 +10443,318 @@ model AnalyticsAccessLog {
   @@index([adminId, createdAt])
   @@index([sensitive, createdAt])
   @@index([createdAt])
+}
+
+// ---------- STEP 32 — Security Operations Center, threat detection, incident response, restore drills, disaster recovery ----------
+// Built on top of SecurityEvent / AdminSession / BackupRun / SystemControl (all unchanged). The existing SecurityIncident table is the
+// technical-controls ledger, so the incident entity of this step is SocIncident.
+
+enum SocSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SocAlertStatus {
+  NEW
+  ACKNOWLEDGED
+  INVESTIGATING
+  RESOLVED
+  FALSE_POSITIVE
+  ESCALATED
+  CLOSED
+}
+
+enum SocIncidentStatus {
+  DETECTED
+  TRIAGED
+  INVESTIGATING
+  CONTAINMENT
+  REMEDIATION
+  RECOVERY
+  POST_INCIDENT_REVIEW
+  CLOSED
+}
+
+enum SocIncidentCategory {
+  ACCOUNT_COMPROMISE
+  AUTHENTICATION_ATTACK
+  AUTHORIZATION_FAILURE
+  DATA_EXPOSURE
+  PRIVACY_INCIDENT
+  MALICIOUS_ATTACHMENT
+  API_ATTACK
+  WEBHOOK_COMPROMISE
+  PAYMENT_SECURITY
+  AI_SECURITY
+  DOCUMENT_ACCESS
+  BACKUP_RECOVERY_FAILURE
+  THIRD_PARTY_PROVIDER
+}
+
+enum SocRuleVersionStatus {
+  PROPOSED
+  ACTIVE
+  SUPERSEDED
+  REJECTED
+}
+
+enum SocContainmentStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  EXECUTED
+  FAILED
+}
+
+enum SocDrillStatus {
+  IN_PROGRESS
+  PASSED
+  FAILED
+}
+
+enum SocPlanStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
+// Singleton (id = 1): the knobs that shape detection follow-up and admin sessions. Every change writes a SocConfigVersion row.
+model SocSettings {
+  id                       Int      @id @default(1)
+  version                  Int      @default(1)
+  suppressionWindowMinutes Int      @default(240) // an open alert with the same dedup key is never repeated; after it closes, wait this long
+  escalateCriticalMinutes  Int      @default(15) // unacknowledged for this long -> escalate (0 = never)
+  escalateHighMinutes      Int      @default(60)
+  escalateMediumMinutes    Int      @default(480)
+  sessionIdleMinutes       Int? // null = no idle timeout (nothing changes until an admin sets it)
+  maxConcurrentSessions    Int? // null = no cap
+  stepUpForHighRisk        Boolean  @default(true) // containment approval, rule disable and configuration changes ask for re-authentication
+  accessLogRetentionDays   Int      @default(365)
+  alertRetentionDays       Int      @default(730)
+  updatedById              String?
+  updatedAt                DateTime @updatedAt
+}
+
+model SocConfigVersion {
+  id        String   @id @default(cuid())
+  version   Int      @unique
+  changes   Json // { field: { from, to } }
+  snapshot  Json // the full settings after the change
+  reason    String
+  authorId  String
+  createdAt DateTime @default(now())
+}
+
+// A detection rule's identity. The definition (what it counts, how it decides) lives in code; every tunable value lives in a version row.
+model SocDetectionRule {
+  id             String           @id @default(cuid())
+  key            String           @unique
+  currentVersion Int              @default(1)
+  createdAt      DateTime         @default(now())
+  versions       SocRuleVersion[]
+}
+
+model SocRuleVersion {
+  id           String               @id @default(cuid())
+  rule         SocDetectionRule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId       String
+  version      Int
+  status       SocRuleVersionStatus @default(ACTIVE)
+  enabled      Boolean              @default(true)
+  severity     SocSeverity
+  threshold    Int
+  windowMinutes Int
+  params       Json?
+  changeReason String
+  authorId     String?
+  reviewerId   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime             @default(now())
+
+  @@unique([ruleId, version])
+  @@index([status])
+}
+
+model SocAlert {
+  id               String         @id @default(cuid())
+  alertCode        String         @unique // LPP-SEC-ALERT-######
+  ruleKey          String
+  ruleVersion      Int?
+  category         String
+  severity         SocSeverity
+  status           SocAlertStatus @default(NEW)
+  title            String // neutral wording, e.g. "Suspicious activity detected: repeated failed sign-ins"
+  summary          String // safe text: counts and windows only
+  source           String // SecurityEvent | AdminLoginHistory | AuditLog | WebhookEvent | RateLimitBucket | AiRequest | BackupRun
+  affectedResource String? // e.g. ADMIN:<id>, NETWORK:<hash>, WEBHOOK:<provider> — a reference, never raw data
+  evidenceRefs     Json? // [{ type, id }] pointers only
+  dedupKey         String
+  occurrences      Int            @default(1)
+  firstSeenAt      DateTime       @default(now())
+  lastSeenAt       DateTime       @default(now())
+  assignedToId     String?
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  resolution       String?
+  resolvedAt       DateTime?
+  resolvedById     String?
+  escalationLevel  Int            @default(0)
+  escalatedAt      DateTime?
+  incidentId       String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  events           SocAlertEvent[]
+
+  @@index([status, severity])
+  @@index([dedupKey, status])
+  @@index([ruleKey, createdAt])
+  @@index([createdAt])
+}
+
+model SocAlertEvent {
+  id         String          @id @default(cuid())
+  alert      SocAlert        @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  alertId    String
+  kind       String // CREATED | STATUS | ASSIGN | NOTE | ESCALATE | NOTIFY | REPEAT
+  actorId    String?
+  fromStatus SocAlertStatus?
+  toStatus   SocAlertStatus?
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  @@index([alertId, createdAt])
+}
+
+model SocIncident {
+  id                String              @id @default(cuid())
+  incidentCode      String              @unique // LPP-INC-###### (shares the existing incident numbering space)
+  title             String
+  category          SocIncidentCategory
+  severity          SocSeverity
+  status            SocIncidentStatus   @default(DETECTED)
+  ownerId           String?
+  summary           String
+  alertIds          Json? // alerts this incident was opened from
+  evidenceRefs      Json? // [{ type, id, note }]
+  communicationPlan String?
+  rootCause         String?
+  lessonsLearned    String?
+  detectedAt        DateTime            @default(now())
+  closedAt          DateTime?
+  createdById       String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  events            SocIncidentEvent[]
+  containment       SocContainmentAction[]
+
+  @@index([status, severity])
+  @@index([createdAt])
+}
+
+model SocIncidentEvent {
+  id         String             @id @default(cuid())
+  incident   SocIncident        @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incidentId String
+  kind       String // CREATED | STATUS | NOTE | EVIDENCE | CONTAINMENT | COMMUNICATION | REVIEW | OWNER
+  actorId    String?
+  fromStatus SocIncidentStatus?
+  toStatus   SocIncidentStatus?
+  note       String?
+  createdAt  DateTime           @default(now())
+
+  @@index([incidentId, createdAt])
+}
+
+// A containment action is always a TECHNICAL, expiring control (see risk/technical-controls) — never a decision about a person.
+model SocContainmentAction {
+  id                 String               @id @default(cuid())
+  incident           SocIncident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incidentId         String
+  actionType         String // REVOKE_SESSION | REVOKE_ADMIN_SESSIONS | THROTTLE_SUBJECT | BLOCK_NETWORK_HASH | EMERGENCY_SWITCH
+  impact             String // LOW | HIGH
+  params             Json
+  status             SocContainmentStatus @default(REQUESTED)
+  reason             String
+  requestedById      String
+  approvedById       String?
+  decidedAt          DateTime?
+  decisionNote       String?
+  executedAt         DateTime?
+  result             String?
+  technicalControlId String?
+  createdAt          DateTime             @default(now())
+
+  @@index([incidentId])
+  @@index([status])
+}
+
+// Who opened which security-operations screen (no data values).
+model SocAccessLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  action     String   @db.VarChar(16) // VIEW | RUN | CHANGE | DENIED | EXPORT
+  resource   String   @db.VarChar(60)
+  resourceId String?  @db.VarChar(60)
+  outcome    String   @default("ALLOWED") @db.VarChar(10)
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([createdAt])
+}
+
+// A rehearsed restore into an ISOLATED database. The app never restores into production; the restore itself is run with
+// scripts/restore-backup.ts against a scratch database and recorded here, checked off item by item, then signed off by a different person.
+model RestoreDrill {
+  id               String         @id @default(cuid())
+  backupId         String? // BackupRun.id (no FK: the record must outlive pruning)
+  backupCode       String?
+  environmentLabel String // e.g. "neon-branch restore-2026-10", never the production label
+  status           SocDrillStatus @default(IN_PROGRESS)
+  items            Json // [{ key, status: PASSED|FAILED|NOT_RUN, note }]
+  verifySummary    Json? // result of the automated verify step (decrypt + checksum + row counts)
+  startedAt        DateTime       @default(now())
+  completedAt      DateTime?
+  durationSeconds  Int?
+  performedById    String
+  reviewedById     String?
+  reviewedAt       DateTime?
+  reviewNote       String?
+  failureNote      String?
+  createdAt        DateTime       @default(now())
+
+  @@index([status, startedAt])
+}
+
+model DisasterRecoveryPlan {
+  id           String        @id @default(cuid())
+  version      Int           @unique
+  status       SocPlanStatus @default(DRAFT)
+  sections     Json // { procedures, infrastructure, providers, contacts, failover, rollback, businessContinuity }
+  testEveryDays Int? // recovery test schedule
+  changeReason String
+  authorId     String
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([status])
+}
+
+model DisasterRecoveryTest {
+  id              String    @id @default(cuid())
+  planVersion     Int?
+  testType        String // TABLETOP | RESTORE | FAILOVER
+  status          String // PLANNED | COMPLETED | FAILED
+  scheduledFor    DateTime?
+  performedAt     DateTime?
+  durationMinutes Int?
+  findings        String?
+  drillId         String? // RestoreDrill.id when the test was a restore drill
+  recordedById    String
+  createdAt       DateTime  @default(now())
+
+  @@index([status, performedAt])
 }
