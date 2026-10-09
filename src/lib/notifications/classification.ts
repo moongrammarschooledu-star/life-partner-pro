@@ -258,6 +258,9 @@ export const NOTIFICATION_CLASSIFICATION: Record<NotificationType, NotificationC
   // STEP 31 — admin-only, in-app (never sent to an applicant)
   ANALYTICS_ALERT: ESSENTIAL,
   ANALYTICS_REPORT_READY: ESSENTIAL,
+  // STEP 32 — admin-only security notices (code + severity + category only; never applicant details)
+  SOC_ALERT: ESSENTIAL,
+  SOC_INCIDENT: ESSENTIAL,
 };
 
 export function classify(type: NotificationType): NotificationClassification {

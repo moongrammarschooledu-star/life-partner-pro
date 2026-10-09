@@ -84,7 +84,9 @@ export async function checkAdminCredentials(params: {
   }
 
   const requiredRoles = (settings?.twoFactorRequiredRoles as AdminRole[] | null) ?? [];
-  const twoFactorRequired = admin.twoFactorEnabled || requiredRoles.includes(admin.role as AdminRole);
+  let twoFactorRequired = admin.twoFactorEnabled || requiredRoles.includes(admin.role as AdminRole);
+  // STEP 32 — optional enforcement for privileged administrators (off until the owner switches it on; fails open).
+  if (!twoFactorRequired) twoFactorRequired = await import("@/lib/soc/admin-security").then((m) => m.mfaEnforcedFor({ role: admin.role, customRoleId: admin.customRoleId ?? null })).catch(() => false);
 
   return { ok: true, admin, twoFactorRequired };
 }

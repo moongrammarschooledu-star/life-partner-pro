@@ -1,7 +1,9 @@
-import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveRule } from "@/lib/risk/config";
 import { redactPayload } from "@/lib/security/redact";
+import { hashIdentifier } from "@/lib/security/hash";
+
+export { hashIdentifier };
 import type { SecurityEventType } from "@prisma/client";
 
 // SecurityEventBus. One place where security-relevant facts enter the risk
@@ -45,6 +47,10 @@ const ALLOWED_TYPES = new Set<string>([
   "COUPON_ABUSE_SUSPECTED", "REFERRAL_ABUSE_SUSPECTED", "ENTITLEMENT_BYPASS_ATTEMPT", "UNUSUAL_TRANSACTION_PATTERN",
   // STEP 29 — Marketing
   "MARKETING_LEAD_ABUSE_SUSPECTED", "MARKETING_WEBHOOK_ANOMALY",
+  // STEP 32 — Security Operations Center (evaluated by the SOC detection engine, never by the risk rule engine)
+  "ADMIN_PRIVILEGE_CHANGE", "ADMIN_SESSION_ANOMALY", "BREAK_GLASS_USED", "WEBHOOK_SIGNATURE_FAILURE", "WEBHOOK_REPLAY_ATTEMPT", "RATE_LIMIT_EXCEEDED",
+  "BULK_EXPORT", "SENSITIVE_RECORD_ACCESS", "PROFILE_SEARCH", "BACKUP_FAILED", "BACKUP_DELETION_ATTEMPT", "AI_PROMPT_INJECTION_SUSPECTED",
+  "AI_UNAUTHORIZED_ACTION_ATTEMPT", "SECURITY_CONFIG_CHANGED",
 ]);
 
 // Events whose evaluation must not wait for the daily batch.
@@ -55,19 +61,11 @@ export const REALTIME_EVENT_TYPES = new Set<string>([
 
 // Auth-related events need a network hash for the (expiring) IP-block control;
 // everything else stores one only when the network rule is switched on.
-const AUTH_TYPES = new Set<string>(["LOGIN_FAILED", "LOGIN_SUCCESS", "OTP_REQUESTED", "OTP_FAILED", "API_AUTH_FAILURE", "PASSWORD_RESET"]);
+// STEP 32: abusive-request signals (refused rate limits, webhook forgeries/replays) need the hashed network address too, or no rule could group them.
+const AUTH_TYPES = new Set<string>(["LOGIN_FAILED", "LOGIN_SUCCESS", "OTP_REQUESTED", "OTP_FAILED", "API_AUTH_FAILURE", "PASSWORD_RESET", "RATE_LIMIT_EXCEEDED", "WEBHOOK_SIGNATURE_FAILURE", "WEBHOOK_REPLAY_ATTEMPT"]);
 
 const EVALUATION_TIMEOUT_MS = 1500;
 const MAX_META_BYTES = 1024;
-
-function hashSecret(): string {
-  return process.env.RISK_HASH_SALT ?? process.env.NEXTAUTH_SECRET ?? "lpp-dev-risk-salt";
-}
-
-// Salted HMAC: not reversible without the server secret, stable so counting works.
-export function hashIdentifier(value: string): string {
-  return createHmac("sha256", hashSecret()).update(value.trim().toLowerCase()).digest("hex").slice(0, 32);
-}
 
 export function sanitizeMeta(meta?: Record<string, unknown>): string | null {
   if (!meta) return null;

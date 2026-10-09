@@ -586,13 +586,40 @@ export type Permission =
   | "analytics:security:view"
   | "analytics:staff:view"
   | "analytics:audit:view"
-  | "ai:analytics:use";
+  | "ai:analytics:use"
+  // STEP 32 — Security Operations Center
+  | "soc:view"
+  | "soc:events:view"
+  | "soc:alerts:view"
+  | "soc:alerts:manage"
+  | "soc:detection:run"
+  | "soc:rules:view"
+  | "soc:rules:manage"
+  | "soc:incidents:view"
+  | "soc:incidents:manage"
+  | "soc:containment:request"
+  | "soc:containment:approve"
+  | "soc:backups:view"
+  | "soc:restore:record"
+  | "soc:restore:review"
+  | "soc:dr:view"
+  | "soc:dr:manage"
+  | "soc:config:view"
+  | "soc:config:manage"
+  | "soc:admin_security:view"
+  | "soc:audit:view";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
 // Permission Matrix's "S" annotation. Never automatically implied by holding
 // a manager/broad role; always granted (or not) independently per role below.
 export const SENSITIVE_PERMISSIONS: Permission[] = [
+  "soc:containment:approve", // STEP 32
+  "soc:rules:manage",
+  "soc:config:manage",
+  "soc:restore:review",
+  "soc:admin_security:view",
+  "soc:audit:view",
   "analytics:sensitive:view", // STEP 31
   "analytics:finance:view",
   "analytics:risk:view",
@@ -917,6 +944,17 @@ const ENGAGEMENT_ALL_PERMISSIONS: Permission[] = [
 // STEP 30 — day-to-day working subset: view, draft content/announcements, handle feedback. No approve/publish/pause/manage/export.
 // STEP 31 — analytics / BI. Section access additionally requires the matching DOMAIN permission (e.g. cases:view for support
 // analytics) or analytics:cross_domain:view; finance/risk/security/staff/sensitive sections always need their own explicit permission.
+// STEP 32 — Security Operations Center role bundles. Containment is split on purpose: one role requests, a different person approves.
+const SOC_VIEW_PERMISSIONS: Permission[] = ["soc:view", "soc:events:view", "soc:alerts:view", "soc:backups:view", "soc:dr:view"];
+const SOC_OPERATIONS_PERMISSIONS: Permission[] = [...SOC_VIEW_PERMISSIONS, "soc:restore:record", "soc:config:view"];
+const SOC_COMPLIANCE_PERMISSIONS: Permission[] = [
+  ...SOC_VIEW_PERMISSIONS, "soc:alerts:manage", "soc:rules:view", "soc:incidents:view", "soc:incidents:manage", "soc:containment:request",
+  "soc:restore:review", "soc:config:view", "soc:admin_security:view", "soc:audit:view",
+];
+const SOC_ALL_PERMISSIONS: Permission[] = [
+  ...SOC_COMPLIANCE_PERMISSIONS, "soc:detection:run", "soc:rules:manage", "soc:containment:approve", "soc:restore:record", "soc:dr:manage", "soc:config:manage",
+];
+
 const ANALYTICS_VIEW_PERMISSIONS: Permission[] = [
   "analytics:view",
   "analytics:dashboard:view",
@@ -1312,6 +1350,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // ---------------------------------------------------------------- SUPER_ADMIN (spec §4)
   SUPER_ADMIN: [
     ...ANALYTICS_ALL_PERMISSIONS, // STEP 31
+    ...SOC_ALL_PERMISSIONS, // STEP 32
     "profile:view",
     "profile:edit",
     "profile:delete",
@@ -1570,6 +1609,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // ---------------------------------------------------------------- OPERATIONS_ADMIN (spec §5)
   OPERATIONS_ADMIN: [
     ...ANALYTICS_OPERATIONS_PERMISSIONS, // STEP 31
+    ...SOC_OPERATIONS_PERMISSIONS, // STEP 32
     "profile:view",
     "profile:edit",
     "profile:archive",
@@ -1912,6 +1952,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   // permission from this role.
   COMPLIANCE_MANAGER: [
     ...ANALYTICS_VIEW_PERMISSIONS, "analytics:risk:view", "analytics:security:view", "analytics:audit:view", // STEP 31
+    ...SOC_COMPLIANCE_PERMISSIONS, // STEP 32
     "profile:view",
     ...COMPLIANCE_ALL_PERMISSIONS,
     "ai:compliance:use",

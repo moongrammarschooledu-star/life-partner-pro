@@ -7,6 +7,7 @@ import type { Permission, AdminRole } from "@/lib/permissions";
 import { ServiceUnavailableError } from "@/lib/ops/system-control";
 import { HttpError } from "@/lib/http-error";
 import { publishSecurityEvent } from "@/lib/security/event-bus";
+import { enforceIdleTimeout } from "@/lib/soc/session-policy";
 
 export class ApiError extends HttpError {}
 
@@ -43,6 +44,8 @@ export async function requireAdmin(permission?: Permission, options?: RequireAdm
   if (!record || record.revokedAt || record.expiresAt.getTime() < Date.now()) {
     throw new ApiError(401, "Session has been revoked or expired. Please sign in again.");
   }
+  // STEP 32 — optional idle timeout (off until configured; fail-open). A session unused for too long ends here, before it is refreshed.
+  if (await enforceIdleTimeout(record)) throw new ApiError(401, "Your session ended because of inactivity. Please sign in again.");
   // Fire-and-forget-ish but awaited (small write, low traffic) — keeps
   // "last active" meaningful for the Active Sessions list.
   await prisma.adminSession.update({ where: { id: record.id }, data: { lastActiveAt: new Date() } }).catch(() => {});

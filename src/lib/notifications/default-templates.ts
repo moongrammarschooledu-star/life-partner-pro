@@ -716,4 +716,13 @@ export const DEFAULT_TEMPLATES: Dict = {
     EN: { title: "Scheduled report ready", body: "A scheduled analytics report is ready. Open it from the reports page." },
     UR: { title: "شیڈول رپورٹ تیار ہے", body: "ایک شیڈول اینالیٹکس رپورٹ تیار ہے۔ رپورٹس کے صفحے سے کھولیں۔" },
   },
+  // STEP 32 — admin-only security notices (no applicant details, ever)
+  SOC_ALERT: {
+    EN: { title: "Security alert", body: "A security alert needs your attention. Open Security Operations for details." },
+    UR: { title: "سکیورٹی الرٹ", body: "ایک سکیورٹی الرٹ آپ کی توجہ چاہتا ہے۔ تفصیل کے لیے سکیورٹی آپریشنز کھولیں۔" },
+  },
+  SOC_INCIDENT: {
+    EN: { title: "Security incident update", body: "A security incident was opened or changed. Open Security Operations for details." },
+    UR: { title: "سکیورٹی واقعے کی اپ ڈیٹ", body: "ایک سکیورٹی واقعہ کھولا گیا یا تبدیل ہوا ہے۔ تفصیل کے لیے سکیورٹی آپریشنز کھولیں۔" },
+  },
 };

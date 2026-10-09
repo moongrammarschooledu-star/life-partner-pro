@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
   const rawBody = await req.text();
   const signatureHeader = req.headers.get("x-verification-signature");
 
-  const outcome = await processVerificationWebhook(rawBody, signatureHeader);
+  const outcome = await processVerificationWebhook(rawBody, signatureHeader, req.headers);
   if (!outcome.ok) {
     // 401/400 for a rejected signature/payload; a processing error still
     // returns 200 so the provider doesn't retry-storm a delivery that was

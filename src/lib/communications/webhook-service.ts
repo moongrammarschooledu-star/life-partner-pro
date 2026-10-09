@@ -115,6 +115,17 @@ async function applyEvent(channel: NotificationChannel, providerKey: string, eve
   return "PROCESSED";
 }
 
+// STEP 32 — a failed signature or a replayed delivery is a security event (counts and provider key only; fail-open).
+async function reportWebhook(kind: "signature" | "replay-stale" | "replay-duplicate", provider: string, req: WebhookRequestData, reason: string, count = 1): Promise<void> {
+  try {
+    const events = await import("@/lib/soc/events");
+    if (kind === "signature") await events.publishWebhookSignatureFailure({ provider, headers: req.headers, reason });
+    else await events.publishWebhookReplay({ provider, headers: req.headers, kind: kind === "replay-stale" ? "STALE" : "DUPLICATE", count });
+  } catch {
+    /* fail-open */
+  }
+}
+
 export async function handleProviderWebhook(channel: NotificationChannel, req: WebhookRequestData, env: EnvMap = process.env, now: Date = new Date()): Promise<WebhookOutcome> {
   const payloadHash = createHash("sha256").update(req.rawBody).digest("hex");
   const adapters = webhookAdapters(channel, env);
@@ -122,7 +133,9 @@ export async function handleProviderWebhook(channel: NotificationChannel, req: W
   const providerKey = verified ? (verified.external ? `${verified.adapterKey.toLowerCase()}` : `sandbox-${channel.toLowerCase()}`) : `unverified-${channel.toLowerCase()}`;
 
   if (!verified) {
-    await recordRejected(channel, providerKey, payloadHash, adapters[0]?.verifyWebhook(req).reason ?? "BAD_SIGNATURE", false);
+    const reason = adapters[0]?.verifyWebhook(req).reason ?? "BAD_SIGNATURE";
+    await recordRejected(channel, providerKey, payloadHash, reason, false);
+    await reportWebhook("signature", channel.toLowerCase(), req, reason);
     return { httpStatus: 401, body: { ok: false, error: "Invalid signature" } };
   }
   const events = verified.parseWebhookEvent(req);
@@ -148,6 +161,11 @@ export async function handleProviderWebhook(channel: NotificationChannel, req: W
       return { httpStatus: 500, body: { ok: false, error: "Processing error" } };
     }
   }
-  if (rejected > 0 && processed + duplicates + unmatched === 0) await recordRejected(channel, providerKey, payloadHash, "STALE_EVENT", true);
+  if (rejected > 0 && processed + duplicates + unmatched === 0) {
+    await recordRejected(channel, providerKey, payloadHash, "STALE_EVENT", true);
+    await reportWebhook("replay-stale", providerKey, req, "STALE_EVENT", rejected);
+  } else if (duplicates > 0 && processed === 0) {
+    await reportWebhook("replay-duplicate", providerKey, req, "DUPLICATE", duplicates);
+  }
   return { httpStatus: 200, body: { ok: true, processed, duplicates, unmatched, rejected } };
 }

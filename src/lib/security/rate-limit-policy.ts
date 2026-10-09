@@ -65,6 +65,10 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "analytics-query": { limit: 600, windowMs: 3_600_000 },
   "analytics-export": { limit: 20, windowMs: 3_600_000 },
   "analytics-assistant": { limit: 60, windowMs: 3_600_000 },
+  // STEP 32 - Security Operations reads, changes and the manual detection run
+  "soc-query": { limit: 600, windowMs: 3_600_000 },
+  "soc-action": { limit: 120, windowMs: 3_600_000 },
+  "soc-detection-run": { limit: 12, windowMs: 3_600_000 },
 };
 
 const CACHE_TTL_MS = 30_000;
