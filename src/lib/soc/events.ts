@@ -1,5 +1,5 @@
 import { publishSecurityEvent } from "@/lib/security/event-bus";
-import type { AuditAction, SecurityEventType } from "@prisma/client";
+import { recordRateLimitExceeded } from "@/lib/soc/light-events";
 
 // STEP 32 — thin, FAIL-OPEN helpers that feed the existing SecurityEventBus. The bus already minimises what it keeps (IP and user-agent only
 // as salted hashes, meta redacted and size-capped), so these helpers only decide WHICH facts become events and pass identifiers, never
@@ -41,8 +41,7 @@ export async function publishWebhookReplay(p: { provider: string; headers?: Head
 
 // ---- rate limits ----
 export async function publishRateLimitExceeded(p: { name: string; ip?: string | null; subject?: string | null }): Promise<void> {
-  if (!p.ip && !p.subject) return;
-  await safe({ eventType: "RATE_LIMIT_EXCEEDED", source: "rate-limit", ip: p.ip ?? null, subject: p.subject ?? null, outcome: "BLOCKED", meta: { limit: p.name.slice(0, 60) } });
+  await recordRateLimitExceeded(p);
 }
 
 // ---- backups ----
@@ -75,48 +74,5 @@ export async function publishSessionAnomaly(p: { adminId: string; reason: "IDLE_
 }
 
 // ---- mirror of selected audit actions ----
-// One central place instead of a call in every export / role / search route: the audit writer already sees every one of these actions
-// once, with the acting admin, so it forwards a minimal event. Only rare or high-signal actions are mirrored.
-const MIRRORED: Partial<Record<AuditAction, SecurityEventType>> = {
-  REPORT_EXPORTED: "BULK_EXPORT",
-  SENSITIVE_DATA_EXPORTED: "BULK_EXPORT",
-  FINANCIAL_REPORT_EXPORTED: "BULK_EXPORT",
-  DATA_EXPORT_CREATED: "BULK_EXPORT",
-  DOCUMENT_EXPORTED: "BULK_EXPORT",
-  CRM_EXPORT: "BULK_EXPORT",
-  MARKETING_LEAD_EXPORTED: "BULK_EXPORT",
-  ENGAGEMENT_EXPORT: "BULK_EXPORT",
-  ANALYTICS_REPORT_EXPORTED: "BULK_EXPORT",
-  SEARCH_EXPORT_PERFORMED: "BULK_EXPORT",
-  ADMIN_USER_CREATED: "ADMIN_PRIVILEGE_CHANGE",
-  ADMIN_USER_ROLE_CHANGED: "ADMIN_PRIVILEGE_CHANGE",
-  CUSTOM_ROLE_PERMISSIONS_CHANGED: "ADMIN_PRIVILEGE_CHANGE",
-  ADMIN_ROLE_ASSIGNED: "ADMIN_PRIVILEGE_CHANGE",
-  ADMIN_ROLE_REMOVED: "ADMIN_PRIVILEGE_CHANGE",
-  ADMIN_PERMISSION_GRANTED: "ADMIN_PRIVILEGE_CHANGE",
-  ADMIN_PERMISSION_REVOKED: "ADMIN_PRIVILEGE_CHANGE",
-  ADMIN_SENSITIVE_PERMISSION_GRANTED: "ADMIN_PRIVILEGE_CHANGE",
-  ADMIN_SENSITIVE_PERMISSION_REVOKED: "ADMIN_PRIVILEGE_CHANGE",
-  BREAK_GLASS_USED: "BREAK_GLASS_USED",
-  CONTACT_VIEWED: "SENSITIVE_RECORD_ACCESS",
-  SENSITIVE_DATA_VIEWED: "SENSITIVE_RECORD_ACCESS",
-  VERIFICATION_DOCUMENT_DOWNLOADED: "SENSITIVE_RECORD_ACCESS",
-  DOCUMENT_DOWNLOADED: "SENSITIVE_RECORD_ACCESS",
-  EVIDENCE_DOWNLOADED: "SENSITIVE_RECORD_ACCESS",
-  MARKETING_LEAD_CONTACT_VIEWED: "SENSITIVE_RECORD_ACCESS",
-  SEARCH_PERFORMED: "PROFILE_SEARCH",
-  SENSITIVE_SEARCH_PERFORMED: "PROFILE_SEARCH",
-  MUTUAL_MATCH_SEARCH_PERFORMED: "PROFILE_SEARCH",
-  SECURITY_SETTINGS_CHANGED: "SECURITY_CONFIG_CHANGED",
-  SOC_CONFIG_CHANGED: "SECURITY_CONFIG_CHANGED",
-};
-
-export function mirroredEventType(action: AuditAction): SecurityEventType | null {
-  return MIRRORED[action] ?? null;
-}
-
-export async function mirrorAuditAction(action: AuditAction, adminId: string | null | undefined): Promise<void> {
-  const eventType = mirroredEventType(action);
-  if (!eventType || !adminId) return; // an event with no acting admin could not be attributed or counted per person
-  await safe({ eventType, source: "audit", adminId, outcome: "RECORDED", meta: { action } });
-}
+// Lives in the light module (imported by the audit writer, which nearly every route uses); re-exported here for the screens and tests.
+export { mirrorAuditAction, mirroredEventType } from "@/lib/soc/light-events";

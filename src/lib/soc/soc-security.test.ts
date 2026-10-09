@@ -294,7 +294,11 @@ describe("SOC code stays inside its lane", () => {
 
   it("writes only SOC-owned tables, plus the specific, reviewed containment targets", () => {
     for (const f of socLib) {
-      for (const m of code(f).matchAll(/prisma\.(\w+)\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g)) expect(m[1], `${rel(f)} writes ${m[1]}`).toMatch(ALLOWED_WRITES);
+      for (const m of code(f).matchAll(/prisma\.(\w+)\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/g)) {
+        // the security event ledger is written by exactly one SOC module: the light event path
+        if (m[1] === "securityEvent" && rel(f) === "lib/soc/light-events.ts" && m[2] === "create") continue;
+        expect(m[1], `${rel(f)} writes ${m[1]}`).toMatch(ALLOWED_WRITES);
+      }
     }
   });
 
@@ -399,5 +403,34 @@ describe("the documentation stays in step with the code", () => {
       expect(text, f).not.toMatch(/(password|secret|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9+/_-]{12,}/i);
       expect(text, f).not.toMatch(/sk_live_[A-Za-z0-9]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----/);
     }
+  });
+});
+
+describe("modules imported by hundreds of routes stay small", () => {
+  const importsOf = (rel2: string) => [...code(join(ROOT, rel2)).matchAll(/(?:from|import\()\s*"([^"]+)"/g)].map((m) => m[1]).sort();
+
+  it("the audit writer and the rate limiter reach the event ledger only through the light module — never the event bus or the risk engine", () => {
+    for (const f of ["src/lib/audit.ts", "src/lib/ops/rate-limit-persistent.ts"]) {
+      const imports = importsOf(f);
+      expect(imports.some((i) => /event-bus|soc\/events|risk\//.test(i)), f).toBe(false);
+      expect(imports, f).toContain("@/lib/soc/light-events");
+    }
+  });
+
+  it("the light module imports only the database client, the hash helper and the redaction helper", () => {
+    expect(importsOf("src/lib/soc/light-events.ts")).toEqual(["@/lib/prisma", "@/lib/security/hash", "@/lib/security/redact", "@prisma/client"].sort());
+    expect(importsOf("src/lib/security/hash.ts")).toEqual(["crypto"]);
+  });
+
+  it("route-guard pulls in the session policy only (small), not the SOC services", () => {
+    const imports = importsOf("src/lib/route-guard.ts");
+    expect(imports.filter((i) => i.startsWith("@/lib/soc/"))).toEqual(["@/lib/soc/session-policy"]);
+    expect(importsOf("src/lib/soc/session-policy.ts").some((i) => /event-bus|risk\//.test(i))).toBe(false);
+  });
+
+  it("abusive-request events keep their hashed network address, so network rules can group them", () => {
+    const bus = code(join(SRC, "lib", "security", "event-bus.ts"));
+    const authTypes = bus.slice(bus.indexOf("const AUTH_TYPES"), bus.indexOf("]);", bus.indexOf("const AUTH_TYPES")));
+    for (const t of ["RATE_LIMIT_EXCEEDED", "WEBHOOK_SIGNATURE_FAILURE", "WEBHOOK_REPLAY_ATTEMPT"]) expect(authTypes, t).toContain(`"${t}"`);
   });
 });

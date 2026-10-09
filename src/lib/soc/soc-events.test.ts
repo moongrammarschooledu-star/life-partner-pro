@@ -10,10 +10,12 @@ let bucketCount = 1;
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/security/event-bus", () => ({ publishSecurityEvent: vi.fn(async (e: Record<string, unknown>) => { published.push(e); return { recorded: true }; }) }));
-vi.mock("@/lib/prisma", () => ({ prisma: { $queryRaw: vi.fn(async () => [{ count: bucketCount }]), rateLimitBucket: { deleteMany: vi.fn() } } }));
+const ledger: Array<Record<string, unknown>> = [];
+vi.mock("@/lib/prisma", () => ({ prisma: { $queryRaw: vi.fn(async () => [{ count: bucketCount }]), rateLimitBucket: { deleteMany: vi.fn() }, securityEvent: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { ledger.push(data); return data; }) } } }));
 
 const events = await import("./events");
 const ai = await import("./ai-security");
+const { hashIdentifier } = await import("@/lib/security/hash");
 const { enforcePersistentLimit } = await import("@/lib/ops/rate-limit-persistent");
 
 const ROOT = join(__dirname, "..", "..", "..");
@@ -21,6 +23,7 @@ const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 beforeEach(() => {
   published.length = 0;
+  ledger.length = 0;
   bucketCount = 1;
 });
 
@@ -84,7 +87,7 @@ describe("audit actions mirrored into the event feed", () => {
     const audit = src("src/lib/audit.ts");
     const set = audit.slice(audit.indexOf("MIRROR_PREFILTER: ReadonlySet"), audit.indexOf("]);", audit.indexOf("MIRROR_PREFILTER: ReadonlySet")));
     const inAudit = [...set.matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]).sort();
-    const evSrc = src("src/lib/soc/events.ts");
+    const evSrc = src("src/lib/soc/light-events.ts");
     const map = evSrc.slice(evSrc.indexOf("const MIRRORED"), evSrc.indexOf("};", evSrc.indexOf("const MIRRORED")));
     const inEvents = [...map.matchAll(/^\s+([A-Z_]+):/gm)].map((m) => m[1]).sort();
     expect(inAudit).toEqual(inEvents);
@@ -93,8 +96,9 @@ describe("audit actions mirrored into the event feed", () => {
   it("an action with no acting admin is not mirrored", async () => {
     await events.mirrorAuditAction("REPORT_EXPORTED", null);
     await events.mirrorAuditAction("REPORT_EXPORTED", "admin-1");
-    expect(published).toHaveLength(1);
-    expect(published[0]).toMatchObject({ eventType: "BULK_EXPORT", adminId: "admin-1", meta: { action: "REPORT_EXPORTED" } });
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]).toMatchObject({ eventType: "BULK_EXPORT", adminId: "admin-1", source: "audit" });
+    expect(JSON.parse(String(ledger[0].meta))).toEqual({ action: "REPORT_EXPORTED" });
   });
 });
 
@@ -109,14 +113,16 @@ describe("a refused-request flood does not become a write flood", () => {
     bucketCount = 400;
     expect((await enforcePersistentLimit(req(), "login", 10, 60_000))?.status).toBe(429);
     await new Promise((r) => setTimeout(r, 20));
-    expect(published.filter((p) => p.eventType === "RATE_LIMIT_EXCEEDED")).toHaveLength(1);
-    expect(published[0]).toMatchObject({ ip: "192.0.2.77", meta: { limit: "login" } });
+    expect(ledger.filter((p) => p.eventType === "RATE_LIMIT_EXCEEDED")).toHaveLength(1);
+    expect(ledger[0].ipHash).toBe(hashIdentifier("192.0.2.77")); // the network is stored only as a salted hash
+    expect(JSON.stringify(ledger[0])).not.toContain("192.0.2.77");
+    expect(JSON.parse(String(ledger[0].meta))).toEqual({ limit: "login" });
   });
 
   it("an allowed request records nothing", async () => {
     bucketCount = 3;
     expect(await enforcePersistentLimit(req(), "login", 10, 60_000)).toBeNull();
-    expect(published).toHaveLength(0);
+    expect(ledger).toHaveLength(0);
   });
 });
 

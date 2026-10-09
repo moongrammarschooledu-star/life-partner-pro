@@ -64,8 +64,8 @@ export async function enforcePersistentLimit(req: Request, name: string, limit: 
 
 async function reportRateLimit(name: string, ip: string | null, subject: string | null): Promise<void> {
   try {
-    const { publishRateLimitExceeded } = await import("@/lib/soc/events");
-    await publishRateLimitExceeded({ name, ip, subject });
+    const { recordRateLimitExceeded } = await import("@/lib/soc/light-events");
+    await recordRateLimitExceeded({ name, ip, subject });
   } catch {
     /* fail-open: monitoring never changes the 429 */
   }

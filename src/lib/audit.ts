@@ -29,11 +29,11 @@ export async function writeAudit(params: {
     },
   });
   // STEP 32 — selected high-signal actions (exports, privilege changes, break-glass, sensitive access, searches, security configuration)
-  // are forwarded once, minimally, to the security event bus. Dynamic import: the bus must not be loaded for the ordinary audit write,
-  // and it can never throw back into the caller.
+  // are forwarded once, minimally, to the security event ledger through a LIGHT module (database client + hash + redaction only — never the
+  // event bus, because this file is imported by nearly every route). Dynamic import, and it can never throw back into the caller.
   if (params.adminId && MIRROR_PREFILTER.has(params.action)) {
     try {
-      const { mirrorAuditAction } = await import("@/lib/soc/events");
+      const { mirrorAuditAction } = await import("@/lib/soc/light-events");
       await mirrorAuditAction(params.action, params.adminId);
     } catch {
       /* fail-open */
@@ -41,7 +41,7 @@ export async function writeAudit(params: {
   }
 }
 
-// Cheap pre-check so the common actions never touch the SOC module at all (kept in step with MIRRORED in soc/events.ts by a test).
+// Cheap pre-check so the common actions never touch the SOC module at all (kept in step with MIRRORED in soc/light-events.ts by a test).
 const MIRROR_PREFILTER: ReadonlySet<AuditAction> = new Set<AuditAction>([
   "REPORT_EXPORTED", "SENSITIVE_DATA_EXPORTED", "FINANCIAL_REPORT_EXPORTED", "DATA_EXPORT_CREATED", "DOCUMENT_EXPORTED", "CRM_EXPORT",
   "MARKETING_LEAD_EXPORTED", "ENGAGEMENT_EXPORT", "ANALYTICS_REPORT_EXPORTED", "SEARCH_EXPORT_PERFORMED", "ADMIN_USER_CREATED",
