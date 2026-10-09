@@ -33,11 +33,8 @@ CREATE TABLE "SocSettings" (
     "sessionIdleMinutes" INTEGER,
     "maxConcurrentSessions" INTEGER,
     "stepUpForHighRisk" BOOLEAN NOT NULL DEFAULT true,
-    "enforceMfaPrivileged" BOOLEAN NOT NULL DEFAULT false,
     "accessLogRetentionDays" INTEGER NOT NULL DEFAULT 365,
     "alertRetentionDays" INTEGER NOT NULL DEFAULT 730,
-    "lastDetectionAt" TIMESTAMP(3),
-    "lastDetectionSummary" JSONB,
     "updatedById" TEXT,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
