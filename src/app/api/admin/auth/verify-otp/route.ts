@@ -8,8 +8,16 @@ import { enforcePersistentLimit } from "@/lib/ops/rate-limit-persistent";
 // Second step of the 2FA login flow — see precheck/route.ts and
 // src/lib/auth.ts's authorize(), which is the actual enforcement point.
 export async function POST(req: Request) {
-  const { challengeId, code } = (await req.json()) as { challengeId?: string; code?: string };
-  if (!challengeId || !code) {
+  // STEP 33 — this route is reachable before sign-in: a malformed body or a non-string value must answer 400, never throw (a thrown error is
+  // a 500 that is also written to the error log, which an anonymous caller could then flood).
+  let body: { challengeId?: unknown; code?: unknown };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ error: "Missing challenge or code." }, { status: 400 });
+  }
+  const { challengeId, code } = body;
+  if (typeof challengeId !== "string" || typeof code !== "string" || !challengeId || !code || code.length > 32 || challengeId.length > 64) {
     return NextResponse.json({ error: "Missing challenge or code." }, { status: 400 });
   }
 

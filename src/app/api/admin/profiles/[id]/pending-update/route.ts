@@ -4,11 +4,14 @@ import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
 import { setVerificationStatus } from "@/lib/verification/status";
 import { notifyProfileUpdateDecision } from "@/lib/notifications/events";
+import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin("profile:edit");
     const { id } = await params;
+    // STEP 33 — approving an applicant's change request edits the profile; the same assignment rule as the profile editor applies.
+    await assertProfileAssignmentAccess(admin, id);
     const { decision } = await req.json(); // "approve" | "reject"
 
     const pending = await prisma.pendingUpdate.findUnique({ where: { profileId: id } });

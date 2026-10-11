@@ -45,3 +45,16 @@ describe("requireApplicantProfileId", () => {
     expect(await requireApplicantProfileId()).toBeNull();
   });
 });
+
+// STEP 33 — session revocation cannot be sidestepped by dropping the session-id cookie.
+describe("requireApplicantProfileId — the session cookie is required", () => {
+  it("returns null when only the signed profile cookie is present", async () => {
+    cookieValues = { lpp_session: "valid-token" };
+    expect(await requireApplicantProfileId()).toBeNull();
+  });
+
+  it("returns null when the session-id cookie is forged", async () => {
+    cookieValues = { lpp_session: "valid-token", lpp_sid: "forged" };
+    expect(await requireApplicantProfileId()).toBeNull();
+  });
+});

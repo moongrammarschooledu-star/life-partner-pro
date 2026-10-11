@@ -22,12 +22,20 @@ interface SendResult {
   destinationMasked: string;
 }
 
-export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", destination: string): Promise<SendResult> {
+export type OtpPurpose = "VERIFY" | "LOGIN";
+
+export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", destination: string, purpose: OtpPurpose = "VERIFY"): Promise<SendResult> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   const expiryMinutes = settings?.otpExpiryMinutes ?? 10;
   const maxAttempts = settings?.otpMaxAttempts ?? 5;
 
-  const code = channel === "PHONE" ? generateOtpCode() : generateEmailToken();
+  // STEP 33 — a sign-in code is a short number the person types, and only the NEWEST one may work: any earlier pending code for this
+  // profile and channel is retired first, so a request-and-wait loop can never leave several valid codes lying in a mailbox.
+  if (purpose === "LOGIN") {
+    await prisma.otpVerification.updateMany({ where: { profileId, channel: channel as OtpChannel, status: "PENDING" }, data: { status: "EXPIRED" } });
+  }
+
+  const code = channel === "PHONE" || purpose === "LOGIN" ? generateOtpCode() : generateEmailToken();
   const codeHash = await bcrypt.hash(code, 10);
   const destinationMasked = channel === "PHONE" ? maskPhone(destination) : maskEmail(destination);
 
@@ -46,22 +54,26 @@ export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", des
     channel: channel === "PHONE" ? "SMS" : "EMAIL",
     to: destination,
     profileId,
-    subject: channel === "EMAIL" ? "Verify your Life Partner Pro email" : undefined,
+    subject: purpose === "LOGIN" ? "Your Life Partner Pro sign-in code" : channel === "EMAIL" ? "Verify your Life Partner Pro email" : undefined,
     body:
-      channel === "PHONE"
-        ? `Your Life Partner Pro verification code is ${code}. It expires in ${expiryMinutes} minutes.`
-        : `Your Life Partner Pro email verification code is ${code}. It expires in ${expiryMinutes} minutes.`,
+      purpose === "LOGIN"
+        ? `Your Life Partner Pro sign-in code is ${code}. It expires in ${expiryMinutes} minutes. If you did not try to sign in, you can ignore this message and nobody will be signed in.`
+        : channel === "PHONE"
+          ? `Your Life Partner Pro verification code is ${code}. It expires in ${expiryMinutes} minutes.`
+          : `Your Life Partner Pro email verification code is ${code}. It expires in ${expiryMinutes} minutes.`,
   });
 
-  await writeAudit({ action: "OTP_SENT", targetProfileId: profileId, meta: { channel } });
-  await publishSecurityEvent({ eventType: "OTP_REQUESTED", profileId, source: "otp-service", meta: { channel } });
+  await writeAudit({ action: "OTP_SENT", targetProfileId: profileId, meta: { channel, purpose } });
+  await publishSecurityEvent({ eventType: "OTP_REQUESTED", profileId, source: purpose === "LOGIN" ? "applicant-login" : "otp-service", meta: { channel, purpose } });
 
   return { otpId: otp.id, destinationMasked };
 }
 
 export type ConfirmOutcome = { ok: true } | { ok: false; error: string };
 
-export async function confirmOtp(profileId: string, channel: "PHONE" | "EMAIL", submittedCode: string): Promise<ConfirmOutcome> {
+// The code check itself: finds the newest pending code, enforces expiry and the attempt limit, compares, and marks the code used on success.
+// Shared by verification (which then records that the contact is verified) and sign-in (which must not).
+async function checkOtp(profileId: string, channel: "PHONE" | "EMAIL", submittedCode: string, source: string): Promise<ConfirmOutcome> {
   const otp = await prisma.otpVerification.findFirst({
     where: { profileId, channel: channel as OtpChannel, status: "PENDING" },
     orderBy: { createdAt: "desc" },
@@ -79,17 +91,29 @@ export async function confirmOtp(profileId: string, channel: "PHONE" | "EMAIL", 
 
   const matches = await bcrypt.compare(submittedCode.trim(), otp.codeHash);
   if (!matches) {
-    const attempts = otp.attempts + 1;
-    await prisma.otpVerification.update({
-      where: { id: otp.id },
-      data: { attempts, status: attempts >= otp.maxAttempts ? "FAILED" : "PENDING" },
-    });
+    // STEP 33 — an atomic increment: parallel wrong guesses must each be counted, or the attempt limit could be outrun by sending them together.
+    const bumped = await prisma.otpVerification.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+    if (bumped.attempts >= bumped.maxAttempts) await prisma.otpVerification.update({ where: { id: otp.id }, data: { status: "FAILED" } });
     await writeAudit({ action: "OTP_FAILED", targetProfileId: profileId, meta: { channel } });
-    await publishSecurityEvent({ eventType: "OTP_FAILED", profileId, source: "otp-service", outcome: "WRONG_CODE", meta: { channel } });
+    await publishSecurityEvent({ eventType: "OTP_FAILED", profileId, source, outcome: "WRONG_CODE", meta: { channel } });
     return { ok: false, error: "Incorrect code. Please try again." };
   }
 
   await prisma.otpVerification.update({ where: { id: otp.id }, data: { status: "VERIFIED", verifiedAt: new Date() } });
+  return { ok: true };
+}
+
+// STEP 33 — completes an applicant sign-in. Only proves control of the e-mail address: it deliberately does NOT touch the verification
+// record, the completeness figure or send an "e-mail verified" notice, none of which a routine sign-in should produce.
+export async function confirmLoginOtp(profileId: string, submittedCode: string): Promise<ConfirmOutcome> {
+  const outcome = await checkOtp(profileId, "EMAIL", submittedCode.slice(0, 64), "applicant-login");
+  if (outcome.ok) await writeAudit({ action: "OTP_VERIFIED", targetProfileId: profileId, meta: { channel: "EMAIL", purpose: "LOGIN" } });
+  return outcome;
+}
+
+export async function confirmOtp(profileId: string, channel: "PHONE" | "EMAIL", submittedCode: string): Promise<ConfirmOutcome> {
+  const checked = await checkOtp(profileId, channel, submittedCode, "otp-service");
+  if (!checked.ok) return checked;
 
   const now = new Date();
   await prisma.profileVerification.upsert({

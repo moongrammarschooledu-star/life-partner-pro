@@ -113,5 +113,9 @@ export async function getHealthReport(opts: { detail: boolean }): Promise<Health
   const values = Object.values(checks).map((c) => c.status);
   const status: HealthReport["status"] = checks.database.status === "down" || checks.authentication.status === "down" ? "down" : values.includes("degraded") || values.includes("down") ? "degraded" : "ok";
 
+  // STEP 33 — the public view must not tell an anonymous caller which optional providers (e-mail, SMS, WhatsApp, file storage) are not set up.
+  // The overall status above already counted every check; only the per-dependency listing is trimmed. The admin view keeps everything.
+  if (!opts.detail) for (const key of Object.keys(checks)) if (checks[key].status === "not_configured") delete checks[key];
+
   return { status, timestamp: new Date().toISOString(), version: cfg.commitSha ? `${cfg.appVersion}+${cfg.commitSha.slice(0, 7)}` : cfg.appVersion, environment: cfg.appEnv, checks };
 }

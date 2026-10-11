@@ -39,7 +39,7 @@ const SESSION_ONLY_ADMIN = new Set(["/api/admin/view-as/status"]);
 // Non-admin routes that are intentionally reachable without a session. Each
 // has its own protection (rate limit, signature, secret, OTP, honeypot…).
 const PUBLIC_ROUTES = new Set([
-  "/api/register", "/api/support", "/api/update-request", "/api/my-status",
+  "/api/register", "/api/support", "/api/update-request", "/api/my-status", "/api/my-status/verify", // STEP 33 — sign-in step two (rate-limited, needs the e-mailed code)
   "/api/verify/email/send", "/api/verify/email/confirm", "/api/verify/phone/send", "/api/verify/phone/confirm",
   "/api/health", "/api/health/live", "/api/health/ready", "/api/system-state", "/api/client-errors",
   "/api/webhooks/payments/[provider]", "/api/webhooks/notifications", "/api/webhooks/verification/[provider]",

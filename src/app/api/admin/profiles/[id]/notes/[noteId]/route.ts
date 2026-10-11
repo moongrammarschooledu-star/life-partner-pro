@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
+import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 
 // Closes a confirmed gap: previously any admin holding the flat "note:add"
 // permission (all of SUPER_ADMIN/ADMIN/STAFF) could pin or hard-delete ANY
@@ -16,6 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const admin = await requireAdmin("note:add");
     const { id, noteId } = await params;
+    await assertProfileAssignmentAccess(admin, id);
     const { pinned } = await req.json();
 
     const note = await prisma.profileNote.findFirst({ where: { id: noteId, profileId: id } });
@@ -33,6 +35,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   try {
     const admin = await requireAdmin("note:add");
     const { id, noteId } = await params;
+    await assertProfileAssignmentAccess(admin, id);
 
     const note = await prisma.profileNote.findFirst({ where: { id: noteId, profileId: id } });
     if (!note) throw new ApiError(404, "Note not found");

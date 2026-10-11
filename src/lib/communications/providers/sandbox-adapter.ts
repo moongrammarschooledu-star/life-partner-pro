@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "crypto";
 import type { DeliveryStatus, NotificationChannel } from "@prisma/client";
-import { defaultBulk, normalizePhone, parseEnvelopeEvents, redactForLog, templateToText, validateEmailAddress, verifyEnvelope } from "@/lib/communications/providers/shared";
+import { bodyForLog, defaultBulk, maskRecipientForLog, normalizePhone, parseEnvelopeEvents, templateToText, validateEmailAddress, verifyEnvelope } from "@/lib/communications/providers/shared";
 import type { CommunicationProvider, EnvMap, OutboundMessage, ParsedWebhookEvent, ProviderHealth, RecipientValidation, SendResult, WebhookRequestData, WebhookVerification } from "@/lib/communications/providers/types";
 
 // SandboxProviderAdapter - the "nothing leaves the system" provider. It is what runs when no real provider is configured, and
@@ -32,7 +32,7 @@ export class SandboxProviderAdapter implements CommunicationProvider {
     const check = this.validateRecipient(msg.to);
     if (!check.valid) return { ok: false, failureClass: "PERMANENT", rejected: true, error: `INVALID_RECIPIENT:${check.reason}` };
     // Console visibility for developers; OTP-like content is redacted in production unless COMMUNICATION_DEBUG_OTP=true.
-    console.log(`[communication:sandbox:${this.channel}] to=${check.normalized} :: ${msg.subject ?? ""} :: ${redactForLog(msg.body, msg.purpose, this.env)}`);
+    console.log(`[communication:sandbox:${this.channel}] to=${maskRecipientForLog(check.normalized)} :: ${msg.subject ?? ""} :: ${bodyForLog(msg.body, msg.purpose, this.env)}`);
     return { ok: true, providerMessageId: `sandbox-${this.channel.toLowerCase()}-${randomUUID()}` };
   }
 

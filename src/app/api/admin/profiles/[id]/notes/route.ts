@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { writeAudit } from "@/lib/audit";
+import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin("note:add");
     const { id } = await params;
+    // STEP 33 — "No Assignment = No Record Access": an assignment-scoped matchmaker may only add notes to a profile assigned to them.
+    await assertProfileAssignmentAccess(admin, id);
     const { text, proposalId } = await req.json();
 
     if (!text || typeof text !== "string" || !text.trim()) {

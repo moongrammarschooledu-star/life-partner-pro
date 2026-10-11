@@ -116,6 +116,26 @@ export function templateToText(msg: OutboundTemplateMessage): OutboundMessage {
 
 // Console/log output must never contain a raw one-time code in production (spec §19). Outside production it stays readable so
 // a developer can complete a flow; COMMUNICATION_DEBUG_OTP=true re-enables it deliberately (e.g. before a real SMS provider exists).
+// STEP 33 — a log line names the recipient only in masked form (first letter + domain, or the last two digits), and in production it never
+// carries a message body at all: a body can hold names, proposal details or links that belong to the applicant, not to the server logs.
+export function maskRecipientForLog(to: string | null | undefined): string {
+  const v = (to ?? "").trim();
+  if (!v) return "***";
+  if (v.includes("@")) {
+    const [local, ...rest] = v.split("@");
+    return `${local.slice(0, 1)}***@${rest.join("@")}`;
+  }
+  const digits = v.replace(/\D/g, "");
+  return digits.length > 4 ? `***${digits.slice(-2)}` : "***";
+}
+
+export function bodyForLog(body: string, purpose: string | undefined, env: Record<string, string | undefined> = process.env): string {
+  const production = (env.APP_ENV ?? env.VERCEL_ENV ?? env.NODE_ENV) === "production";
+  // COMMUNICATION_DEBUG_OTP=true is the owner's deliberate switch to read codes in the console while no real provider exists; it is honoured as before.
+  if (production && env.COMMUNICATION_DEBUG_OTP !== "true") return "[body not logged in production]";
+  return redactForLog(body, purpose, env);
+}
+
 export function redactForLog(body: string, purpose: string | undefined, env: Record<string, string | undefined> = process.env): string {
   const production = (env.APP_ENV ?? env.VERCEL_ENV ?? env.NODE_ENV) === "production";
   const isOtp = purpose === "OTP" || purpose === "VERIFICATION";

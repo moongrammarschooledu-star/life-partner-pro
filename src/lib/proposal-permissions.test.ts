@@ -93,3 +93,39 @@ describe("applyContactPermissionAction — applicant actor", () => {
     expect(proposals.get("prop1")!.status).toBe("CONTACT_APPROVED");
   });
 });
+
+// STEP 33 — consent to contact needs mutual interest first and an open proposal; it must not rewind a later status.
+describe("applyContactPermissionAction — proposal state guard (STEP 33)", () => {
+  it.each(["DRAFT", "PROPOSAL_CREATED", "SENT", "WAITING_FOR_PROFILE_A", "WAITING_FOR_PROFILE_B", "BOTH_REVIEWING", "ON_HOLD", "REJECTED", "CLOSED", "ARCHIVED", "FINALIZED", "MARRIED"])(
+    "refuses to grant or request while the proposal is %s",
+    async (status) => {
+      proposals.get("prop1")!.status = status;
+      await expect(applyContactPermissionAction({ proposalId: "prop1", profileId: "me", action: "approve", actor: { type: "applicant" } })).rejects.toMatchObject({ status: 409 });
+      await expect(applyContactPermissionAction({ proposalId: "prop1", profileId: "me", action: "request", actor: { type: "admin", adminId: "admin1" } })).rejects.toMatchObject({ status: 409 });
+      expect(permissions).toEqual([]);
+      expect(proposals.get("prop1")!.status).toBe(status);
+    }
+  );
+
+  it("two applicants consenting on a REJECTED proposal cannot turn it into CONTACT_APPROVED", async () => {
+    proposals.get("prop1")!.status = "REJECTED";
+    for (const profileId of ["me", "other"]) {
+      await expect(applyContactPermissionAction({ proposalId: "prop1", profileId, action: "approve", actor: { type: "applicant" } })).rejects.toMatchObject({ status: 409 });
+    }
+    expect(proposals.get("prop1")!.status).toBe("REJECTED");
+  });
+
+  it("withdrawing consent is always allowed, whatever state the proposal is in", async () => {
+    await applyContactPermissionAction({ proposalId: "prop1", profileId: "me", action: "approve", actor: { type: "applicant" } });
+    proposals.get("prop1")!.status = "ARCHIVED";
+    await applyContactPermissionAction({ proposalId: "prop1", profileId: "me", action: "revoke", actor: { type: "applicant" } });
+    expect(permissions[0].revokedAt).not.toBeNull();
+  });
+
+  it("re-granting after a meeting is scheduled does not pull the proposal back to CONTACT_APPROVED", async () => {
+    proposals.get("prop1")!.status = "MEETING_SCHEDULED";
+    await applyContactPermissionAction({ proposalId: "prop1", profileId: "me", action: "approve", actor: { type: "applicant" } });
+    await applyContactPermissionAction({ proposalId: "prop1", profileId: "other", action: "approve", actor: { type: "applicant" } });
+    expect(proposals.get("prop1")!.status).toBe("MEETING_SCHEDULED");
+  });
+});

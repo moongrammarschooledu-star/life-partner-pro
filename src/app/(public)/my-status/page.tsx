@@ -35,6 +35,9 @@ export default function MyStatusPage() {
   const [profileCode, setProfileCode] = useState("");
   const [email, setEmail] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
+  // STEP 33 — sign-in is two steps: Profile ID + email, then the one-time code e-mailed to that address.
+  const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   function load() {
     setLoading(true);
@@ -61,6 +64,31 @@ export default function MyStatusPage() {
         show(json.error ?? "Profile not found.", "error");
         return;
       }
+      if (json.otpRequired) {
+        setOtpSentTo(json.destinationMasked ?? "your email");
+        setCode("");
+        return;
+      }
+      setData(json);
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
+  async function verifyCode() {
+    setLookingUp(true);
+    try {
+      const res = await fetch("/api/my-status/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileCode, email, code }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        show(json.error ?? "That code is not valid.", "error");
+        return;
+      }
+      setOtpSentTo(null);
       setData(json);
     } finally {
       setLookingUp(false);
@@ -75,11 +103,33 @@ export default function MyStatusPage() {
     );
   }
 
+  if (!data && otpSentTo) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
+        <h1 className="font-heading text-2xl font-semibold">Check your email</h1>
+        <p className="mt-2 text-sm text-muted">We sent a sign-in code to {otpSentTo}. Enter it below. The code expires in a few minutes; if it does not arrive, check your spam folder or go back and ask for a new one.</p>
+        <Card className="mt-6">
+          <CardContent className="space-y-4">
+            <Field label="Sign-in code" htmlFor="otpCode">
+              <Input id="otpCode" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={verifyCode} disabled={lookingUp || code.trim().length < 4}>
+                {lookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Sign in
+              </Button>
+              <Button variant="outline" onClick={() => { setOtpSentTo(null); setCode(""); }} disabled={lookingUp}>Back</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!data) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
         <h1 className="font-heading text-2xl font-semibold">My Profile Status</h1>
-        <p className="mt-2 text-sm text-muted">Enter your Profile ID and the email you registered with to view your status.</p>
+        <p className="mt-2 text-sm text-muted">Enter your Profile ID and the email you registered with. We will email you a sign-in code to confirm it is you.</p>
         <Card className="mt-6">
           <CardContent className="space-y-4">
             <Field label="Profile ID" htmlFor="profileCode">
@@ -89,7 +139,7 @@ export default function MyStatusPage() {
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </Field>
             <Button onClick={lookup} disabled={lookingUp || !profileCode || !email}>
-              {lookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} View My Status
+              {lookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Send me a sign-in code
             </Button>
           </CardContent>
         </Card>
