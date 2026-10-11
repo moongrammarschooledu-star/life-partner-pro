@@ -41,6 +41,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
   if (!provider.verifyWebhook(rawBody, signatureHeader)) {
     // Counted so a spoofing/probing spike is visible on System Health → Security.
     void bumpCounter("security:webhook-signature");
+    // STEP 32 — also a security event for the SOC detection rules (provider name + hashed network only; fail-open).
+    void import("@/lib/soc/events").then((m) => m.publishWebhookSignatureFailure({ provider: `payments-${providerName}`, headers: req.headers, reason: "BAD_SIGNATURE" })).catch(() => undefined);
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 

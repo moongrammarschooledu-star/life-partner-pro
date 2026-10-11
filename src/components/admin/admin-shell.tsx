@@ -81,6 +81,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/marketing", label: "Marketing & Lead Generation", icon: Megaphone, permission: "marketing:view" },
   { href: "/admin/engagement", label: "Engagement & Retention", icon: HeartHandshake, permission: "engagement:view" },
   { href: "/admin/executive", label: "Executive Dashboard", icon: Gauge, permission: "analytics:dashboard:view" },
+  { href: "/admin/security-operations", label: "Security Operations", icon: ShieldAlert, permission: "soc:view" },
   { href: "/admin/analytics", label: "Analytics & BI", icon: LineChart, permission: "analytics:view" },
   { href: "/admin/matching", label: "Matching Center", icon: Sparkles, permission: "match:run" },
   { href: "/admin/candidate-discovery", label: "Candidate Discovery", icon: SearchCheck, permission: "search:view" },

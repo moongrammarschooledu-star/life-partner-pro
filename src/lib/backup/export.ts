@@ -142,6 +142,7 @@ export async function createDatabaseBackup(params: { trigger: "SCHEDULED" | "MAN
     const reason = redactString(error instanceof Error ? error.message : String(error), 400);
     await prisma.backupRun.update({ where: { id: run.id }, data: { status: "FAILED", completedAt: new Date(), failureReason: reason } });
     logger.error("backup_failed", { backupCode: run.backupCode, reason });
+    void import("@/lib/soc/events").then((m) => m.publishBackupFailure({ kind: "DATABASE", reason })).catch(() => undefined); // STEP 32 — SOC signal (fail-open)
     return { status: "FAILED", backupId: run.id, backupCode: run.backupCode, message: reason };
   }
 }
@@ -157,7 +158,7 @@ export async function pruneBackups(): Promise<number> {
   );
   for (const id of ids) {
     const run = runs.find((r) => r.id === id)!;
-    if (run.storageUrl) await deleteBackupObject(run.storageUrl);
+    if (run.storageUrl) await deleteBackupObject(run.storageUrl, "RETENTION_POLICY");
     await prisma.backupRun.update({ where: { id }, data: { prunedAt: new Date(), storageUrl: null } });
   }
   return ids.length;

@@ -73,13 +73,18 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "analytics.alerts.enabled", description: "Evaluate analytics alert rules and notify recipients", sensitive: true },
   { key: "analytics.forecast.enabled", description: "Forecast estimates (statistical, aggregate only, never about an individual)", sensitive: true },
   { key: "ai.analytics_assistant.enabled", description: "AI analytics assistant: answers questions from the validated metric catalog (never SQL)", sensitive: true },
+  // STEP 32 — security operations center. Every key defaults OFF.
+  { key: "soc.enabled", description: "Security Operations Center master switch: overview, alerts, incidents, rules, admin security, backups, restore drills, disaster recovery and security configuration screens", sensitive: true },
+  { key: "soc.detection.enabled", description: "Run the threat-detection rules (daily job and manual run) and raise security alerts; never acts on a person automatically", sensitive: true },
+  { key: "soc.escalation.enabled", description: "Escalate unacknowledged security alerts to the next tier with an in-app notice (code, severity and category only)", sensitive: true },
+  { key: "soc.restore_drills.enabled", description: "Record restore drills and reviewer sign-off (the app never restores into production)", sensitive: true },
   { key: "engagement.loyalty.enabled", description: "Referral link, referral history and reward granting through the existing referral/credit system", sensitive: true },
   { key: "ai.engagement_assistant.enabled", description: "AI engagement summaries and reminder drafts from server-computed platform activity (never sends, approves or predicts; human review required)", sensitive: true },
   { key: "ai.marketing_assistant.enabled", description: "AI marketing copy drafts from an approved phrase library (never launches, spends or approves; human review required)", sensitive: true },
 ];
 
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && d.key !== "documents.ocr.enabled"]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && !d.key.startsWith("soc.") && d.key !== "documents.ocr.enabled"]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

@@ -21,6 +21,8 @@ export async function POST(req: Request) {
   if (!secret) return NextResponse.json({ error: "Webhook is not configured" }, { status: 503 });
   const signature = req.headers.get("x-webhook-signature");
   if (!verifyWebhookSignature(rawBody, signature, secret)) {
+    // STEP 32 — a failed signature is a SOC signal (fail-open).
+    await import("@/lib/soc/events").then((m) => m.publishWebhookSignatureFailure({ provider: "notifications", headers: req.headers, reason: "BAD_SIGNATURE" })).catch(() => undefined);
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 

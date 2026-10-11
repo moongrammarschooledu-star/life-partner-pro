@@ -57,6 +57,7 @@ export async function runCopilot(admin: SessionAdmin, message: string, contextPr
     profileIds: contextProfileId ? [contextProfileId] : [],
     language: "en",
     extraCacheParts: { message },
+    userText: message,
     build: async (ctx) => {
       const routed = routeIntent(message, ctx.loaded[0]?.view.profileCode ?? null);
       if (routed.kind === "refusal") return { payload: composeCopilotPayload({ outputs: [], denied: [], refusal: routed.message }) };

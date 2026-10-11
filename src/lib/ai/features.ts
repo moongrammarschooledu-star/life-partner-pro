@@ -493,6 +493,7 @@ export async function runAnalyticsAssistant(
   return runAiRequest({
     admin,
     feature: "ANALYTICS_ASSISTANT",
+    userText: input.question,
     profileIds: [],
     extraCacheParts: { mode: input.mode, q: (input.question ?? "").slice(0, 300), period: input.period ?? "", day: new Date().toISOString().slice(0, 13) },
     build: async () => {

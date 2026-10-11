@@ -59,6 +59,8 @@ export async function handleMarketingWebhook(provider: string, req: { rawBody: s
     if (burst >= REJECT_BURST_LIMIT) {
       await publishSecurityEvent({ eventType: "MARKETING_WEBHOOK_ANOMALY", source: "marketing-webhook", subject: source, outcome: "REVIEW_REQUIRED", meta: { rejected: burst }, idempotencyKey: `mkt-wh:${source}:${Math.floor(now / REJECT_BURST_WINDOW_MS)}` });
     }
+    // STEP 32 — every refused delivery is also a SOC signal (provider key + hashed network only; fail-open).
+    await import("@/lib/soc/events").then((m) => m.publishWebhookSignatureFailure({ provider: `marketing-${source}`, headers: req.headers, reason: (verification.reason ?? "INVALID").slice(0, 40) })).catch(() => undefined);
     return { status: 401, body: { error: "Invalid signature." } };
   }
 

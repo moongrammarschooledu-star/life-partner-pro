@@ -78,6 +78,7 @@ export async function mirrorFiles(params: { trigger: "SCHEDULED" | "MANUAL"; act
   } catch (error) {
     const reason = redactString(error instanceof Error ? error.message : String(error), 300);
     await prisma.backupRun.update({ where: { id: run.id }, data: { status: "FAILED", completedAt: new Date(), failureReason: reason } });
+    void import("@/lib/soc/events").then((m) => m.publishBackupFailure({ kind: "FILES", reason })).catch(() => undefined); // STEP 32 — SOC signal (fail-open)
     return { backupId: run.id, backupCode: run.backupCode, status: "FAILED" as const, copiedNow: 0, remaining: 0, failures: 0 };
   }
 }

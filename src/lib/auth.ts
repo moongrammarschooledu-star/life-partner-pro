@@ -65,6 +65,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
         const sid = session.id;
+        // STEP 32 — new-device signal and the optional concurrent-session cap (never blocks or fails the sign-in).
+        await import("@/lib/soc/session-policy").then((m) => m.onAdminSessionCreated({ adminId: admin.id, sessionId: sid, ip: ipAddress, userAgent })).catch(() => undefined);
         await prisma.adminUser.update({ where: { id: admin.id }, data: { lastLoginAt: new Date() } });
         await prisma.adminLoginHistory.create({
           data: { adminId: admin.id, email: admin.email, event: "SUCCESS", ipAddress, userAgent },

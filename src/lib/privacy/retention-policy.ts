@@ -180,6 +180,7 @@ export async function runDueRetentionActions() {
   await (await import("@/lib/communications/retention")).safeSweepCommunicationData(); // STEP 25 §39 — redact old message bodies (hold/case aware)
   await (await import("@/lib/documents/retention")).safeSweepDocumentRetention(); // STEP 26 §53 — redact old document bytes (hold/case aware)
   await (await import("@/lib/marketing/retention")).safeSweepMarketingRetention(); // STEP 29 §46 — anonymise stale unconverted leads / trim events (policy + hold aware)
+  await (await import("@/lib/soc/retention")).safeSweepSocRetention(); // STEP 32 — SOC access log and closed alerts (configured periods; incident evidence is never swept)
   await (await import("@/lib/analytics/retention")).safeSweepAnalyticsRetention(); // STEP 31 — analytics access log (policy aware; absent policy = keep)
   await (await import("@/lib/engagement/retention")).safeSweepEngagementRetention(); // STEP 30 — old engagement events / reminders / feedback (policy + hold aware)
   await flagUnautomatedCategories().catch(() => {});
