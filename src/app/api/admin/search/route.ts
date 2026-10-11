@@ -29,8 +29,10 @@ async function getHandler(req: Request) {
             { profileCode: { contains: q, mode: "insensitive" } },
             { city: { contains: q, mode: "insensitive" } },
             { profession: { profession: { contains: q, mode: "insensitive" } } },
-            { contact: { mobileNumber: { contains: q } } },
-            { contact: { whatsappNumber: { contains: q } } },
+            // STEP 33 — phone search is a contact-existence oracle; only for administrators who may see contact details.
+            ...(admin.permissions.includes("sensitive:contact:view")
+              ? [{ contact: { mobileNumber: { contains: q } } }, { contact: { whatsappNumber: { contains: q } } }]
+              : []),
           ],
         },
         select: {

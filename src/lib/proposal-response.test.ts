@@ -72,6 +72,41 @@ describe("submitProposalResponse", () => {
     await expect(submitProposalResponse("stranger", "LPP-RP-000001", "INTERESTED")).rejects.toThrow(/not found/i);
   });
 
+  // STEP 33 — a response may not rewind or re-open a proposal that staff have moved on.
+  it.each(["DRAFT", "ON_HOLD", "CONTACT_APPROVED", "FAMILIES_CONTACTED", "MEETING_REQUESTED", "MEETING_SCHEDULED", "MEETING_COMPLETED", "FURTHER_DISCUSSION", "ACCEPTED", "FINALIZED", "MARRIED", "REJECTED", "CLOSED", "ARCHIVED"])(
+    "refuses a response once the proposal is %s (409, nothing written)",
+    async (status) => {
+      proposals.get("LPP-RP-000001")!.status = status;
+      await expect(submitProposalResponse("me", "LPP-RP-000001", "INTERESTED")).rejects.toMatchObject({ status: 409 });
+      expect(responses.size).toBe(0);
+      expect(proposals.get("LPP-RP-000001")!.status).toBe(status);
+      expect(auditCalls).toEqual([]);
+    }
+  );
+
+  it("an applicant cannot re-open a proposal they or the other side declined", async () => {
+    await submitProposalResponse("me", "LPP-RP-000001", "NOT_INTERESTED", "LOCATION");
+    expect(proposals.get("LPP-RP-000001")!.status).toBe("REJECTED");
+    await expect(submitProposalResponse("me", "LPP-RP-000001", "INTERESTED")).rejects.toMatchObject({ status: 409 });
+    expect(proposals.get("LPP-RP-000001")!.status).toBe("REJECTED");
+  });
+
+  it("after both sides are interested a later response never moves the proposal backwards", async () => {
+    await submitProposalResponse("me", "LPP-RP-000001", "INTERESTED");
+    await submitProposalResponse("other", "LPP-RP-000001", "INTERESTED");
+    expect(proposals.get("LPP-RP-000001")!.status).toBe("BOTH_INTERESTED");
+    await submitProposalResponse("me", "LPP-RP-000001", "NEED_MORE_INFO");
+    expect(proposals.get("LPP-RP-000001")!.status).toBe("BOTH_INTERESTED");
+  });
+
+  it("while a contact request is pending an applicant can still withdraw (-> REJECTED) but not rewind", async () => {
+    proposals.get("LPP-RP-000001")!.status = "CONTACT_PERMISSION_PENDING";
+    await submitProposalResponse("me", "LPP-RP-000001", "INTERESTED");
+    expect(proposals.get("LPP-RP-000001")!.status).toBe("CONTACT_PERMISSION_PENDING");
+    await submitProposalResponse("me", "LPP-RP-000001", "NOT_INTERESTED", "OTHER");
+    expect(proposals.get("LPP-RP-000001")!.status).toBe("REJECTED");
+  });
+
   it("changing a mind re-upserts rather than creating a duplicate row", async () => {
     await submitProposalResponse("me", "LPP-RP-000001", "INTERESTED");
     await submitProposalResponse("me", "LPP-RP-000001", "NOT_INTERESTED", "LOCATION", "too far");

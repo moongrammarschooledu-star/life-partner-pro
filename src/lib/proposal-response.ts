@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
-import { nextProposalStatus } from "@/lib/proposal-workflow";
+import { isResponseOpen, statusAfterResponse } from "@/lib/proposal-workflow";
 import { writeAudit } from "@/lib/audit";
 import { notifyProposalResponseReceived } from "@/lib/notifications/events";
 import type { ProposalResponseType, ProposalDeclineReason } from "@prisma/client";
@@ -52,6 +52,11 @@ export async function submitProposalResponse(
     throw new ProposalResponseError(404, "Proposal not found.");
   }
 
+  // STEP 33 — the proposal must still be collecting responses (see RESPONSE_OPEN_STATUSES); otherwise the answer could rewind or re-open it.
+  if (!isResponseOpen(proposal.status)) {
+    throw new ProposalResponseError(409, "This proposal is no longer open for a response. Please contact support if you need to change something.");
+  }
+
   await prisma.proposalResponse.upsert({
     where: { proposalId_profileId: { proposalId: proposal.id, profileId } },
     update: { response, reason: reason || null, reasonNote: reasonNote || null, respondedAt: new Date() },
@@ -62,7 +67,7 @@ export async function submitProposalResponse(
     prisma.proposalResponse.findUnique({ where: { proposalId_profileId: { proposalId: proposal.id, profileId: proposal.profileAId } } }),
     prisma.proposalResponse.findUnique({ where: { proposalId_profileId: { proposalId: proposal.id, profileId: proposal.profileBId } } }),
   ]);
-  const newStatus = nextProposalStatus(proposal.status, responseA?.response, responseB?.response);
+  const newStatus = statusAfterResponse(proposal.status, responseA?.response, responseB?.response);
 
   await prisma.proposal.update({
     where: { id: proposal.id },

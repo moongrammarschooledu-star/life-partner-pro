@@ -24,7 +24,8 @@
     "deps:outdated": "npm outdated",
     "smoke": "node scripts/smoke.mjs",
     "smoke:security": "node scripts/security-smoke.mjs",
-    "load-test": "node scripts/load-test.mjs"
+    "load-test": "node scripts/load-test.mjs",
+    "audit:routes": "node scripts/audit-routes.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

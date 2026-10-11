@@ -36,11 +36,15 @@ export async function verifyManualPayment(paymentId: string, verifiedById: strin
   if (!isValidPaymentStatusTransition(payment.status, "PAID")) throw new Error(`Cannot mark payment as PAID from status ${payment.status}`);
   if (!isValidOrderStatusTransition(payment.order.status, "PAID")) throw new Error(`Cannot mark order as PAID from status ${payment.order.status}`);
 
-  await prisma.$transaction([
-    prisma.manualPaymentDetail.update({ where: { paymentId }, data: { status: "VERIFIED", verifiedById, verifiedAt: new Date() } }),
-    prisma.payment.update({ where: { id: paymentId }, data: { status: "PAID", paidAt: new Date() } }),
-    prisma.order.update({ where: { id: payment.orderId }, data: { status: "PAID", completedAt: new Date() } }),
-  ]);
+  // STEP 33 — two administrators pressing "verify" at the same moment must settle the payment ONCE. The check above is only a fast path;
+  // the claim below is the real guard: it flips PENDING_VERIFICATION -> VERIFIED conditionally, and only the request that wins the row
+  // (count === 1) goes on to mark the payment paid and activate the subscription. The loser gets the same "already verified" answer.
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.manualPaymentDetail.updateMany({ where: { paymentId, status: "PENDING_VERIFICATION" }, data: { status: "VERIFIED", verifiedById, verifiedAt: new Date() } });
+    if (claimed.count !== 1) throw new Error("This payment has already been verified or rejected.");
+    await tx.payment.update({ where: { id: paymentId }, data: { status: "PAID", paidAt: new Date() } });
+    await tx.order.update({ where: { id: payment.orderId }, data: { status: "PAID", completedAt: new Date() } });
+  });
 
   await writeAudit({ action: "MANUAL_PAYMENT_VERIFIED", adminId: verifiedById, targetProfileId: payment.profileId, meta: { paymentId } });
   await notifyPaymentSuccess(payment.profileId);

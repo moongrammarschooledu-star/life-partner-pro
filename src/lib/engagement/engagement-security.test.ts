@@ -70,7 +70,7 @@ describe("routes are guarded", () => {
 
   it("the applicant-facing responses never include staff-only fields", () => {
     const sources = applicantRoutes.map(read).join("\n") + read(join(SRC, "lib", "engagement", "feedback-service.ts"));
-    const mine = read(join(SRC, "lib", "engagement", "feedback-service.ts")).match(/export async function listMyFeedback[\s\S]*?\n}\n/)?.[0] ?? "";
+    const mine = read(join(SRC, "lib", "engagement", "feedback-service.ts")).match(/export async function listMyFeedback[\s\S]*?\r?\n}\r?\n/)?.[0] ?? "";
     expect(mine).toContain("select:");
     expect(mine).not.toMatch(/internalNote|handledById/);
     expect(applicantRoutes.map(read).join("\n")).not.toMatch(/internalNote|activityScore|computeActivityScore/);
@@ -85,7 +85,7 @@ describe("the activity figure stays with staff", () => {
     const importers = engagementLib.concat(walk(API).filter((p) => p.endsWith(".ts")), walk(join(SRC, "app")).filter((p) => p.endsWith(".tsx")), walk(join(SRC, "lib", "ai")).filter((p) => p.endsWith(".ts") && !p.endsWith(".test.ts")))
       .filter((p) => !p.endsWith("activity-score.ts") && importsScore(read(p))).map(rel).sort();
     expect(importers).toEqual(["app/api/admin/engagement/users/[id]/route.ts", "lib/engagement/eligibility.ts", "lib/engagement/reengagement.ts"].sort());
-  });
+  }, 60_000); // reads the whole source tree; slow on a cold Windows disk
 
   it("is never available to workflow conditions, targeting, exports or the AI", () => {
     for (const f of ["workflow-schema.ts", "announcement-service.ts", "analytics.ts"]) expect(read(join(SRC, "lib", "engagement", f)), f).not.toMatch(/computeActivityScore|activityScore/);

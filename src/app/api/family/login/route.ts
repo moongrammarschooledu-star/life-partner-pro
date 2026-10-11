@@ -17,8 +17,15 @@ export async function POST(req: Request) {
   const limited = await enforceConfiguredLimit(req, "family-login", { limit: 10, windowMs: 60_000 });
   if (limited) return limited;
 
-  const { email, password } = await req.json();
-  if (typeof email !== "string" || typeof password !== "string") {
+  // STEP 33 — pre-authentication route: a malformed body answers 400 instead of throwing (and being logged as a server error).
+  let body: { email?: unknown; password?: unknown };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
+  }
+  const { email, password } = body;
+  if (typeof email !== "string" || typeof password !== "string" || email.length > 254 || password.length > 256) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
   }
 

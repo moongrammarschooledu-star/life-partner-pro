@@ -2188,6 +2188,9 @@ model ContactInfo {
   email                  String
   preferredContactMethod ContactMethod @default(PHONE)
   contactVerified        Boolean       @default(false)
+
+  // STEP 33 — registration, the duplicate-risk signals and the duplicate clusters all look a profile up by exact mobile number.
+  @@index([mobileNumber])
 }
 
 model EducationInfo {

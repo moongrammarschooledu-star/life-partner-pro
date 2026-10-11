@@ -25,6 +25,7 @@ import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { pairEligibilityProblem } from "@/lib/matching-eligibility";
 import { blockedResponse } from "@/lib/ops/guards";
 import { withRequestMetrics } from "@/lib/observability/metrics";
+import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 
 interface MatchConfig {
   weights: MatchWeights;
@@ -75,8 +76,10 @@ async function getHandler(req: Request, { params }: { params: Promise<{ id: stri
   const blocked = await blockedResponse({ switches: ["matching"], flags: ["matching.enabled"] });
   if (blocked) return blocked;
   try {
-    await requireAdmin("match:run");
+    const admin = await requireAdmin("match:run");
     const { id } = await params;
+    // STEP 33 — "No Assignment = No Record Access": the candidate list of a profile is that profile's record.
+    await assertProfileAssignmentAccess(admin, id);
     const { searchParams } = new URL(req.url);
     const minScore = Number(searchParams.get("minScore") ?? 40);
     const verifiedOnly = searchParams.get("verifiedOnly") === "true";
@@ -218,6 +221,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const admin = await requireAdmin("match:run");
     const { id } = await params;
+    await assertProfileAssignmentAccess(admin, id);
     const { candidateId } = await req.json();
 
     const [seekerRecord, candidateRecord] = await Promise.all([

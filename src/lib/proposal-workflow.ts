@@ -5,6 +5,24 @@ type MinimalCategoryResult = Pick<CategoryResult, "category" | "status">;
 
 export type ResponseOrNull = ProposalResponseType | null | undefined;
 
+// STEP 33 — an applicant's interest response is only meaningful while the proposal is still collecting responses (or, up to the contact
+// request, before anything has been disclosed or arranged). Later statuses are reached through admin actions; a response arriving then would
+// recompute the status and could pull a proposal BACK (MEETING_SCHEDULED -> BOTH_INTERESTED) or re-open one an administrator had closed.
+// DRAFT and ON_HOLD are not open: the first is not released, the second is paused by staff.
+export const RESPONSE_OPEN_STATUSES: readonly ProposalStatus[] = [
+  "PROPOSAL_CREATED", "SENT", "WAITING", "WAITING_FOR_PROFILE_A", "WAITING_FOR_PROFILE_B", "BOTH_REVIEWING", "PROFILE_A_INTERESTED", "PROFILE_B_INTERESTED",
+  "BOTH_INTERESTED", "CONTACT_PERMISSION_PENDING",
+];
+export const isResponseOpen = (status: ProposalStatus): boolean => RESPONSE_OPEN_STATUSES.includes(status);
+
+// Once both sides are interested (or a contact request is pending) a later response may only WITHDRAW (-> REJECTED); it never moves the
+// proposal backwards to an earlier waiting status.
+const STAYS_PUT_UNLESS_DECLINED: readonly ProposalStatus[] = ["BOTH_INTERESTED", "CONTACT_PERMISSION_PENDING"];
+export function statusAfterResponse(current: ProposalStatus, responseA: ResponseOrNull, responseB: ResponseOrNull): ProposalStatus {
+  const next = nextProposalStatus(current, responseA, responseB);
+  return STAYS_PUT_UNLESS_DECLINED.includes(current) && next !== "REJECTED" ? current : next;
+}
+
 // Pure state-transition logic (no DB) — given the current status and the
 // latest response recorded for each side, returns the next status. A
 // one-sided NOT_INTERESTED ends the proposal outright: in this domain a

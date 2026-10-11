@@ -53,3 +53,6 @@ next-env.d.ts
 /.backups-selftest/
 /.backups/
 *.lppb
+
+# STEP 33 scratch output of the audit scripts
+.audit-tmp/

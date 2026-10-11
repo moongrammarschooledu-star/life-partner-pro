@@ -53,6 +53,13 @@ export async function requestRefund(params: { paymentId: string; amountMinor: nu
   return refund;
 }
 
+// Atomic compare-and-set on the refund's status: succeeds only while the row still has the status that was validated. A concurrent request that
+// lost the race gets a clear 409 instead of acting twice.
+export async function claimRefundStatus(refundId: string, expectedStatus: RefundStatus, data: { status: RefundStatus; approvedById?: string; executedById?: string }) {
+  const claimed = await prisma.refund.updateMany({ where: { id: refundId, status: expectedStatus }, data });
+  if (claimed.count !== 1) throw new ApiError(409, "This refund was changed by someone else a moment ago. Reload it and check its status.");
+}
+
 async function transitionRefund(refundId: string, toStatus: RefundStatus) {
   const refund = await prisma.refund.findUnique({ where: { id: refundId } });
   if (!refund) throw new Error("Refund not found");
@@ -71,14 +78,14 @@ export async function approveRefund(refundId: string, approvedById: string) {
   if (refund.requestedById === approvedById) {
     throw new ApiError(403, "You cannot approve a refund you requested yourself — ask another finance admin to approve it.");
   }
-  await prisma.refund.update({ where: { id: refundId }, data: { status: "APPROVED", approvedById } });
+  await claimRefundStatus(refundId, refund.status, { status: "APPROVED", approvedById });
   await writeAudit({ action: "REFUND_APPROVED", adminId: approvedById, meta: { refundId } });
   return refund;
 }
 
 export async function rejectRefund(refundId: string, rejectedById: string) {
-  await transitionRefund(refundId, "REJECTED");
-  await prisma.refund.update({ where: { id: refundId }, data: { status: "REJECTED" } });
+  const refund = await transitionRefund(refundId, "REJECTED");
+  await claimRefundStatus(refundId, refund.status, { status: "REJECTED" });
   await writeAudit({ action: "REFUND_REJECTED", adminId: rejectedById, meta: { refundId } });
 }
 
@@ -88,7 +95,9 @@ export async function rejectRefund(refundId: string, rejectedById: string) {
 // back into themselves.
 export async function executeRefund(refundId: string, executedById: string) {
   const refund = await transitionRefund(refundId, "PROCESSING");
-  await prisma.refund.update({ where: { id: refundId }, data: { status: "PROCESSING", executedById } });
+  // STEP 33 — the check above only READS the status. Two executions at the same moment (two administrators, a double click, a retry) would
+  // both pass it and both ask the provider for the money back. The compare-and-set below lets exactly one of them continue.
+  await claimRefundStatus(refundId, refund.status, { status: "PROCESSING", executedById });
 
   const payment = await prisma.payment.findUnique({ where: { id: refund.paymentId } });
   if (!payment) throw new Error("Payment not found");

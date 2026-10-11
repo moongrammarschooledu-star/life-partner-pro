@@ -36,13 +36,16 @@ export async function GET(req: Request) {
       ...(maritalStatus ? { maritalStatus: maritalStatus as never } : {}),
       ...(verified ? { verified: verified === "true" } : {}),
       ...(city ? { city: { contains: city } } : {}),
+      // STEP 33 — searching by phone number is a "does a profile with this number exist?" oracle. Without the permission to SEE contact
+      // details an administrator could recover a hidden number digit by digit, so the contact columns are only searched with it.
       ...(q
         ? {
             OR: [
               { fullName: { contains: q } },
               { profileCode: { contains: q } },
-              { contact: { is: { mobileNumber: { contains: q } } } },
-              { contact: { is: { whatsappNumber: { contains: q } } } },
+              ...(admin.permissions.includes("sensitive:contact:view")
+                ? [{ contact: { is: { mobileNumber: { contains: q } } } }, { contact: { is: { whatsappNumber: { contains: q } } } }]
+                : []),
             ],
           }
         : {}),

@@ -23,14 +23,13 @@ export async function requireApplicantProfileId(): Promise<string | null> {
   // STEP 24 — FULL_ACCOUNT_RESTRICTED is the same lock, applied as a broader risk-driven restriction.
   if ((await hasActiveRestriction(profileId, "LOGIN_RESTRICTED")) || (await hasActiveRestriction(profileId, "FULL_ACCOUNT_RESTRICTED"))) return null;
 
-  // A browser with no session cookie yet (pre-STEP-13) is grandfathered
-  // through session-less rather than logged out — the next /api/my-status
-  // login provisions one. Once present, it must be valid.
   const sessionId = verifySessionIdToken(cookieStore.get(APPLICANT_SESSION_ID_COOKIE)?.value);
-  if (sessionId) {
-    const valid = await touchAndValidateSession(sessionId, profileId);
-    if (!valid) return null;
-  }
+  // STEP 33 — the session cookie is REQUIRED. The old rule let a browser holding only the long-lived signed profile cookie straight in, which
+  // meant revoking a session (or "sign out everywhere") could be sidestepped by simply dropping the session-id cookie. Every sign-in since
+  // STEP 13 sets both cookies, so nobody legitimate is affected: a very old browser just signs in again.
+  if (!sessionId) return null;
+  const valid = await touchAndValidateSession(sessionId, profileId);
+  if (!valid) return null;
 
   return profileId;
 }

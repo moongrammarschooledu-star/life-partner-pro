@@ -26,6 +26,7 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   support: { limit: 5, windowMs: 60_000 },
   "update-request": { limit: 10, windowMs: 60_000 },
   "my-status": { limit: 10, windowMs: 60_000 },
+  "my-status-verify": { limit: 10, windowMs: 60_000 }, // STEP 33 — second step of the applicant sign-in (the e-mailed code)
   "otp-email-send": { limit: 5, windowMs: 60_000 },
   "otp-email-confirm": { limit: 10, windowMs: 60_000 },
   "otp-phone-send": { limit: 5, windowMs: 60_000 },

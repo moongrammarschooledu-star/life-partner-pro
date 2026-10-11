@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import nodemailer, { type Transporter } from "nodemailer";
 import type { NotificationProvider, ProviderSendResult } from "@/lib/notifications/providers/types";
-import { redactForLog } from "@/lib/communications/providers/shared";
+import { bodyForLog, maskRecipientForLog } from "@/lib/communications/providers/shared";
 
 // Real delivery goes through SMTP (Gmail by default). It is "configured" only
 // when SMTP_USER and SMTP_PASS are both set — see isEmailConfigured(). Without
@@ -18,7 +18,7 @@ export function isEmailConfigured(env: Env = process.env): boolean {
 class ConsoleEmailProvider implements NotificationProvider {
   async send(to: string, body: string, subject?: string): Promise<ProviderSendResult> {
     // STEP 25 - console fallback never prints a raw one-time code in production (see redactForLog).
-    console.log(`[notification:EMAIL] to=${to} :: ${subject ?? ""} :: ${redactForLog(body, /verif|code|otp|token/i.test(`${subject ?? ""} ${body}`) ? "OTP" : undefined)}`);
+    console.log(`[notification:EMAIL] to=${maskRecipientForLog(to)} :: ${subject ?? ""} :: ${bodyForLog(body, /verif|code|otp|token/i.test(`${subject ?? ""} ${body}`) ? "OTP" : undefined)}`);
     return { providerMessageId: `console-email-${randomUUID()}` };
   }
 }

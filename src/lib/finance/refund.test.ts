@@ -25,6 +25,12 @@ vi.mock("@/lib/prisma", () => ({
         refundRow = { ...refundRow, ...args.data } as typeof refundRow;
         return Promise.resolve(refundRow);
       }),
+      // compare-and-set: applies only while the row still has the expected status (STEP 33 claimRefundStatus)
+      updateMany: vi.fn((args: { where: { status: string }; data: Record<string, unknown> }) => {
+        if (refundRow.status !== args.where.status) return Promise.resolve({ count: 0 });
+        refundRow = { ...refundRow, ...args.data } as typeof refundRow;
+        return Promise.resolve({ count: 1 });
+      }),
     },
   },
 }));

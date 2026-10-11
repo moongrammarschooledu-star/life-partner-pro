@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// The real service hashes with bcrypt cost 12 several times per test; under a fully parallel run on a slow disk that can pass 5 s.
+vi.setConfig({ testTimeout: 30_000 });
+
 // Admin e-mail-code password reset: enumeration resistance, single use, expiry, attempt cap, supersession, session
 // revocation, 2FA/login separation and the route-level responses — over an in-memory database with the REAL service.
 

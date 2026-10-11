@@ -21,6 +21,10 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "communications.marketing.enabled", description: "Marketing messages on any channel (defaults OFF; never implied by registration)", sensitive: true },
   { key: "support.enabled", description: "New support / complaint / safety cases from applicants", sensitive: false },
   { key: "registrations.enabled", description: "New applicant registrations", sensitive: true },
+  // STEP 33 — applicant sign-in used to be Profile ID + e-mail address alone (two things other people can know). With this ON (the default) the
+  // person must also type a one-time code sent to the e-mail address on the profile. Turning it OFF returns to the old, weaker sign-in:
+  // only do that if e-mail delivery is down and people are locked out, and turn it back ON as soon as delivery works again.
+  { key: "auth.applicant_otp_login.enabled", description: "Applicant sign-in requires a one-time code e-mailed to the profile's address (turn OFF only if e-mail delivery is down)", sensitive: true },
   { key: "uploads.enabled", description: "File uploads (photos, documents, evidence)", sensitive: true },
   { key: "payments.enabled", description: "Payments master switch", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
   // STEP 16 — AI Assistant. Every flag defaults to OFF (see FEATURE_FLAG_DEFAULTS) and the rollout phase in AiConfig must also allow use.
