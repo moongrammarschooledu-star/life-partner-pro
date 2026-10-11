@@ -41,6 +41,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   serverExternalPackages: ["sharp", "bcryptjs"],
   poweredByHeader: false,
+  // The application (700+ API routes, 175 pages) no longer fits in the hosting build machine's memory with the default bundler (the build was
+  // killed for lack of memory). Deploy builds use webpack with the memory optimisations Next documents for this; see docs/DEPLOYMENT.md.
+  experimental: { webpackMemoryOptimizations: true },
   env: { APP_VERSION: pkg.version },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
