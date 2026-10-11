@@ -3653,7 +3653,9 @@ model AdminTask {
   assignedDepartment   Department?          @relation(fields: [assignedDepartmentId], references: [id])
   assignedDepartmentId String?
   outcome              String?
-  updatedAt            DateTime             @updatedAt
+  // The STEP 18 migration added this column with DEFAULT CURRENT_TIMESTAMP (needed to backfill existing rows), so the model declares the same
+  // default; otherwise `prisma migrate diff` reports drift between the migrations and this file and the CI migration check fails.
+  updatedAt            DateTime             @default(now()) @updatedAt
 
   comments         TaskComment[]
   checklistItems   TaskChecklistItem[]
