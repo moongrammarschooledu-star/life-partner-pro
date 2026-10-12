@@ -303,6 +303,7 @@ function InvoicesSection() {
 }
 
 function RefundsSection({ onChanged }: { onChanged: () => void }) {
+  const { show } = useToast();
   const [items, setItems] = useState<Array<{ id: string; refundCode: string; payment: { profile: { fullName: string; profileCode: string } }; amountMinor: number; currencyCode: string; status: string; reason: string }> | null>(null);
   const [executing, setExecuting] = useState<string | null>(null);
   const [password, setPassword] = useState("");
@@ -312,21 +313,26 @@ function RefundsSection({ onChanged }: { onChanged: () => void }) {
   }
   useEffect(load, []);
 
+  // A failed call used to do nothing at all (no message), which is how a refund that could not be approved looked like a dead button.
+  async function failure(res: Response, fallback: string) {
+    const json = await res.json().catch(() => ({}));
+    show(typeof json.error === "string" ? json.error : fallback, "error");
+  }
   async function approve(id: string) {
     const res = await fetch(`/api/admin/finance-center/refunds/${id}/approve`, { method: "POST" });
-    if (res.ok) { onChanged(); load(); }
+    if (res.ok) { onChanged(); load(); } else await failure(res, "Could not approve the refund.");
   }
   async function reject(id: string) {
     const res = await fetch(`/api/admin/finance-center/refunds/${id}/reject`, { method: "POST" });
-    if (res.ok) { onChanged(); load(); }
+    if (res.ok) { onChanged(); load(); } else await failure(res, "Could not reject the refund.");
   }
   async function execute() {
     if (!executing) return;
     const reauth = await fetch("/api/admin/auth/reauth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
-    const reauthJson = await reauth.json();
-    if (!reauth.ok) return;
+    const reauthJson = await reauth.json().catch(() => ({}));
+    if (!reauth.ok) { show(typeof reauthJson.error === "string" ? reauthJson.error : "Password confirmation failed.", "error"); return; }
     const res = await fetch(`/api/admin/finance-center/refunds/${executing}/execute`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reauthToken: reauthJson.token }) });
-    if (res.ok) { onChanged(); setExecuting(null); setPassword(""); load(); }
+    if (res.ok) { onChanged(); setExecuting(null); setPassword(""); load(); } else await failure(res, "Could not execute the refund.");
   }
 
   if (items === null) return <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted" /></div>;

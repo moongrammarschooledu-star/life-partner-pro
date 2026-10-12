@@ -74,7 +74,17 @@ async function transitionRefund(refundId: string, toStatus: RefundStatus) {
 // finance:refunds:approve (e.g. FINANCE_MANAGER, who can do both actions on
 // someone else's request but not rubber-stamp their own).
 export async function approveRefund(refundId: string, approvedById: string) {
-  const refund = await transitionRefund(refundId, "APPROVED");
+  // A refund is created as REQUESTED and is shown to approvers in that state, but the status rules only allow APPROVED from PENDING_APPROVAL
+  // (REQUESTED -> PENDING_APPROVAL -> APPROVED). Looking only at the single edge REQUESTED -> APPROVED made every approval throw (HTTP 500), so no
+  // refund could ever be approved (found by the sandbox refund test). REQUESTED means "waiting for a decision": both edges of that route are
+  // checked, then the refund is approved in one compare-and-set.
+  const found = await prisma.refund.findUnique({ where: { id: refundId } });
+  if (!found) throw new Error("Refund not found");
+  const routeIsValid = found.status === "REQUESTED"
+    ? isValidRefundStatusTransition("REQUESTED", "PENDING_APPROVAL") && isValidRefundStatusTransition("PENDING_APPROVAL", "APPROVED")
+    : isValidRefundStatusTransition(found.status, "APPROVED");
+  if (!routeIsValid) throw new ApiError(409, `This refund cannot be approved from status ${found.status}.`);
+  const refund = found;
   if (refund.requestedById === approvedById) {
     throw new ApiError(403, "You cannot approve a refund you requested yourself — ask another finance admin to approve it.");
   }
