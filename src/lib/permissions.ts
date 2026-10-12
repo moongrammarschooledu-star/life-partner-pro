@@ -197,6 +197,7 @@ export type Permission =
   | "alerts:manage"
   | "readiness:view"
   | "releases:manage"
+  | "golive:manage"
   | "ai:view"
   | "ai:use"
   | "ai:copilot"
@@ -614,6 +615,7 @@ export type Permission =
 // Permission Matrix's "S" annotation. Never automatically implied by holding
 // a manager/broad role; always granted (or not) independently per role below.
 export const SENSITIVE_PERMISSIONS: Permission[] = [
+  "golive:manage", // STEP 34
   "soc:containment:approve", // STEP 32
   "soc:rules:manage",
   "soc:config:manage",
@@ -1047,6 +1049,7 @@ const SYSTEM_ALL_PERMISSIONS: Permission[] = [
   "alerts:manage",
   "readiness:view",
   "releases:manage",
+  "golive:manage",
 ];
 
 const AI_ALL_PERMISSIONS: Permission[] = [

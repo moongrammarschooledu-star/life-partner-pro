@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { publicUrl } from "@/lib/config/public-url";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
 import { writeAudit } from "@/lib/audit";
@@ -11,6 +12,17 @@ import { grantFamilyPermission } from "@/lib/family/grants";
 import { notifyFamilyInvitationAccepted } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import type { FamilyRole } from "@prisma/client";
+
+// STEP 34 §42 — the e-mailed link always starts with the canonical https domain. If none is configured the e-mail is NOT sent: a relative
+// "/family/register?..." link is useless in a mail client and an unusable invitation must not be reported as sent.
+function invitationLink(code: string, token: string): string | null {
+  try {
+    return publicUrl(`/family/register?code=${encodeURIComponent(code)}&token=${encodeURIComponent(token)}`);
+  } catch {
+    console.error("[family-invitation] no public address is configured (APP_URL); the invitation e-mail was not sent");
+    return null;
+  }
+}
 
 export class FamilyInvitationError extends HttpError {
   constructor(status: number, message: string) {
@@ -76,8 +88,8 @@ export async function createInvitation(params: {
   await writeAudit({ action: "FAMILY_INVITATION_CREATED", targetProfileId: params.applicantId, meta: { invitationCode, relationship: params.relationship } });
   await publishSecurityEvent({ eventType: "FAMILY_INVITE_CREATED", profileId: params.applicantId, source: "family-invitation" });
 
-  if (params.invitedEmail) {
-    const link = `${process.env.NEXTAUTH_URL ?? ""}/family/register?code=${invitationCode}&token=${rawToken}`;
+  const link = params.invitedEmail ? invitationLink(invitationCode, rawToken) : null;
+  if (params.invitedEmail && link) {
     await emailProvider.send(
       params.invitedEmail,
       `You have been invited to assist with a matrimonial process on Life Partner Pro. This link is valid for 7 days and can only be used once: ${link}`,
@@ -106,8 +118,8 @@ export async function resendInvitation(invitationId: string, applicantId: string
   });
   await writeAudit({ action: "FAMILY_INVITATION_RESENT", targetProfileId: applicantId, meta: { invitationCode: invitation.invitationCode } });
 
-  if (invitation.invitedEmail) {
-    const link = `${process.env.NEXTAUTH_URL ?? ""}/family/register?code=${invitation.invitationCode}&token=${rawToken}`;
+  const link = invitation.invitedEmail ? invitationLink(invitation.invitationCode, rawToken) : null;
+  if (invitation.invitedEmail && link) {
     await emailProvider.send(
       invitation.invitedEmail,
       `Here is your new invitation link to Life Partner Pro. This link is valid for 7 days and can only be used once: ${link}`,

@@ -164,7 +164,7 @@ const lastLog = () => logs()[logs().length - 1];
 beforeEach(() => {
   db.clear(); idc = 0; tick = 0;
   audits.length = 0; tasks.length = 0; adminNotes.length = 0;
-  enabledFlags.clear(); enabledFlags.add("notifications.enabled"); enabledFlags.add("whatsapp.enabled");
+  enabledFlags.clear(); enabledFlags.add("notifications.enabled"); enabledFlags.add("whatsapp.enabled"); enabledFlags.add("sms.enabled"); enabledFlags.add("email.enabled");
   killSwitch = false; restrictions.clear(); jurisdictionRule = null; gate = { requiresApproval: false }; families.clear();
   clearCommunicationPolicyCache();
   rows("appSettings").push({ id: 1, emailNotificationsEnabled: true, smsNotificationsEnabled: true, whatsappNotificationsEnabled: true });
@@ -412,6 +412,23 @@ describe("send service: queue, providers, retries, dead letters", () => {
       lastLog().nextAttemptAt = new Date(Date.now() - 1000);
       await processCommunicationQueue();
       expect(lastLog().deliveryStatus).toBe("SENT");
+    });
+
+    it.each([["sms.enabled", "SMS"], ["email.enabled", "EMAIL"]])("STEP 34: the %s switch holds only that channel's messages, uses no attempt, and sends them when switched back on", async (flag, channel) => {
+      fetchMock.mockResolvedValue({ ok: true, status: 201, json: async () => ({ sid: "later" }) });
+      enabledFlags.delete(flag);
+      const held = await send({ channel });
+      expect(held.status).toBe("QUEUED");
+      expect(lastLog()).toMatchObject({ deliveryStatus: "QUEUED", attempts: 0 });
+      expect(fetchMock).not.toHaveBeenCalled();
+      // the other channel is untouched
+      const other = await send({ channel: channel === "SMS" ? "EMAIL" : "SMS" });
+      expect(other.status).toBe("SENT");
+      enabledFlags.add(flag);
+      const log = logs().find((l) => l.channel === channel)!;
+      log.nextAttemptAt = new Date(Date.now() - 1000);
+      await processCommunicationQueue();
+      expect(logs().find((l) => l.channel === channel)!.deliveryStatus).toBe("SENT");
     });
 
     it("two workers racing for the same row send it exactly once", async () => {

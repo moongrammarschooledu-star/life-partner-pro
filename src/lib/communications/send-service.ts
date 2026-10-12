@@ -10,7 +10,7 @@ import { canSend, type BlockedCode, type CommunicationIntent, type PolicyDecisio
 import { packContent, unpackContent } from "@/lib/communications/content";
 import { containsProtectedString } from "@/lib/communications/secure-renderer";
 import { eligibleFailoverChain, type ResolvedProvider } from "@/lib/communications/providers/registry";
-import { recordProviderOutcome } from "@/lib/communications/provider-health";
+import { circuitOpen, circuitReopensAt, recordProviderOutcome } from "@/lib/communications/provider-health";
 import { addSuppression } from "@/lib/communications/suppression-service";
 import type { OutboundMessage, SendResult } from "@/lib/communications/providers/types";
 
@@ -207,7 +207,9 @@ export async function addDeliveryEvent(logId: string, eventType: string, extra: 
 }
 
 async function externalDisabled(channel: NotificationChannel): Promise<boolean> {
-  return (await isEmergencyDisabled("notifications")) || !(await isFeatureEnabled("notifications.enabled")) || (channel === "WHATSAPP" && !(await isFeatureEnabled("whatsapp.enabled")));
+  return (await isEmergencyDisabled("notifications")) || !(await isFeatureEnabled("notifications.enabled")) || (channel === "WHATSAPP" && !(await isFeatureEnabled("whatsapp.enabled"))) ||
+    (channel === "SMS" && !(await isFeatureEnabled("sms.enabled"))) || // STEP 34 §51 — per-channel kill switches; data is kept, messages wait
+    (channel === "EMAIL" && !(await isFeatureEnabled("email.enabled")));
 }
 
 function outboundFor(log: CommunicationLog, destination: string, content: NonNullable<ReturnType<typeof unpackContent>>, language: string, sender?: string | null): OutboundMessage {
@@ -284,7 +286,20 @@ export async function deliverLog(logId: string, now: Date = new Date()): Promise
     return "FAILED";
   }
 
-  const chain = await eligibleFailoverChain(decision.chain);
+  const fullChain = await eligibleFailoverChain(decision.chain);
+  // STEP 34 §32 — skip providers whose circuit is open; if none is usable the message waits (no attempt used) rather than hammering a failed provider.
+  const chain = fullChain.filter((item) => !circuitOpen(item.row, now));
+  if (fullChain.length > 0 && chain.length === 0) {
+    if (log.queuedAt && now.getTime() - log.queuedAt.getTime() > EXPIRE_AFTER_MS) {
+      await finish({ deliveryStatus: "EXPIRED", failedAt: now, failureReason: "Expired while every provider was paused after repeated failures" });
+      await addDeliveryEvent(logId, "EXPIRED", { source: "SYSTEM" });
+      return "FAILED";
+    }
+    const reopen = fullChain.map((item) => (item.row ? circuitReopensAt(item.row) : null)).filter((d): d is Date => d !== null).sort((a, b) => a.getTime() - b.getTime())[0];
+    await finish({ deliveryStatus: "QUEUED", nextAttemptAt: reopen && reopen.getTime() > now.getTime() ? reopen : new Date(now.getTime() + 300_000), failureReason: "Provider paused after repeated failures; will be tried again shortly" });
+    await addDeliveryEvent(logId, "FAILED", { source: "SYSTEM", detail: "Circuit open: no attempt was made" });
+    return "REQUEUED";
+  }
   const msg = (item: ResolvedProvider) => outboundFor(log, decision.destination as string, content, decision.language, item.row?.senderIdentity ?? null);
 
   let last: SendResult = { ok: false, failureClass: "RETRYABLE", error: "NO_PROVIDER" };

@@ -17,6 +17,10 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "verification.enabled", description: "Applicant verification submissions (OTP + documents)", sensitive: true },
   { key: "notifications.enabled", description: "Sending notifications on every channel", sensitive: true },
   { key: "whatsapp.enabled", description: "WhatsApp notification channel", sensitive: false },
+  // STEP 34 §51 — per-channel kill switches for the communications system. Turning one off HOLDS messages (nothing is deleted); security codes for
+  // sign-in and password reset are not part of this system and are not affected (switching them off would lock administrators out).
+  { key: "sms.enabled", description: "SMS channel of the communications system (messages wait while off)", sensitive: false },
+  { key: "email.enabled", description: "E-mail channel of the communications system (messages wait while off; sign-in and reset codes are not affected)", sensitive: false },
   { key: "communications.campaigns.enabled", description: "Bulk communication campaigns (defaults OFF; also requires marketing consent and an active jurisdiction rule)", sensitive: true },
   { key: "communications.marketing.enabled", description: "Marketing messages on any channel (defaults OFF; never implied by registration)", sensitive: true },
   { key: "support.enabled", description: "New support / complaint / safety cases from applicants", sensitive: false },

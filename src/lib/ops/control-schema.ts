@@ -68,6 +68,7 @@ const schemas = {
       emergencyNotificationsDisabled: z.boolean(),
       emergencyUploadsDisabled: z.boolean(),
       emergencyPublicAccessDisabled: z.boolean(),
+      emergencyContactSharingDisabled: z.boolean(),
     })
     .partial()
     .strict(),

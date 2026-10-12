@@ -26,7 +26,7 @@ export async function getPublicState(): Promise<PublicState> {
 }
 
 export type EmergencySwitch =
-  | "payments" | "registrations" | "profileSubmissions" | "matching" | "proposals" | "notifications" | "uploads" | "publicAccess";
+  | "payments" | "registrations" | "profileSubmissions" | "matching" | "proposals" | "notifications" | "uploads" | "publicAccess" | "contactSharing";
 
 export const SWITCH_FIELD: Record<EmergencySwitch, keyof SystemControl> = {
   payments: "emergencyPaymentsDisabled",
@@ -37,6 +37,7 @@ export const SWITCH_FIELD: Record<EmergencySwitch, keyof SystemControl> = {
   notifications: "emergencyNotificationsDisabled",
   uploads: "emergencyUploadsDisabled",
   publicAccess: "emergencyPublicAccessDisabled",
+  contactSharing: "emergencyContactSharingDisabled", // STEP 34 §51
 };
 
 export async function isEmergencyDisabled(sw: EmergencySwitch): Promise<boolean> {

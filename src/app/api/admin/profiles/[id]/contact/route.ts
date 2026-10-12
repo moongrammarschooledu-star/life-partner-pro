@@ -9,6 +9,7 @@ import { logPrivacyAccess } from "@/lib/privacy/access-log";
 import { redactForAudit } from "@/lib/privacy/audit-redaction";
 import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 import { resolvePurposeForPermission } from "@/lib/compliance/purpose-mapping";
+import { assertSwitchOpen } from "@/lib/ops/system-control";
 
 // Reveals contact info for a single profile. Every call is audited — this is
 // the only code path in the app that ever reads ContactInfo for display.
@@ -53,6 +54,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin("contact:reveal");
+    await assertSwitchOpen("contactSharing"); // STEP 34 §51 — emergency switch: no NEW contact share while it is on (viewing and consent are unaffected)
     const { id } = await params;
     const { otherProfileId, proposalId, overrideReason, phoneShared, whatsappShared, emailShared } = await req.json();
 

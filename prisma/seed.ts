@@ -3,6 +3,7 @@
 // so the admin UI falls back to its initials avatar for every demo profile.
 import { PrismaClient, Gender, MaritalStatus, ProfileStatus, FamilyType, FamilyStatus, EmploymentType } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { assertSeedAllowed } from "../src/lib/ops/seed-guard";
 
 const prisma = new PrismaClient();
 
@@ -189,6 +190,8 @@ async function seedProfiles() {
 }
 
 async function main() {
+  // STEP 34 — never runs against production or an unlabelled remote database (see src/lib/ops/seed-guard.ts).
+  assertSeedAllowed();
   await seedAdmins();
   await seedProfiles();
 }

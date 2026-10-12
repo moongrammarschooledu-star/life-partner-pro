@@ -10,6 +10,20 @@ export function healthFromCounters(consecutiveFailures: number, lastSuccessAt: D
   return "UNKNOWN";
 }
 
+// STEP 34 §32 — circuit breaker. A provider that is DOWN (5 failures in a row) is not hammered: for a cooldown after its last failure no
+// message is handed to it. When the cooldown ends ONE message is tried (half-open); a success closes the circuit (recordProviderOutcome resets
+// the counters), a failure stamps a new lastFailureAt and opens it again. Held messages do not use up their attempts.
+export const BREAKER_COOLDOWN_MS = 5 * 60_000;
+
+export function circuitOpen(row: { healthStatus: string; lastFailureAt: Date | null } | null | undefined, now: Date = new Date()): boolean {
+  if (!row || row.healthStatus !== "DOWN" || !row.lastFailureAt) return false;
+  return now.getTime() - row.lastFailureAt.getTime() < BREAKER_COOLDOWN_MS;
+}
+
+export function circuitReopensAt(row: { lastFailureAt: Date | null }): Date | null {
+  return row.lastFailureAt ? new Date(row.lastFailureAt.getTime() + BREAKER_COOLDOWN_MS) : null;
+}
+
 export async function recordProviderOutcome(providerKey: string, outcome: { ok: boolean; error?: string }): Promise<void> {
   try {
     const row = await prisma.communicationProvider.findUnique({ where: { providerKey }, select: { id: true, consecutiveFailures: true, lastSuccessAt: true } });
