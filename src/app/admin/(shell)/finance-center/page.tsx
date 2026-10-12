@@ -88,22 +88,67 @@ export default function FinanceCenterPage() {
   );
 }
 
+type PaymentRow = { id: string; paymentCode: string; profile: { fullName: string; profileCode: string }; orderCode: string; amountMinor: number; currencyCode: string; method: string; status: string; createdAt: string };
+
 function PaymentsSection() {
-  const [items, setItems] = useState<Array<{ id: string; paymentCode: string; profile: { fullName: string; profileCode: string }; orderCode: string; amountMinor: number; currencyCode: string; method: string; status: string; createdAt: string }> | null>(null);
+  const { show } = useToast();
+  const [items, setItems] = useState<PaymentRow[] | null>(null);
+  // Requesting a refund. Until now the Refunds tab could approve and execute a refund but nothing in the interface could START one (only the API could),
+  // so no refund could be requested from the admin console. The request only creates a REQUESTED refund: a different admin still has to approve it and
+  // executing it still needs a password.
+  const [refunding, setRefunding] = useState<PaymentRow | null>(null);
+  const [refundType, setRefundType] = useState<"FULL" | "PARTIAL">("FULL");
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundBusy, setRefundBusy] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/finance-center/payments").then((r) => r.json()).then((j) => setItems(j.items ?? []));
   }, []);
 
+  function closeRefund() {
+    setRefunding(null);
+    setRefundType("FULL");
+    setRefundAmount("");
+    setRefundReason("");
+  }
+
+  async function requestRefund() {
+    if (!refunding) return;
+    const amountMinor = refundType === "FULL" ? refunding.amountMinor : Math.round(Number(refundAmount) * 100);
+    if (!Number.isFinite(amountMinor) || amountMinor <= 0 || amountMinor > refunding.amountMinor) {
+      show("Enter an amount above zero and not more than the payment.", "error");
+      return;
+    }
+    setRefundBusy(true);
+    try {
+      const res = await fetch("/api/admin/finance-center/refunds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId: refunding.id, amountMinor, type: refundType, reason: refundReason.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        show(typeof json.error === "string" ? json.error : "Could not request the refund.", "error");
+        return;
+      }
+      show("Refund requested. A different finance admin must approve it (Refunds tab).", "success");
+      closeRefund();
+    } finally {
+      setRefundBusy(false);
+    }
+  }
+
   if (items === null) return <div className="flex h-32 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted" /></div>;
   if (items.length === 0) return <EmptyState icon={DollarSign} title="No payments yet" />;
 
   return (
+    <>
     <div className="overflow-x-auto rounded-xl border border-border bg-surface">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-            <th className="p-3">Payment</th><th className="p-3">Customer</th><th className="p-3">Order</th><th className="p-3">Amount</th><th className="p-3">Method</th><th className="p-3">Status</th><th className="p-3">Date</th>
+            <th className="p-3">Payment</th><th className="p-3">Customer</th><th className="p-3">Order</th><th className="p-3">Amount</th><th className="p-3">Method</th><th className="p-3">Status</th><th className="p-3">Date</th><th className="p-3" />
           </tr>
         </thead>
         <tbody>
@@ -116,11 +161,40 @@ function PaymentsSection() {
               <td className="p-3 text-muted">{formatEnumLabel(p.method)}</td>
               <td className="p-3"><Badge variant="muted">{formatEnumLabel(p.status)}</Badge></td>
               <td className="p-3 text-muted">{formatDate(p.createdAt)}</td>
+              <td className="p-3">
+                {(p.status === "PAID" || p.status === "PARTIALLY_REFUNDED") && <Button size="sm" variant="outline" onClick={() => setRefunding(p)}>Request refund</Button>}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+
+    <ConfirmDialog
+      open={refunding != null}
+      title={refunding ? `Request a refund - ${refunding.paymentCode}` : "Request a refund"}
+      description={refunding ? `Payment of ${formatMoney(refunding.amountMinor, refunding.currencyCode)} by ${refunding.profile.fullName}. This only creates the request: another finance admin must approve it and executing it needs a password.` : ""}
+      confirmLabel={refundBusy ? "Sending..." : "Request refund"}
+      confirmDisabled={refundBusy || refundReason.trim().length < 5 || (refundType === "PARTIAL" && !refundAmount.trim())}
+      onConfirm={requestRefund}
+      onCancel={closeRefund}
+    >
+      <Field label="Refund type" htmlFor="refund-type">
+        <Select id="refund-type" value={refundType} onChange={(e) => setRefundType(e.target.value as "FULL" | "PARTIAL")}>
+          <option value="FULL">Full refund</option>
+          <option value="PARTIAL">Partial refund</option>
+        </Select>
+      </Field>
+      {refundType === "PARTIAL" && (
+        <Field label="Amount to refund" htmlFor="refund-amount" hint="In the payment's currency, e.g. 500 for Rs.500.">
+          <Input id="refund-amount" type="number" min="0" step="0.01" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} />
+        </Field>
+      )}
+      <Field label="Reason (recorded in the audit log)" htmlFor="refund-reason">
+        <Textarea id="refund-reason" rows={2} value={refundReason} onChange={(e) => setRefundReason(e.target.value)} />
+      </Field>
+    </ConfirmDialog>
+    </>
   );
 }
 
