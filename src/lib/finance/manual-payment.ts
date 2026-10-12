@@ -77,6 +77,9 @@ export async function rejectManualPayment(paymentId: string, rejectedById: strin
   await prisma.$transaction([
     prisma.manualPaymentDetail.update({ where: { paymentId }, data: { status: "REJECTED", verifiedById: rejectedById, verifiedAt: new Date(), rejectionReason } }),
     prisma.payment.update({ where: { id: paymentId }, data: { status: "FAILED", failedAt: new Date() } }),
+    // The order used to stay PAYMENT_PROCESSING after a rejection, looking as if a payment were still being checked. Both open states may fail
+    // (see ORDER_TRANSITIONS); any other state (paid, cancelled, ...) is left alone.
+    prisma.order.updateMany({ where: { id: payment.orderId, status: { in: ["PENDING_PAYMENT", "PAYMENT_PROCESSING"] } }, data: { status: "FAILED" } }),
   ]);
 
   await writeAudit({ action: "MANUAL_PAYMENT_REJECTED", adminId: rejectedById, targetProfileId: payment.profileId, meta: { paymentId, rejectionReason } });
