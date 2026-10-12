@@ -205,15 +205,22 @@ export interface QuorumResult {
 // expired request's decisions (checked by the caller via isExpired before
 // this is even consulted), and a reviewer whose CURRENT role is no longer in
 // the policy's allowedRoles (re-checked live, not the stored roleAtDecision).
+// Several steps can share ONE level (a LEVEL_3 request has a manager step and then a Super Admin step, both LEVEL_3), so the level alone cannot say
+// which step is open: it always returned the first of them, which is already satisfied, and the Super Admin's approval was recorded against the wrong
+// step so the request could never finish. The open step is the IN_PROGRESS one at the current level (the latest if an escalation added another);
+// the old lookup by level stays only as the fallback for a request that has no step marked IN_PROGRESS.
+export async function findOpenStep(approvalRequestId: string, level: ApprovalLevel) {
+  const include = { reviewers: { include: { reviewer: { select: { id: true, role: true, active: true } } } } };
+  const open = await prisma.approvalStep.findFirst({ where: { approvalRequestId, level, status: "IN_PROGRESS" }, orderBy: { sequence: "desc" }, include });
+  if (open) return open;
+  return prisma.approvalStep.findFirst({ where: { approvalRequestId, level }, orderBy: { sequence: "asc" }, include });
+}
+
 export async function checkQuorum(approvalRequestId: string): Promise<QuorumResult> {
   const request = await prisma.approvalRequest.findUnique({ where: { id: approvalRequestId } });
   if (!request) return { satisfied: false, approvedCount: 0, requiredCount: 1, stepId: null };
 
-  const step = await prisma.approvalStep.findFirst({
-    where: { approvalRequestId, level: request.currentLevel },
-    orderBy: { sequence: "asc" },
-    include: { reviewers: { include: { reviewer: { select: { id: true, role: true, active: true } } } } },
-  });
+  const step = await findOpenStep(approvalRequestId, request.currentLevel);
   if (!step) return { satisfied: false, approvedCount: 0, requiredCount: 1, stepId: null };
 
   const { allowedRoles } = await getRequiredApprovers(request.actionType);
