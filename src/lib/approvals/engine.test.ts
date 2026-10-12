@@ -486,3 +486,49 @@ describe("approvals/engine — submit", () => {
     await expect(submitApprovalRequest(req.id, "maker1")).rejects.toThrow(/Cannot submit/);
   });
 });
+
+// A LEVEL_3 request has two steps that share one level: a manager step, then a Super Admin step. The step used to be found by level alone, so every
+// decision landed on the FIRST step and the Super Admin step never received an approval (found on a payment-rollout request that could not finish).
+describe("approvals/engine — two steps that share one level (LEVEL_3)", () => {
+  const setup = async () => {
+    admins.set("finance1", { id: "finance1", role: "FINANCE_MANAGER", active: true });
+    seedPolicy({ actionType: "PAYMENT_ROLLOUT", requiredLevel: "LEVEL_3", allowedRoles: ["FINANCE_MANAGER", "SUPER_ADMIN"], riskLevel: "CRITICAL" });
+    const req = await createApprovalRequest({ actionType: "PAYMENT_ROLLOUT", sourceType: "PAYMENT", sourceId: "global-payment-rollout", makerId: "maker1", reason: "sandbox test" });
+    const mine = () => [...steps.values()].filter((s) => s.approvalRequestId === req.id).sort((a, b) => a.sequence - b.sequence);
+    return { req, mine };
+  };
+
+  it("builds a manager step and then a Super Admin step at the same level", async () => {
+    const { mine } = await setup();
+    expect(mine().map((s) => [s.level, s.sequence, s.requiredRoles.join(",")])).toEqual([
+      ["LEVEL_3", 1, "FINANCE_MANAGER"],
+      ["LEVEL_3", 2, "SUPER_ADMIN"],
+    ]);
+  });
+
+  it("the manager approves step 1, then the Super Admin's approval lands on step 2 and the request is APPROVED", async () => {
+    const { req, mine } = await setup();
+    await recordDecision({ approvalRequestId: req.id, actorId: "finance1", decision: "APPROVE" });
+    expect(mine().map((s) => s.status)).toEqual(["SATISFIED", "IN_PROGRESS"]);
+
+    const done = await recordDecision({ approvalRequestId: req.id, actorId: "checker1", decision: "APPROVE" });
+    expect(done.status).toBe("APPROVED");
+    const [first, second] = mine();
+    const onStep = (stepId: string) => [...reviewers.values()].filter((r) => r.stepId === stepId).map((r) => r.reviewerId);
+    expect(onStep(first.id)).toEqual(["finance1"]); // the Super Admin is NOT recorded on the manager step
+    expect(onStep(second.id)).toEqual(["checker1"]);
+    expect(second.status).toBe("SATISFIED");
+  });
+
+  it("a second manager approval cannot stand in for the Super Admin step", async () => {
+    const { req } = await setup();
+    await recordDecision({ approvalRequestId: req.id, actorId: "finance1", decision: "APPROVE" });
+    const again = await recordDecision({ approvalRequestId: req.id, actorId: "finance1", decision: "APPROVE" });
+    expect(again.status).not.toBe("APPROVED");
+  });
+
+  it("the maker still cannot approve either step", async () => {
+    const { req } = await setup();
+    await expect(recordDecision({ approvalRequestId: req.id, actorId: "maker1", decision: "APPROVE" })).rejects.toThrow(ApprovalError);
+  });
+});

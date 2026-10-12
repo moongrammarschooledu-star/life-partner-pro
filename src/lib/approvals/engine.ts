@@ -6,7 +6,7 @@ import { nextSequenceCode } from "@/lib/privacy/codes";
 import { verifyStepUpToken } from "@/lib/step-up-token";
 import { createTask } from "@/lib/workflow/engine";
 import { isValidTransition, ACTIVE_APPROVAL_STATUSES } from "@/lib/approvals/status";
-import { getApprovalPolicy, getRequiredApprovers, calculateRisk, canApprove, canReject, canRequestChanges, checkQuorum, isExpired, type ApprovalContext } from "@/lib/approvals/policy-engine";
+import { getApprovalPolicy, getRequiredApprovers, calculateRisk, canApprove, canReject, canRequestChanges, checkQuorum, findOpenStep, isExpired, type ApprovalContext } from "@/lib/approvals/policy-engine";
 import { detectConflict, recordConflict, CONFLICT_NEUTRAL_MESSAGE } from "@/lib/approvals/conflict";
 import { getCatalogEntry } from "@/lib/approvals/catalog";
 import { recordApprovalEvent } from "@/lib/approvals/events";
@@ -237,7 +237,7 @@ export async function recordDecision(params: { approvalRequestId: string; actorI
     throw new ApprovalError(403, "You are not authorized to decide on this approval request.");
   }
 
-  const step = await prisma.approvalStep.findFirst({ where: { approvalRequestId: params.approvalRequestId, level: request.currentLevel }, orderBy: { sequence: "asc" } });
+  const step = await findOpenStep(params.approvalRequestId, request.currentLevel);
   if (!step) throw new ApprovalError(500, "This approval request has no active review step.");
 
   const decisionValue = params.decision === "APPROVE" ? "APPROVED" : params.decision === "REJECT" ? "REJECTED" : "CHANGES_REQUESTED";
