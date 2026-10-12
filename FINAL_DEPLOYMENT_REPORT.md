@@ -12,7 +12,7 @@ Vercel Hobby, project `lifepartnerpro`, functions in `iad1`, served from the nea
 **No custom domain.** The site is `lifepartnerpro.vercel.app`. Everything that needs a domain (APP_URL, e-mail identity, DNS runbook) is ready and documented but waits for the owner to buy/attach one. Not verified (nothing to verify).
 
 ## 4. SSL
-Verified live: valid Google Trust Services certificate (2026-08-29 to 2026-11-27, renewed by Vercel), `http://` answers 308 to `https://`, HSTS `max-age=31536000; includeSubDomains` (no preload), CSP enforcing, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, COOP. The 15-minute HSTS/certificate/page probe is written (`docs/ops/uptime.workflow.yml`) but **not active**: GitHub rejected pushing a workflow file with the stored token, so the owner must copy it to `.github/workflows/uptime.yml`.
+Verified live: valid Google Trust Services certificate (2026-08-29 to 2026-11-27, renewed by Vercel), `http://` answers 308 to `https://`, HSTS `max-age=31536000; includeSubDomains` (no preload), CSP enforcing, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, COOP. The 15-minute HSTS/certificate/page probe is `.github/workflows/uptime.yml`, active since 2026-10-12 (added through the GitHub web editor because the stored token cannot push workflow files; its first run passed).
 
 ## 5. Database
 Neon Postgres. 31 migrations validated statically (additive only; STEP 34 adds one column, four audit enum values and two tables). `/api/health/ready` on production answered `ready` (database ok, config ok, state NORMAL). STEP 34's migrations are **not yet applied to production** - they run during the build when the owner merges. Prisma transactions now bounded (5 s wait, 15 s limit). Free plan: about 6 hours of point-in-time history.
@@ -24,13 +24,13 @@ Vercel Blob; files are AES-256-GCM ciphertext and only served through authorised
 No Redis, queue service or worker is used or needed. Background work is the database-backed job table (retry with backoff, dead-letter review), drained by the daily cron and "Run now". Rate limits are persisted in the database. Documented in `docs/DEPLOYMENT.md` s.9.
 
 ## 8. CI/CD
-`ci.yml` (types, lint, tests, security scan, dependency audit, migration validation, build), `deploy-gate.yml` (live probes + evidence), `backup.yml` (optional), uptime probe prepared but not active (see section 4). Branch protection and a reviewer-gated `production` Environment are GitHub settings the owner must switch on. Controlled path for risky migrations: `scripts/deploy-db.sh pre|post` (refusals tested; the full run against a real database was not executed).
+`ci.yml` (types, lint, tests, security scan, dependency audit, migration validation, build), `deploy-gate.yml` (live probes + evidence), `backup.yml` (optional), uptime probe `uptime.yml` (active, see section 4). Branch protection and a reviewer-gated `production` Environment are GitHub settings the owner must switch on. Controlled path for risky migrations: `scripts/deploy-db.sh pre|post` (refusals tested; the full run against a real database was not executed).
 
 ## 9. Security
 Verified now: 2585 tests (208 files); route-authorization audit 0 critical / 0 high; static security scan PASS; dependency audit PASS; live security smoke PASS 12 / FAIL 0 / NOT_RUN 9. Finding fixed in the test tool: the security smoke reported 2 failures on production because its allow-list did not know the intentionally public sign-in-code endpoints (`forgot-password`, `reset-password`, `my-status/verify`) and treated a switched-off AI feature (503) as a leak, plus one network time-out; the endpoints were checked by hand (they are public by design and rate-limited). Not covered by tools: authenticated IDOR, privilege escalation with real sessions, replay with valid signatures - covered by unit tests and need manual review.
 
 ## 10. Monitoring
-In-app errors, metrics, slow queries, alerts, SOC detection, health pages; uptime probe prepared in `docs/ops/uptime.workflow.yml`, **not active yet**; optional `ALERT_WEBHOOK_URL`. **Not configured:** an external uptime service and an error tracker (owner accounts needed).
+In-app errors, metrics, slow queries, alerts, SOC detection, health pages; uptime probe `.github/workflows/uptime.yml`, active (first run passed); optional `ALERT_WEBHOOK_URL`. **Not configured:** an external uptime service and an error tracker (owner accounts needed).
 
 ## 11. Backups
 Daily encrypted backup with automatic restore verification inside the daily cron; optional `pg_dump` workflow (off). Authenticated backup status was **not** read from production in this session (the owner types passwords); check Admin > System Health > Backup & Recovery.

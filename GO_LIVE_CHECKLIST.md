@@ -39,7 +39,7 @@ Legend: [x] verified on 2026-10-12, [ ] open, [-] not applicable yet.
 
 ## F. Monitoring and alerting
 - [x] Auto - Health endpoints answer ready (observed 2026-10-12); in-app errors, alerts and SOC detection exist (confirm the monitoring self-test gate on Production Readiness)
-- [ ] You - Activate the GitHub uptime probe: copy `docs/ops/uptime.workflow.yml` to `.github/workflows/uptime.yml` (on github.com: Add file > Create new file, paste, commit to a branch; or push with a token that has the `workflow` scope). Needs the `EVIDENCE_URL` secret - confirm it is set, then check the first run in GitHub > Actions)
+- [x] Auto - GitHub uptime probe every 15 minutes is active (`.github/workflows/uptime.yml`); confirm the first scheduled run in GitHub > Actions and that the `EVIDENCE_URL` secret is set
 - [ ] You - Create a free external uptime monitor (e.g. UptimeRobot) for `/api/health/live` with e-mail/SMS alerts to the owner
 - [ ] You - Optional error tracker (Sentry) - not configured; in-app error capture is the current mechanism
 - [ ] You - `ALERT_WEBHOOK_URL` (Slack-compatible) if you want alerts outside the app

@@ -189,7 +189,7 @@ Admin > Deployment & Go-Live. `GO_LIVE_BLOCKED -> GO_LIVE_READY -> GO_LIVE_APPRO
 
 ### Monitoring layers
 1. In-app: errors, metrics, slow queries, alerts, SOC detection, health pages.
-2. GitHub uptime probe every 15 minutes - ready in `docs/ops/uptime.workflow.yml`, active only after it is copied to `.github/workflows/uptime.yml` (pages, health, HSTS, certificate life) - opens one `outage` issue.
+2. GitHub uptime probe every 15 minutes - `.github/workflows/uptime.yml`, active (pages, health, HSTS, certificate life) - opens one `outage` issue.
 3. Recommended on top (owner account needed): an external uptime service and optionally an error tracker.
 
 ### Controlled database deployment

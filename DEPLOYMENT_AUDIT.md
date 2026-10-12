@@ -37,7 +37,7 @@ Date of inspection: 2026-10-12. Scope: what exists today for production deployme
 | No per-channel kill switch for SMS and e-mail; no contact-sharing kill switch | `sms.enabled`, `email.enabled` flags (messages held, never deleted; sign-in/reset codes unaffected); `contactSharing` emergency switch |
 | Failing provider kept being retried, wasting attempts | **Circuit breaker**: DOWN provider skipped for 5 minutes, message re-queued for the reopen time, no attempt consumed |
 | Prisma transactions used library defaults (2 s wait / 5 s run) | Bounded explicitly: 5 s wait for a connection, 15 s transaction limit |
-| No outside-in uptime check | `docs/ops/uptime.workflow.yml` (activate by copying to `.github/workflows/uptime.yml`): every 15 minutes probes pages, health, HSTS and certificate life; opens one `outage` issue on failure |
+| No outside-in uptime check | `.github/workflows/uptime.yml` (active since 2026-10-12): every 15 minutes probes pages, health, HSTS and certificate life; opens one `outage` issue on failure |
 | No controlled DB deployment script | `scripts/deploy-db.sh pre|post` (backup proof required, validate, migrate, integrity, wait, smoke) |
 | Version was `0.1.0` | `1.0.0-rc.1` until the owner declares launch; `CHANGELOG.md` started |
 | Runbooks existed in-app only | 12 file runbooks in `docs/runbooks/` with symptoms, diagnosis, actions, verification, escalation, recovery, rollback, post-incident |
