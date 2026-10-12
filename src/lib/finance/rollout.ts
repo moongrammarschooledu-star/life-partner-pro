@@ -200,7 +200,8 @@ export async function changeRolloutStage(params: { toStage: PaymentRolloutStage;
 // without doing the work (spec §65).
 export async function getSandboxReadinessChecklist() {
   const [paid, failed, cancelledOrder, completedRefund, processedWebhook, activeSubscription, invoice] = await Promise.all([
-    prisma.payment.findFirst({ where: { status: "PAID" } }),
+    // A payment that was paid and later refunded still proves a payment succeeded.
+    prisma.payment.findFirst({ where: { status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] } } }),
     prisma.payment.findFirst({ where: { status: "FAILED" } }),
     prisma.order.findFirst({ where: { status: "CANCELLED" } }),
     prisma.refund.findFirst({ where: { status: "COMPLETED" } }),
