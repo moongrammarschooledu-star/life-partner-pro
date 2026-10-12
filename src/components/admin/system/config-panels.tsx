@@ -11,7 +11,7 @@ interface Control {
   operationalState: string; operationalStateReason: string | null;
   maintenanceMode: string; maintenanceStartsAt: string | null; maintenanceEndsAt: string | null; maintenanceMessage: string | null;
   emergencyPaymentsDisabled: boolean; emergencyRegistrationsDisabled: boolean; emergencyProfileSubmissionsDisabled: boolean; emergencyMatchingDisabled: boolean;
-  emergencyProposalsDisabled: boolean; emergencyNotificationsDisabled: boolean; emergencyUploadsDisabled: boolean; emergencyPublicAccessDisabled: boolean;
+  emergencyProposalsDisabled: boolean; emergencyNotificationsDisabled: boolean; emergencyUploadsDisabled: boolean; emergencyPublicAccessDisabled: boolean; emergencyContactSharingDisabled: boolean;
   rpoMinutes: number; rtoMinutes: number; slowQueryThresholdMs: number; apiLatencyWarnMs: number; errorRateWarnPerHour: number; failedLoginSpikeThreshold: number;
   paymentFailureSpikeThreshold: number; webhookFailureSpikeThreshold: number; queueBacklogThreshold: number; permissionViolationThreshold: number;
   dbStorageLimitMb: number | null; fileStorageLimitMb: number | null; capacityWarnPercent: number; monitoringPeriodHours: number; evidenceMaxAgeDays: number;
@@ -188,6 +188,7 @@ const SWITCHES: Array<{ field: keyof Control; label: string; effect: string }> =
   { field: "emergencyProposalsDisabled", label: "Proposals", effect: "Creating proposals is refused." },
   { field: "emergencyNotificationsDisabled", label: "Notifications", effect: "External delivery pauses; failed rows are kept for retry." },
   { field: "emergencyUploadsDisabled", label: "File uploads", effect: "Photo, document and evidence uploads are refused." },
+  { field: "emergencyContactSharingDisabled", label: "Contact sharing", effect: "New contact shares between two profiles are refused; existing consent, approvals and records are kept." },
   { field: "emergencyPublicAccessDisabled", label: "Public application access", effect: "The whole public site shows the neutral page. Admin console stays up." },
 ];
 

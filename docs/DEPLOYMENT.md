@@ -161,3 +161,36 @@ record it in the app afterwards (password re-confirmation + reason).
 * CPU/memory metrics are not available on serverless.
 * Automated tooling covers unauthenticated behaviour only; authenticated flows,
   IDOR with real users and real payment sandboxes need manual verification.
+
+## 9. STEP 34 addendum - architecture, branches, versions, zero downtime
+
+### Production architecture (as it is today)
+```
+Browser --https--> Vercel edge (TLS, HSTS, cache of static pages)
+                     |--> Vercel Functions (Next.js, region iad1) --pooled--> Neon Postgres (primary data)
+                     |                                          --------> Vercel Blob (AES-GCM ciphertext files, backup store)
+                     |                                          --------> SMTP / (SMS, WhatsApp, payments: not enabled)
+GitHub (code, CI, deploy gate, 15-minute uptime probe, optional pg_dump) --> posts evidence to the app
+Vercel Cron (once a day) --> /api/cron/notifications --> jobs, backups, detection, reminders
+```
+No Redis, queue service or worker process is used or needed: background work is the database-backed job table, drained by the daily tick and by "Run now". Rate limits live in the database too. If traffic ever needs real-time queues, that is a new decision, not an omission.
+
+### Branch strategy (what actually exists)
+`feature/*` or `stepNN-*` branch -> pull request -> **CI / verify** -> merge to `main` -> Vercel Production. There is no separate long-lived `staging` branch: every pull request gets a Vercel **Preview** deployment that uses the staging environment variables and a **schema-only Neon branch** (no personal data), which is the staging environment. Production changes only by merging to `main`.
+
+### Versions
+`package.json` version is the product version (`MAJOR.MINOR.PATCH`, release candidates `-rc.N`); the commit and the latest migration are shown beside it in Admin > Deployment & Go-Live and stored in the release record. `CHANGELOG.md` is updated in the pull request. The version becomes `1.0.0` only after the go-live gate reaches LIVE.
+
+### Zero downtime
+Vercel builds the new version beside the old one and switches traffic only when the build succeeded; a failed migration or build leaves the old version serving. Migrations are additive (expand), code that uses them ships after (contract happens later and needs a written approval). Rollback = promote the previous deployment (seconds, no rebuild). See `docs/runbooks/rollback.md`.
+
+### Go-live gate
+Admin > Deployment & Go-Live. `GO_LIVE_BLOCKED -> GO_LIVE_READY -> GO_LIVE_APPROVED -> LIVE`. READY needs every required readiness gate to pass for the running build; APPROVED needs a different administrator; LIVE re-checks both. A failing gate or a new build drops READY/APPROVED back to BLOCKED automatically. It is a record of the decision: it does not turn payments, messaging or any flag on.
+
+### Monitoring layers
+1. In-app: errors, metrics, slow queries, alerts, SOC detection, health pages.
+2. GitHub uptime probe every 15 minutes - ready in `docs/ops/uptime.workflow.yml`, active only after it is copied to `.github/workflows/uptime.yml` (pages, health, HSTS, certificate life) - opens one `outage` issue.
+3. Recommended on top (owner account needed): an external uptime service and optionally an error tracker.
+
+### Controlled database deployment
+`bash scripts/deploy-db.sh pre --backup-ref "<backup code>"` then merge, then `bash scripts/deploy-db.sh post --url https://<site>`. Normal releases do not need it (the build runs the migrations).

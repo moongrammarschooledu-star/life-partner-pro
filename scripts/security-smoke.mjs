@@ -44,7 +44,8 @@ const routes = walk(API).map((file) => {
 const concreteUrl = (path) => base + path.replace(/\[\.\.\.[^\]]+\]/g, "x").replace(/\[[^\]]+\]/g, "smoke-id");
 
 // 1. Every admin API endpoint must reject an anonymous caller.
-const PUBLIC_ADMIN = new Set(["/api/admin/auth/precheck", "/api/admin/auth/verify-otp"]);
+// Public by design: the sign-in steps and the e-mailed-code reset flow (they hold no session yet; each is rate limited and answers without revealing whether an account exists).
+const PUBLIC_ADMIN = new Set(["/api/admin/auth/precheck", "/api/admin/auth/verify-otp", "/api/admin/auth/forgot-password", "/api/admin/auth/reset-password"]);
 const adminFailures = [];
 let adminChecked = 0;
 for (const r of routes.filter((x) => x.path.startsWith("/api/admin/") && !PUBLIC_ADMIN.has(x.path))) {
@@ -57,14 +58,16 @@ for (const r of routes.filter((x) => x.path.startsWith("/api/admin/") && !PUBLIC
 add(`Unauthorized API access — ${adminChecked} admin endpoint/method pairs reject anonymous callers (401)`, adminFailures.length === 0 ? "PASS" : "FAIL", adminFailures.slice(0, 8).join("; "));
 
 // 2. Applicant (/api/my-*) endpoints must reject anonymous callers.
-const PUBLIC_MY = new Set(["/api/my-status", "/api/my-billing/packages"]);
+// /api/my-status/verify is the second step of the applicant sign-in (the e-mailed code), public like /api/my-status.
+const PUBLIC_MY = new Set(["/api/my-status", "/api/my-status/verify", "/api/my-billing/packages"]);
 const applicantFailures = [];
 let applicantChecked = 0;
 for (const r of routes.filter((x) => /^\/api\/my-/.test(x.path) && !PUBLIC_MY.has(x.path))) {
   for (const method of r.methods) {
     const res = await http(concreteUrl(r.path), { method, headers: method === "GET" ? {} : { "Content-Type": "application/json" }, body: method === "GET" ? undefined : "{}" });
     applicantChecked++;
-    if (![401, 403, 429].includes(res.status)) applicantFailures.push(`${method} ${r.path} → ${res.status}`);
+    // 503 = the feature is switched off, so nothing is served to anyone (the flag check runs before the sign-in check).
+    if (![401, 403, 429, 503].includes(res.status)) applicantFailures.push(`${method} ${r.path} → ${res.status}`);
   }
 }
 add(`Unauthorized profile/contact/document/payment access — ${applicantChecked} applicant endpoint/method pairs reject anonymous callers`, applicantFailures.length === 0 ? "PASS" : "FAIL", applicantFailures.slice(0, 8).join("; "));

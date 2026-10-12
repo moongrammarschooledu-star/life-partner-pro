@@ -109,6 +109,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/system-config", label: "System Configuration", icon: SlidersHorizontal, permission: "system:view" },
   { href: "/admin/alerts", label: "Alerts & Incidents", icon: Siren, permission: "alerts:view" },
   { href: "/admin/production-readiness", label: "Production Readiness", icon: ClipboardCheck, permission: "readiness:view" },
+  { href: "/admin/deployment", label: "Deployment & Go-Live", icon: ClipboardCheck, permission: "readiness:view" },
   { href: "/admin/runbooks", label: "Runbooks", icon: BookOpen, permission: "system:view" },
   { href: "/admin/ai", label: "AI Assistant", icon: Bot, permission: "ai:view" },
   { href: "/admin/support", label: "Support", icon: Inbox },

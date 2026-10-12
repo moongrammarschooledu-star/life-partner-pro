@@ -157,6 +157,7 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "alerts:manage": "Acknowledge, assign, resolve alerts and open incidents",
   "readiness:view": "View Production Readiness and release records",
   "releases:manage": "Approve releases and record rollbacks",
+  "golive:manage": "Mark the system ready for go-live, approve go-live as a second person, record the launch and block it again",
   "ai:view": "View the AI Matchmaking Assistant and its overview",
   "ai:use": "Use AI analysis (profile summary, match explanation, comparison, data quality) on profiles you can access",
   "ai:copilot": "Use the Admin Copilot (read-only questions within your own permissions)",

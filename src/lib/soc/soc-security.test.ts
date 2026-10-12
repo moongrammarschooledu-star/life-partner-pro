@@ -398,8 +398,10 @@ describe("the documentation stays in step with the code", () => {
     for (const f of files) for (const m of read(join(ROOT, "docs", f)).matchAll(/\]\(([A-Z_]+\.md)\)/g)) expect(existsSync(join(ROOT, "docs", m[1])), `${f} links to ${m[1]}`).toBe(true);
   });
   it("contains no credential-looking text", () => {
-    for (const f of readdirSync(join(ROOT, "docs"))) {
-      const text = read(join(ROOT, "docs", f));
+    // STEP 34 added docs/runbooks/: read the files of both folders (a folder itself cannot be read).
+    const all = [...readdirSync(join(ROOT, "docs")).map((f) => join("docs", f)), ...readdirSync(join(ROOT, "docs", "runbooks")).map((f) => join("docs", "runbooks", f))].filter((f) => f.endsWith(".md"));
+    for (const f of all) {
+      const text = read(join(ROOT, f));
       expect(text, f).not.toMatch(/(password|secret|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9+/_-]{12,}/i);
       expect(text, f).not.toMatch(/sk_live_[A-Za-z0-9]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----/);
     }

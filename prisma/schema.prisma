@@ -1376,6 +1376,12 @@ enum AuditAction {
   SOC_DR_PLAN_CHANGED
   SOC_DR_TEST_RECORDED
   SOC_ACCESS_DENIED
+
+  // ---------- STEP 34 — go-live gate ----------
+  GO_LIVE_MARKED_READY
+  GO_LIVE_APPROVED
+  GO_LIVE_RECORDED_LIVE
+  GO_LIVE_BLOCKED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -5848,6 +5854,7 @@ model SystemControl {
   emergencyNotificationsDisabled      Boolean @default(false)
   emergencyUploadsDisabled            Boolean @default(false)
   emergencyPublicAccessDisabled       Boolean @default(false)
+  emergencyContactSharingDisabled     Boolean @default(false) // STEP 34 — stops NEW contact shares between two profiles; nothing is deleted
 
   // Disaster-recovery targets (spec §9) — targets, never guarantees
   rpoMinutes Int @default(1440)
@@ -10765,4 +10772,35 @@ model DisasterRecoveryTest {
   createdAt       DateTime  @default(now())
 
   @@index([status, performedAt])
+}
+
+// STEP 34 — go-live approval gate. ONE row (id "singleton") holds where the launch stands; every change is also written to GoLiveEvent
+// (append-only). This is a governance record: it never opens or closes traffic by itself. Statuses are plain strings (no enum) so a later
+// step can add one without the two-migration enum rule.
+model GoLiveState {
+  id           String    @id
+  status       String // GO_LIVE_BLOCKED | GO_LIVE_READY | GO_LIVE_APPROVED | LIVE
+  readyById    String? // who marked it ready (the maker)
+  readyAt      DateTime?
+  approvedById String? // a DIFFERENT administrator (the checker)
+  approvedAt   DateTime?
+  liveById     String?
+  liveAt       DateTime?
+  commitSha    String? // the build that was judged
+  reason       String?
+  updatedAt    DateTime  @updatedAt
+}
+
+model GoLiveEvent {
+  id         String   @id @default(cuid())
+  fromStatus String
+  toStatus   String
+  action     String // MARK_READY | APPROVE | GO_LIVE | BLOCK | AUTO_BLOCK
+  actorId    String?
+  reason     String?
+  commitSha  String?
+  gateSummary Json? // { verdict, unresolved: string[] } at that moment — names only, never values
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }

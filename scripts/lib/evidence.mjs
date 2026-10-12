@@ -19,13 +19,15 @@ export function baseUrl(args) {
   return raw.replace(/\/$/, "");
 }
 
-export async function http(url, init = {}) {
+export async function http(url, init = {}, retried = false) {
   const started = Date.now();
   try {
     const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(15000), ...init });
     const text = await res.text().catch(() => "");
     return { status: res.status, headers: res.headers, text, ms: Date.now() - started };
   } catch (error) {
+    // One retry for a network error or timeout (a cold serverless start can exceed the limit once); a second failure is reported.
+    if (!retried) return http(url, init, true);
     return { status: 0, headers: new Headers(), text: String(error?.message ?? error), ms: Date.now() - started, error: true };
   }
 }
