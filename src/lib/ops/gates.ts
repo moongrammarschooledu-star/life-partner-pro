@@ -54,7 +54,7 @@ export interface ReadinessFacts {
   jobs: { workerStatus: string | null; workerAgeHours: number | null; alertEvalAgeHours: number | null; deadLetter: number; tickConsecutiveFailures: number };
   alerts: { openCritical: number };
   integrity: { status: string | null; ageDays: number | null; highFindings: number };
-  payments: { provider: string; activeBankAccounts: number; stage: string; envSafe: boolean; checklist: Record<string, boolean>; reconciliationClean: boolean | null; killSwitchExercised: boolean; webhooksEnabled: boolean };
+  payments: { provider: string; activeBankAccounts: number; stage: string; envSafe: boolean; checklist: Record<string, boolean>; reconciliationClean: boolean | null; killSwitchExercised: boolean; webhooksEnabled: boolean; paymentsEnabled: boolean };
   comms: { email: boolean; sms: boolean; whatsappEnabled: boolean; whatsappConfigured: boolean };
   security: { twoFactorRoles: string[]; adminSessionMaxHours: number; legacyUnencryptedPhotos: number; lockoutConfigured: boolean };
   release: { hasCurrent: boolean; healthy: boolean; approved: boolean; hasRollbackTarget: boolean };
@@ -238,6 +238,17 @@ export function evaluateReadiness(f: ReadinessFacts): ReadinessResult {
   add({ id: "ai_llm_unverified", category: "AI Assistant", title: "External LLM adapter exercised against a live provider", required: false, status: ai?.externalEverSucceeded ? "PASS" : "WARN", detail: ai?.externalEverSucceeded ? "At least one live external request succeeded." : "The external adapter is contract-tested with mocks only; it has not been exercised against a live provider (no key configured)." });
   add({ id: "ai_fairness", category: "AI Assistant", title: "Fairness review", required: false, status: "WARN", detail: "Fairness checks are rule/probe based on synthetic profiles, not a statistical bias audit. Known limitations are listed in Admin → AI Assistant → AI Safety." });
   add({ id: "ai_document", category: "AI Assistant", title: "AI document analysis", required: false, status: "WARN", detail: "Not implemented (spec §50); no AI processing of documents exists or can be enabled." });
+
+  // STEP 34 - while payments are OFF (rollout stage DISABLED and the master switch off) nothing can be charged, so the gates that prove a
+  // payment can be taken, refunded and stopped cannot be satisfied yet and must not block a launch without payments. They are shown as
+  // warnings (never as PASS) and become required again the moment payments are switched on. The environment-safety gate stays required.
+  const paymentsInUse = p.stage !== "DISABLED" || p.paymentsEnabled;
+  if (!paymentsInUse) {
+    for (const id of ["pay_provider", "pay_flows", "pay_reconciliation", "pay_refund", "pay_kill_switch"]) {
+      const i = gates.findIndex((g) => g.id === id);
+      if (i >= 0 && gates[i].status !== "PASS") gates[i] = { ...gates[i], required: false, status: "WARN", detail: `${gates[i].detail} Not required while payments are off; required again as soon as payments are switched on.` };
+    }
+  }
 
   // ---- Scorecard + verdict -------------------------------------------------------------------------------
   const scorecard: Scorecard[] = CATEGORIES.map((category) => {

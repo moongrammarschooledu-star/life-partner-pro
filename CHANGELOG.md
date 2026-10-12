@@ -6,6 +6,12 @@ Rule for contributors: every pull request that changes behaviour adds a line und
 
 ## Unreleased
 
+### Changed
+- Readiness: while payments are off (rollout stage DISABLED and the master switch off), the payment-provider, sandbox-checklist, reconciliation, refund and kill-switch gates are advisory warnings instead of launch blockers. They become required again the moment payments are switched on or the rollout stage leaves DISABLED; the payment-environment safety gate is always required.
+
+### Fixed
+- The daily tick no longer fails when the settings row does not exist yet (scheduled payment reconciliation and the rollout-stage change now upsert).
+
 ## 1.0.0-rc.1 - STEP 34: production deployment and go-live system (not yet released)
 
 ### Added
