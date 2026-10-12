@@ -113,6 +113,22 @@ export default function MyBillingPage() {
             >
               <CheckCircle2 className="h-4 w-4" /> I&apos;ve Made the Transfer
             </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const res = await fetch(`/api/my-billing/orders/${checkoutResult.orderCode}/cancel`, { method: "POST" });
+                if (res.ok) {
+                  show("Order cancelled. Nothing was charged.", "success");
+                  setCheckoutResult(null);
+                  setSelected(null);
+                  setReference("");
+                } else {
+                  show((await res.json().catch(() => ({}))).error ?? "Could not cancel the order.", "error");
+                }
+              }}
+            >
+              Cancel this order
+            </Button>
           </CardContent>
         </Card>
       </div>
