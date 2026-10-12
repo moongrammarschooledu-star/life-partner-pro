@@ -92,6 +92,7 @@ export default function ApprovalDetailPage({ params }: { params: Promise<{ id: s
   const [escalateOpen, setEscalateOpen] = useState(false);
   const [escalateReason, setEscalateReason] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [executeOpen, setExecuteOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [delegateOpen, setDelegateOpen] = useState(false);
   const [delegateTo, setDelegateTo] = useState("");
@@ -295,7 +296,7 @@ export default function ApprovalDetailPage({ params }: { params: Promise<{ id: s
                 </Button>
               )}
               {canExecute && (
-                <Button size="sm" onClick={() => callAction("/execute", {}, "Executed")} disabled={busy}>
+                <Button size="sm" onClick={() => setExecuteOpen(true)} disabled={busy}>
                   <Play className="h-3.5 w-3.5" /> Execute
                 </Button>
               )}
@@ -318,6 +319,14 @@ export default function ApprovalDetailPage({ params }: { params: Promise<{ id: s
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={executeOpen} title="Mark this request as executed?"
+        description="This only records the request as executed - it does NOT carry out the action. Do the action itself first from its own screen (for a payment rollout: Finance Center > Rollout > Advance; the screen then marks the request executed by itself). Once marked executed, the approval cannot be used again."
+        confirmLabel="Only mark as executed" danger confirmDisabled={busy}
+        onConfirm={() => { callAction("/execute", {}, "Marked as executed"); setExecuteOpen(false); }}
+        onCancel={() => setExecuteOpen(false)}
+      />
 
       <SensitiveActionDialog
         open={reauthFor != null}
