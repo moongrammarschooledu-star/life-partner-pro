@@ -34,7 +34,11 @@ export async function verifyManualPayment(paymentId: string, verifiedById: strin
   if (!payment || !payment.manualDetail) throw new Error("Manual payment not found");
   if (payment.manualDetail.status !== "PENDING_VERIFICATION") throw new Error("This payment has already been verified or rejected.");
   if (!isValidPaymentStatusTransition(payment.status, "PAID")) throw new Error(`Cannot mark payment as PAID from status ${payment.status}`);
-  if (!isValidOrderStatusTransition(payment.order.status, "PAID")) throw new Error(`Cannot mark order as PAID from status ${payment.order.status}`);
+  // When the applicant submits the transfer reference the order used to stay PENDING_PAYMENT (only the payment moved to PROCESSING), and the rules do not
+  // allow PENDING_PAYMENT -> PAID, so no manual payment could ever be verified. An order in that state is treated as PAYMENT_PROCESSING, which is
+  // where the confirm route now puts it, so payments already waiting from before that fix can still be verified.
+  const orderFrom = payment.order.status === "PENDING_PAYMENT" ? "PAYMENT_PROCESSING" : payment.order.status;
+  if (!isValidOrderStatusTransition(orderFrom, "PAID")) throw new Error(`Cannot mark order as PAID from status ${payment.order.status}`);
 
   // STEP 33 — two administrators pressing "verify" at the same moment must settle the payment ONCE. The check above is only a fast path;
   // the claim below is the real guard: it flips PENDING_VERIFICATION -> VERIFIED conditionally, and only the request that wins the row

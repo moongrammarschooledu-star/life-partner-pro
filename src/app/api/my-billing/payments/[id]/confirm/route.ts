@@ -28,7 +28,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (existing) return NextResponse.json({ error: "A payment reference has already been submitted for this payment." }, { status: 409 });
 
   await recordManualPayment({ paymentId: id, referenceNumber: referenceNumber.trim(), evidenceDescription, submittedByProfileId: profileId });
-  await prisma.payment.update({ where: { id }, data: { status: "PROCESSING" } });
+  // The order moves with the payment (PENDING_PAYMENT -> PAYMENT_PROCESSING). Only the payment used to move, which left the order where the status
+  // rules cannot reach PAID, so the admin's Verify failed with "Cannot mark order as PAID from status PENDING_PAYMENT".
+  await prisma.$transaction([
+    prisma.payment.update({ where: { id }, data: { status: "PROCESSING" } }),
+    prisma.order.updateMany({ where: { id: payment.orderId, status: "PENDING_PAYMENT" }, data: { status: "PAYMENT_PROCESSING" } }),
+  ]);
   await notifyManualPaymentRequiresReview();
   await createFromEvent({
     eventName: "MANUAL_PAYMENT_REQUIRES_REVIEW",
