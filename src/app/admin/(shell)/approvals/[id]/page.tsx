@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Select } from "@/components/ui/form";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { SensitiveActionDialog } from "@/components/admin/system/shared";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime, formatEnumLabel } from "@/lib/utils";
 import type { Permission } from "@/lib/permissions";
@@ -95,6 +96,9 @@ export default function ApprovalDetailPage({ params }: { params: Promise<{ id: s
   const [delegateOpen, setDelegateOpen] = useState(false);
   const [delegateTo, setDelegateTo] = useState("");
   const [delegateReason, setDelegateReason] = useState("");
+  // Some policies demand a fresh password before a decision is recorded (the server answers 403 "re-enter your password"). The page used to show only
+  // that message with nowhere to type it; now the same call is held here and re-sent with the confirmed password.
+  const [reauthFor, setReauthFor] = useState<{ path: string; body: Record<string, unknown>; successMessage: string } | null>(null);
 
   function load() {
     fetch(`/api/admin/approvals/${id}`)
@@ -126,6 +130,10 @@ export default function ApprovalDetailPage({ params }: { params: Promise<{ id: s
       const res = await fetch(`/api/admin/approvals/${id}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json();
       if (!res.ok) {
+        if (res.status === 403 && typeof json.error === "string" && /re-enter your password/i.test(json.error)) {
+          setReauthFor({ path, body, successMessage });
+          return;
+        }
         show(json.error ?? "Something went wrong.", "error");
         return;
       }
@@ -310,6 +318,28 @@ export default function ApprovalDetailPage({ params }: { params: Promise<{ id: s
           </Card>
         </div>
       </div>
+
+      <SensitiveActionDialog
+        open={reauthFor != null}
+        title="Confirm with your password"
+        description="This decision needs your password. It is recorded in the audit log."
+        requireReason={false}
+        onCancel={() => setReauthFor(null)}
+        onConfirm={async ({ stepUpToken }) => {
+          if (!reauthFor) return null;
+          const res = await fetch(`/api/admin/approvals/${id}${reauthFor.path}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...reauthFor.body, reauthToken: stepUpToken, stepUpToken }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) return typeof json.error === "string" ? json.error : "Could not record the decision.";
+          show(reauthFor.successMessage, "success");
+          setReauthFor(null);
+          load();
+          return null;
+        }}
+      />
 
       <ConfirmDialog
         open={rejectOpen} title="Reject Approval Request" description="This action is never executed once rejected. Provide a reason for the audit trail."
