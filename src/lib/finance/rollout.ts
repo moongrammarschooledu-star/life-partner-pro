@@ -182,7 +182,8 @@ export async function changeRolloutStage(params: { toStage: PaymentRolloutStage;
     throw new Error(`Cannot move payment rollout stage from ${fromStage} to ${params.toStage}.`);
   }
 
-  await prisma.appSettings.update({ where: { id: 1 }, data: { paymentRolloutStage: params.toStage } });
+  // upsert: the settings row may not exist yet on a fresh database (same cause as the scheduled reconciliation failure).
+  await prisma.appSettings.upsert({ where: { id: 1 }, update: { paymentRolloutStage: params.toStage }, create: { id: 1, paymentRolloutStage: params.toStage } });
   await prisma.paymentRolloutEvent.create({
     data: { fromStage, toStage: params.toStage, reason: params.reason, actorId: params.actorId },
   });
