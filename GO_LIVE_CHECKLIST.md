@@ -45,7 +45,7 @@ Legend: [x] verified on 2026-10-12, [ ] open, [-] not applicable yet.
 - [ ] You - `ALERT_WEBHOOK_URL` (Slack-compatible) if you want alerts outside the app
 
 ## G. Integrations - keep OFF until verified
-- [x] Payments are OFF (master switch). Do not enable until sandbox end-to-end passes
+- [x] Payments are OFF (master switch). Do not enable until sandbox end-to-end passes. While they are off, the payment readiness gates (provider, sandbox checklist, refund, kill switch, reconciliation) show as warnings and do not block go-live; the moment payments are switched on they block again until proven
 - [ ] You - Payment provider: sandbox keys first, webhook secret, one sandbox payment + refund, then production keys, then the rollout (Admin > Finance Center > Rollout), with a second person watching
 - [ ] You - WhatsApp (Meta): business verification, approved templates, token and secrets in Vercel; test with `COMMUNICATION_TEST_RECIPIENTS` in staging first; then the `whatsapp.enabled` flag
 - [ ] You - SMS (Twilio): credentials, sender, test; then `sms.enabled`

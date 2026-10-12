@@ -19,7 +19,7 @@ const green: ReadinessFacts = {
   jobs: { workerStatus: "SUCCESS", workerAgeHours: 2, alertEvalAgeHours: 2, deadLetter: 0, tickConsecutiveFailures: 0 },
   alerts: { openCritical: 0 },
   integrity: { status: "CLEAN", ageDays: 0.5, highFindings: 0 },
-  payments: { provider: "MANUAL", activeBankAccounts: 1, stage: "PRODUCTION", envSafe: true, checklist: { successfulPayment: true, failedPayment: true, cancelledOrder: true, completedRefund: true, processedWebhookEvent: false, activeSubscription: true, invoiceGenerated: true }, reconciliationClean: true, killSwitchExercised: true, webhooksEnabled: true },
+  payments: { provider: "MANUAL", activeBankAccounts: 1, stage: "PRODUCTION", envSafe: true, checklist: { successfulPayment: true, failedPayment: true, cancelledOrder: true, completedRefund: true, processedWebhookEvent: false, activeSubscription: true, invoiceGenerated: true }, reconciliationClean: true, killSwitchExercised: true, webhooksEnabled: true, paymentsEnabled: true },
   comms: { email: true, sms: true, whatsappEnabled: false, whatsappConfigured: false },
   security: { twoFactorRoles: ["SUPER_ADMIN", "OPERATIONS_ADMIN"], adminSessionMaxHours: 12, legacyUnencryptedPhotos: 0, lockoutConfigured: true },
   release: { hasCurrent: true, healthy: true, approved: true, hasRollbackTarget: true },
@@ -155,5 +155,57 @@ describe("AI Assistant gates (STEP 16)", () => {
     expect(warn).toEqual(expect.arrayContaining(["ai_llm_unverified", "ai_fairness", "ai_document"]));
     expect(r.scorecard.find((s) => s.category === "AI Assistant")!.status).toBe("PASS WITH WARNINGS");
     expect(JSON.stringify(r.scorecard)).not.toMatch(/"score"/);
+  });
+});
+
+// STEP 34 - payments that are switched off must not block a launch without payments, and must never read as PASS.
+describe("payment gates while payments are off", () => {
+  const PAY = ["pay_provider", "pay_flows", "pay_reconciliation", "pay_refund", "pay_kill_switch"];
+  const off: ReadinessFacts = {
+    ...green,
+    payments: { ...green.payments, stage: "DISABLED", paymentsEnabled: false, activeBankAccounts: 0, checklist: {}, reconciliationClean: null, killSwitchExercised: false },
+  };
+
+  it("are advisory warnings, not blockers, when the rollout stage is DISABLED and the master switch is off", () => {
+    const r = evaluateReadiness(off);
+    for (const id of PAY) {
+      const g = r.gates.find((x) => x.id === id)!;
+      expect(g.required, id).toBe(false);
+      expect(g.status, id).toBe("WARN");
+      expect(g.detail, id).toMatch(/Not required while payments are off/);
+    }
+    expect(r.unresolved.some((u) => u.startsWith("[Payments]"))).toBe(false);
+    expect(r.verdict).toBe("READY");
+  });
+
+  it("become required and blocking again as soon as the master switch is on", () => {
+    const r = evaluateReadiness({ ...off, payments: { ...off.payments, paymentsEnabled: true } });
+    for (const id of ["pay_provider", "pay_flows", "pay_refund", "pay_kill_switch"]) expect(r.gates.find((x) => x.id === id)!.required, id).toBe(true);
+    expect(r.verdict).toBe("NOT READY");
+  });
+
+  it("become required and blocking again as soon as the rollout stage leaves DISABLED", () => {
+    const r = evaluateReadiness({ ...off, payments: { ...off.payments, stage: "SANDBOX" } });
+    expect(r.unresolved.filter((u) => u.startsWith("[Payments]")).length).toBeGreaterThan(0);
+    expect(r.verdict).toBe("NOT READY");
+  });
+
+  it("a gate that really passes still reads PASS (nothing is downgraded)", () => {
+    const r = evaluateReadiness({ ...off, payments: { ...off.payments, activeBankAccounts: 1 } });
+    expect(r.gates.find((x) => x.id === "pay_provider")!.status).toBe("PASS");
+  });
+
+  it("the environment-safety gate stays required even while payments are off", () => {
+    const r = evaluateReadiness({ ...off, payments: { ...off.payments, envSafe: false } });
+    const g = r.gates.find((x) => x.id === "pay_env")!;
+    expect(g.required).toBe(true);
+    expect(g.status).toBe("BLOCKED");
+    expect(r.verdict).toBe("NOT READY");
+  });
+
+  it("the scorecard shows the Payments category with warnings, never a clean PASS", () => {
+    const sc = evaluateReadiness(off).scorecard.find((s) => s.category === "Payments")!;
+    expect(sc.status).toBe("PASS WITH WARNINGS");
+    expect(sc.blocking).toEqual([]);
   });
 });

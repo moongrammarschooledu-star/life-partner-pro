@@ -147,6 +147,7 @@ export async function gatherReadinessFacts(): Promise<ReadinessFacts> {
       reconciliationClean: latestRecon ? latestRecon.discrepancyCount === 0 : null,
       killSwitchExercised: killSwitch > 0,
       webhooksEnabled: appSettings?.providerWebhooksEnabled ?? true,
+      paymentsEnabled: appSettings?.paymentsEnabled ?? false,
     },
     comms: { email: Boolean(env.SMTP_USER?.trim() && env.SMTP_PASS?.trim()), sms: Boolean(env.SMS_PROVIDER_API_KEY?.trim()), whatsappEnabled: env.WHATSAPP_ENABLED === "true", whatsappConfigured: Boolean(env.WHATSAPP_API_KEY?.trim()) },
     security: { twoFactorRoles, adminSessionMaxHours: control.adminSessionMaxHours, legacyUnencryptedPhotos: legacyPhotos, lockoutConfigured: (appSettings?.loginMaxAttempts ?? 0) > 0 },
