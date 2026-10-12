@@ -84,7 +84,10 @@ export async function runScheduledReconciliation() {
   }
 
   const result = await runReconciliation(null);
-  await prisma.appSettings.update({ where: { id: 1 }, data: { lastScheduledReconciliationAt: new Date() } });
+  // upsert, not update: a fresh production database has no settings row until something creates it (the screens already upsert), and an
+  // update on a missing row threw every day, which kept the whole daily tick marked as failing.
+  const stamp = new Date();
+  await prisma.appSettings.upsert({ where: { id: 1 }, update: { lastScheduledReconciliationAt: stamp }, create: { id: 1, lastScheduledReconciliationAt: stamp } });
 
   if (result.discrepancies > 0) {
     await reportPaymentIncident({
