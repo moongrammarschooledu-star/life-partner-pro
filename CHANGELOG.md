@@ -21,7 +21,7 @@ Rule for contributors: every pull request that changes behaviour adds a line und
 - Provider **circuit breaker** in the communications system (a provider that is DOWN is skipped for 5 minutes; messages wait, no attempt is wasted).
 - `publicUrl()`: every emailed link uses the canonical https address; production refuses to build a link without one.
 - `assertSeedAllowed()`: demo data can never be seeded into production or any database not clearly labelled development.
-- `scripts/deploy-db.sh` (backup proof, validate, migrate, integrity, wait, smoke), `docs/ops/uptime.workflow.yml` (probe every 15 minutes, HSTS and certificate checks, one outage issue).
+- `scripts/deploy-db.sh` (backup proof, validate, migrate, integrity, wait, smoke), `.github/workflows/uptime.yml` (probe every 15 minutes, HSTS and certificate checks, one outage issue).
 - Runbooks in `docs/runbooks/` (12), `GO_LIVE_CHECKLIST.md`, `DEPLOYMENT_AUDIT.md`, `FINAL_DEPLOYMENT_REPORT.md`, `docs/ENVIRONMENT_VARIABLES.md`.
 
 ### Changed
