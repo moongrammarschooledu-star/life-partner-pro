@@ -24,7 +24,7 @@ jobs:
     # Only the real production project (Vercel reports it as 'Production – lifepartnerpro').
     # Preview / other linked projects are ignored: their deployment URLs sit behind
     # Vercel Deployment Protection and cannot be probed anonymously.
-    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production – lifepartnerpro')
+    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && (github.event.deployment.environment == 'Production' || github.event.deployment.environment == 'Production – lifepartnerpro'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # To require a human approval before this job runs, add `environment: production`
