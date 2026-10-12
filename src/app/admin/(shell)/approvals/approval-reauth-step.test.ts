@@ -34,3 +34,21 @@ describe("approval detail page: password step", () => {
     expect(page).not.toMatch(/localStorage|sessionStorage|console\.(log|error)\([^)]*password/i);
   });
 });
+
+// The Execute button on this page only RECORDS an execution; it does not perform the action. A payment rollout was marked executed this way with the stage
+// unchanged, which used up the approval. The button must now explain that and ask first.
+describe("approval detail page: Execute button", () => {
+  const page = readFileSync(join(process.cwd(), "src/app/admin/(shell)/approvals/[id]/page.tsx"), "utf8");
+
+  it("does not call the execute route straight from the click", () => {
+    const button = page.slice(page.indexOf("canExecute && ("), page.indexOf("canDelegate && ("));
+    expect(button).toContain("setExecuteOpen(true)");
+    expect(button).not.toContain("callAction(\"/execute\"");
+  });
+
+  it("asks first and says plainly that nothing is carried out", () => {
+    expect(page).toContain("Mark this request as executed?");
+    expect(page).toMatch(/does NOT carry out the action/);
+    expect(page).toContain('callAction("/execute", {}, "Marked as executed")');
+  });
+});
