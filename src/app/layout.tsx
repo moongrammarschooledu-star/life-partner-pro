@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
+import Script from "next/script";
 import { PwaRegister } from "@/components/public/pwa-register";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, siteUrl } from "@/lib/public-site/config";
 import "./globals.css";
@@ -40,6 +41,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Catches the browser's install event as early as possible so the install offer can appear on the first page (see InstallPrompt). */}
+        <Script id="lpp-install-capture" strategy="beforeInteractive">{`window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__lppInstall=e;window.dispatchEvent(new Event("lpp-install-ready"));});`}</Script>
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-body">
         <ThemeProvider>
           <ToastProvider>{children}</ToastProvider>

@@ -237,9 +237,10 @@ describe("navigation and footer", () => {
 
 describe("install prompt policy", () => {
   const base = { canPrompt: true, ios: false, standalone: false, views: INSTALL_MIN_PAGEVIEWS, dismissedUntil: 0, now: 1_000 };
-  it("appears only for a visitor who has looked around and can actually install", () => {
+  it("appears on the first page for a visitor who can actually install", () => {
     expect(installPromptVisible(base)).toBe(true);
-    expect(installPromptVisible({ ...base, views: 1 })).toBe(false);
+    expect(installPromptVisible({ ...base, views: 0 })).toBe(false);
+    expect(INSTALL_MIN_PAGEVIEWS).toBe(1); // first-time visitors see it straight away
     expect(installPromptVisible({ ...base, canPrompt: false })).toBe(false);
     expect(installPromptVisible({ ...base, canPrompt: false, ios: true })).toBe(true);
   });

@@ -11,6 +11,13 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+declare global {
+  interface Window {
+    /** Set by the early script in the root layout, which catches the browser event before this component has loaded. */
+    __lppInstall?: BeforeInstallPromptEvent;
+  }
+}
+
 const DISMISS_KEY = "lpp_install_dismissed_until";
 const VIEWS_KEY = "lpp_pageviews";
 
@@ -31,8 +38,9 @@ function writeNumber(storage: "local" | "session", key: string, value: number) {
   }
 }
 
-// "Install Life Partner Pro": offered only after the visitor has looked around (not on the first page), never while already installed,
-// and a dismissal is remembered for 60 days. Browsers that cannot show an install dialog (iPhone Safari) get a one-line instruction.
+// "Install Life Partner Pro": offered on the very first page a visitor opens, never while already installed, and a dismissal is remembered for 60 days.
+// The browser fires its install event early, often before the page has finished loading, so a tiny script in the root layout catches it and this component
+// picks it up (otherwise the offer would only appear after a later page view). Browsers that cannot show an install dialog (iPhone Safari) get a one-line instruction.
 export function InstallPrompt() {
   const pathname = usePathname();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
@@ -47,14 +55,22 @@ export function InstallPrompt() {
     setStandalone(window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true);
     setIos(/iPad|iPhone|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent));
     setDismissedUntil(readNumber("local", DISMISS_KEY));
+    if (window.__lppInstall) setDeferred(window.__lppInstall);
+    const onEarly = () => setDeferred(window.__lppInstall ?? null);
     const onPrompt = (e: Event) => {
       e.preventDefault();
+      window.__lppInstall = e as BeforeInstallPromptEvent;
       setDeferred(e as BeforeInstallPromptEvent);
     };
-    const onInstalled = () => setDeferred(null);
+    const onInstalled = () => {
+      window.__lppInstall = undefined;
+      setDeferred(null);
+    };
+    window.addEventListener("lpp-install-ready", onEarly);
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
+      window.removeEventListener("lpp-install-ready", onEarly);
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
@@ -77,6 +93,7 @@ export function InstallPrompt() {
     if (!deferred) return;
     await deferred.prompt();
     await deferred.userChoice.catch(() => null);
+    window.__lppInstall = undefined;
     setDeferred(null);
     dismiss();
   }
