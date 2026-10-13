@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { Card, ErrorNote, Loading, useApi } from "@/components/admin/system/shared";
 import { ApprovalNote, ChangeDialog, CcHeader, Table, fmt, sendChange } from "@/components/admin/platform/cc-shared";
 
-interface Change { id: string; kind: string; key: string; version: number; actorId: string | null; reason: string | null; environment: string; createdAt: string; rolledBackFromId: string | null; approvalId: string | null; viaBreakGlass?: boolean }
+interface Change { id: string; kind: string; key: string; version: number; actorId: string | null; actorName?: string | null; reason: string | null; environment: string; createdAt: string; rolledBackFromId: string | null; approvalId: string | null; viaBreakGlass?: boolean }
 interface List { items: Change[]; nextCursor: string | null }
 interface DiffEntry { path: string; before: unknown; after: unknown }
 interface Detail { change: Change & { before: unknown; after: unknown }; diff: DiffEntry[] }
@@ -45,7 +45,7 @@ export function HistoryClient({ permissions, environment }: { permissions: strin
                 <tr key={c.id} className="align-top">
                   <td className="px-2 py-2"><span className="font-mono text-xs">{c.key}</span><p className="text-xs text-muted">{c.kind.replace(/_/g, " ").toLowerCase()} · {c.environment.toLowerCase()}{c.rolledBackFromId ? " · rollback" : ""}</p></td>
                   <td className="px-2 py-2 text-muted">v{c.version}</td>
-                  <td className="px-2 py-2 text-muted">{c.actorId ?? "system"}</td>
+                  <td className="px-2 py-2 text-muted">{c.actorName ?? c.actorId ?? "system"}</td>
                   <td className="px-2 py-2 text-muted">{c.reason ?? "—"}</td>
                   <td className="px-2 py-2 text-muted">{fmt(c.createdAt)}</td>
                   <td className="space-x-1 whitespace-nowrap px-2 py-2 text-right"><Button size="sm" variant="outline" onClick={() => setSelected(selected === c.id ? null : c.id)}>{selected === c.id ? "Hide" : "Compare"}</Button>{rollbackable(c) && <Button size="sm" variant="ghost" onClick={() => setRollback(c)}>Roll back</Button>}</td>

@@ -13,6 +13,8 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 // STEP 36 — security tests done on the source and on the permission tables: every Control Center route is guarded, only handlers are exported, the request can
 // never name the person acting, there is no SQL console / shell / secret reader, staff roles hold nothing, and the sensitive actions are marked sensitive.
 
+vi.setConfig({ testTimeout: 60_000 }); // some checks read the whole source tree
+
 const ROOT = join(__dirname, "..", "..", "..");
 const SRC = join(ROOT, "src");
 const walk = (dir: string, out: string[] = []): string[] => {
