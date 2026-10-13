@@ -84,7 +84,7 @@ jobs:
       - name: Install the mobile shell
         working-directory: mobile
         run: npm ci
-      - name: Firebase configuration (optional: without it the app builds and notifications stay off)
+      - name: "Firebase configuration (optional - without it the app builds and notifications stay off)"
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
@@ -168,7 +168,7 @@ jobs:
         run: |
           npx cap sync ios
           node scripts/configure-ios.mjs
-      - name: Compile for the simulator (no signing needed: proves the project builds)
+      - name: "Compile for the simulator (no signing needed - proves the project builds)"
         working-directory: mobile/ios/App
         run: |
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
