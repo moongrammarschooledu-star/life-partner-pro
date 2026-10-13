@@ -84,7 +84,7 @@ jobs:
       - name: Install the mobile shell
         working-directory: mobile
         run: npm ci
-      - name: Firebase configuration (optional: without it the app builds and notifications stay off)
+      - name: "Firebase configuration (optional - without it the app builds and notifications stay off)"
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
@@ -130,8 +130,13 @@ jobs:
           echo "Bundle: $AAB ($(du -h "$AAB" | cut -f1))"
           test -s "$AAB"
           unzip -l "$AAB" | grep -q "BundleConfig.pb"
-          # a key, a Firebase file or a source map must never be inside the bundle
-          if unzip -l "$AAB" | grep -Eiq '\.(keystore|jks|p12|p8|pem)$|google-services\.json|\.map$'; then echo "Forbidden file inside the bundle"; exit 1; fi
+          # A key, a Firebase file or a web source map must never be inside the bundle. BUNDLE-METADATA is the one allowed place for a .map: it holds the R8
+          # mapping file that Google Play uses to read crash reports; it is not part of what is delivered to phones.
+          if unzip -l "$AAB" | grep -v 'BUNDLE-METADATA/' | grep -Eiq '\.(keystore|jks|p12|p8|pem)$|google-services\.json|\.map$'; then
+            echo "Forbidden file inside the bundle:"
+            unzip -l "$AAB" | grep -v 'BUNDLE-METADATA/' | grep -Ei '\.(keystore|jks|p12|p8|pem)$|google-services\.json|\.map$'
+            exit 1
+          fi
       - name: Keep the artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -144,6 +149,49 @@ jobs:
         if: always()
         run: |
           rm -f "$RUNNER_TEMP/upload.keystore" mobile/android/app/google-services.json
+
+  android-debug-apk:
+    # FOR TESTING ONLY: an installable debug build (different application id, web debugging on) that points at the real website. It lets the owner try the app on an
+    # Android phone before any store account or signing key exists. It is never uploaded to a store and is kept for 7 days.
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install the mobile shell
+        working-directory: mobile
+        run: npm ci
+      - name: Sync the web shell (debug settings)
+        working-directory: mobile
+        env:
+          MOBILE_BUILD_TYPE: debug
+          APP_URL: ${{ vars.APP_URL }}
+        run: npx cap sync android
+      - name: Build the debug APK
+        working-directory: mobile/android
+        env:
+          LPP_VERSION_NAME: ${{ env.MOBILE_APP_VERSION }}
+          LPP_VERSION_CODE: ${{ env.MOBILE_BUILD_NUMBER }}
+          LPP_APP_HOST: ${{ vars.LPP_APP_HOST }}
+          LPP_ANDROID_PACKAGE_ID: ${{ vars.ANDROID_PACKAGE_ID }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+      - name: Keep the test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-apk-${{ env.MOBILE_APP_VERSION }}-${{ env.MOBILE_BUILD_NUMBER }}
+          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
 
   ios-compile:
     needs: checks
@@ -168,7 +216,7 @@ jobs:
         run: |
           npx cap sync ios
           node scripts/configure-ios.mjs
-      - name: Compile for the simulator (no signing needed: proves the project builds)
+      - name: "Compile for the simulator (no signing needed - proves the project builds)"
         working-directory: mobile/ios/App
         run: |
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \

@@ -12,6 +12,14 @@
 
 These do **not** prove the app runs on a phone.
 
+## 1b. Try the app on an Android phone without any store account
+
+The *Mobile release* workflow also builds a **test APK** (job `android-debug-apk`; artifact `android-test-apk-<version>-<build>`, kept 7 days). It is a debug build with its own application id (`…app.debug`), web debugging on, and it shows the real website. It exists only so you can run script 1 below on your own phone before any store or signing key exists.
+
+1. Download the artifact zip from the workflow run page (Actions → the run → Artifacts) and unzip it on the phone or copy `app-debug.apk` to it.
+2. Open the APK; Android asks to allow installing from that source (Files / Chrome): allow it for this one install.
+3. Open *Life Partner Pro*. Do **not** install this build for anyone outside the team, and delete it afterwards.
+
 ## 2. Device matrix
 
 | | Minimum | Also test |
