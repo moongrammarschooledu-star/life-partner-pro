@@ -25,9 +25,17 @@ vi.mock("@/lib/prisma", () => {
   };
 });
 
+const audit = { rows: [] as Array<Record<string, unknown>>, fail: false };
+vi.mock("@/lib/audit", () => ({
+  writeAudit: async (row: Record<string, unknown>) => { if (audit.fail) throw new Error("audit store down"); audit.rows.push(row); },
+}));
+vi.mock("@/lib/observability/logger", () => ({ logger: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, critical: () => {} } }));
+
 import { cancelPendingOrder } from "@/lib/finance/order-cancel";
 
 beforeEach(() => {
+  audit.rows = [];
+  audit.fail = false;
   st.order = { id: "o1", orderCode: "LPP-ORD-000001", profileId: "p1", status: "PENDING_PAYMENT" };
   st.payments = [{ id: "pay1", status: "PENDING", manualDetail: null }];
   st.redemption = "REDEEMED";
@@ -65,6 +73,41 @@ describe("cancelPendingOrder", () => {
     const results = await Promise.allSettled([cancelPendingOrder({ profileId: "p1", orderCode: "LPP-ORD-000001" }), cancelPendingOrder({ profileId: "p1", orderCode: "LPP-ORD-000001" })]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(st.order.status).toBe("CANCELLED");
+  });
+});
+
+describe("cancel audit trail", () => {
+  it("records exactly one ORDER_CANCELLED row for the applicant, with only the order code and the status it was cancelled from", async () => {
+    await cancelPendingOrder({ profileId: "p1", orderCode: "LPP-ORD-000001" });
+    expect(audit.rows).toEqual([{ action: "ORDER_CANCELLED", targetProfileId: "p1", meta: { orderCode: "LPP-ORD-000001", from: "PENDING_PAYMENT", by: "applicant" } }]);
+  });
+
+  it("writes nothing when the cancel is refused (404, 409 or lost race)", async () => {
+    await expect(cancelPendingOrder({ profileId: "someone-else", orderCode: "LPP-ORD-000001" })).rejects.toMatchObject({ status: 404 });
+    st.order.status = "PAID";
+    await expect(cancelPendingOrder({ profileId: "p1", orderCode: "LPP-ORD-000001" })).rejects.toMatchObject({ status: 409 });
+    expect(audit.rows).toEqual([]);
+  });
+
+  it("two simultaneous cancels leave one audit row", async () => {
+    await Promise.allSettled([cancelPendingOrder({ profileId: "p1", orderCode: "LPP-ORD-000001" }), cancelPendingOrder({ profileId: "p1", orderCode: "LPP-ORD-000001" })]);
+    expect(audit.rows).toHaveLength(1);
+  });
+
+  it("a failing audit write does not undo or fail an order that is already cancelled", async () => {
+    audit.fail = true;
+    await expect(cancelPendingOrder({ profileId: "p1", orderCode: "LPP-ORD-000001" })).resolves.toEqual({ orderCode: "LPP-ORD-000001" });
+    expect(st.order.status).toBe("CANCELLED");
+  });
+});
+
+describe("the audit action exists in the schema and has a migration", () => {
+  const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
+  it("ORDER_CANCELLED is an AuditAction value added by an enum-only migration", () => {
+    expect(read("prisma/schema.prisma")).toMatch(/enum AuditAction \{[\s\S]*?\n\s+ORDER_CANCELLED\r?\n\}/);
+    const sql = read("prisma/migrations/20261013090000_order_cancel_audit_enum/migration.sql");
+    expect(sql).toContain(`ALTER TYPE "AuditAction" ADD VALUE 'ORDER_CANCELLED';`);
+    expect(sql).not.toMatch(/CREATE TABLE|INSERT|UPDATE|DROP/i);
   });
 });
 
