@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Life Partner Pro</string>
+    <string name="title_activity_main">Life Partner Pro</string>
+    <string name="package_name">com.lifepartnerpro.app</string>
+    <string name="custom_url_scheme">com.lifepartnerpro.app</string>
+</resources>

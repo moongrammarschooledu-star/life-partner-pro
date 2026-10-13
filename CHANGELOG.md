@@ -6,6 +6,22 @@ Rule for contributors: every pull request that changes behaviour adds a line und
 
 ## Unreleased
 
+### Added (STEP 37: mobile apps, push notifications, deep links)
+- Android and iPhone apps as a native shell (Capacitor 7) around the website, in `mobile/`: the same sign-in, API and permissions, no second backend. Hardened Android project (no backup, no plain-text traffic, one exported component, exact App Links, shrunk release build, signing only from the build environment) and iOS project (push and Universal Links entitlements, permission strings, no arbitrary loads).
+- Registered devices (`MobileDevice`): "Your devices & notifications" in Account Settings and the family Security page; remove a device to sign it out and delete its push token.
+- Push notifications (off by default, flag `mobile.push.enabled`): FCM and APNs providers, privacy-safe text (private by default; Full / Private / Minimal / Off), quiet hours, preferences, a cap per device per hour, encrypted push tokens, delivery history.
+- Deep links: an approved-routes list, a server-side resolver that answers "not found" for anything the person may not open, `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association` (empty until configured).
+- App version policy (minimum / recommended / latest per platform) with an update screen, a release log with an approval gate for production, and Control Center → Mobile apps (versions, devices, push health, links, releases, errors, usage).
+- Nine `mobile.*` feature flags; anonymous app usage counts (off unless enabled); offline notice for the website and the apps; crash reports tagged with platform and app version.
+- A public page `/delete-account` describing how to delete an account (linked from the footer and the store listings).
+- Membership checkout started from inside the app is refused until `mobile.payments.enabled` is on.
+- CI workflow `mobile.yml` (builds and validates the Android bundle, compiles the iPhone app, optionally archives it; publishes nothing). Documents in `docs/mobile/` and `MOBILE_PRODUCTION_READINESS.md`.
+- Migrations (additive): mobile enum values, then the mobile tables.
+
+### Changed (STEP 37)
+- A notification mirrored to the person's phone is created after the in-app notification and never affects it.
+- A public push path or deep link can never be anything but a plain in-app route.
+
 ### Added (STEP 36: Super Admin Control Center)
 - Control Center at Admin > Control Center: overview (platform, security, operations, business, infrastructure, deployment; each block only for the permissions held), read-only hubs for areas that keep their own editors, and its own pages for platform settings, localization, branding and public contact, feature flags, providers, maintenance, announcements, configuration history, system health and deployment.
 - Feature flag states (enabled, disabled, rollout, paused, emergency-disabled) with percentage and group rollout; an emergency kill-switch panel; an honest list of flags the application does not enforce yet.

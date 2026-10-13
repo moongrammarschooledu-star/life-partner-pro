@@ -1,0 +1,96 @@
+apply plugin: 'com.android.application'
+
+// Life Partner Pro Android shell (STEP 37). Everything that differs between builds comes from Gradle properties or environment variables; no secret is
+// ever written in this file. See ANDROID_RELEASE_GUIDE.md.
+//
+//   LPP_ANDROID_PACKAGE_ID  store identifier (default com.lifepartnerpro.app). Once published it must never change.
+//   LPP_VERSION_NAME / LPP_VERSION_CODE  shown version, and the number Google Play requires to rise with every upload
+//   LPP_APP_HOST            the website host for Android App Links (default lifepartnerpro.vercel.app)
+//   LPP_KEYSTORE_PATH, LPP_KEYSTORE_PASSWORD, LPP_KEY_ALIAS, LPP_KEY_PASSWORD   the UPLOAD key, supplied by the build environment (CI secrets); never committed
+//   LPP_REQUIRE_SIGNING=true  makes a release build fail instead of producing an unsigned bundle
+def prop = { String name, String fallback -> (project.findProperty(name) ?: System.getenv(name) ?: fallback).toString() }
+
+android {
+    namespace "com.lifepartnerpro.app"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId prop('LPP_ANDROID_PACKAGE_ID', 'com.lifepartnerpro.app')
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode prop('LPP_VERSION_CODE', '1').toInteger()
+        versionName prop('LPP_VERSION_NAME', '1.0.0')
+        manifestPlaceholders = [appHost: prop('LPP_APP_HOST', 'lifepartnerpro.vercel.app')]
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv('LPP_KEYSTORE_PATH') ?: project.findProperty('LPP_KEYSTORE_PATH')
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword (System.getenv('LPP_KEYSTORE_PASSWORD') ?: project.findProperty('LPP_KEYSTORE_PASSWORD'))
+                keyAlias (System.getenv('LPP_KEY_ALIAS') ?: project.findProperty('LPP_KEY_ALIAS'))
+                keyPassword (System.getenv('LPP_KEY_PASSWORD') ?: project.findProperty('LPP_KEY_PASSWORD'))
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            // A debug build is never offered to anyone outside the team: it cannot be uploaded to the store as production.
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
+        release {
+            debuggable false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (System.getenv('LPP_KEYSTORE_PATH') || project.findProperty('LPP_KEYSTORE_PATH')) {
+                signingConfig signingConfigs.release
+            } else if (prop('LPP_REQUIRE_SIGNING', 'false') == 'true') {
+                throw new GradleException('LPP_REQUIRE_SIGNING is set but no signing key was supplied (LPP_KEYSTORE_PATH).')
+            }
+        }
+    }
+    // The app bundle is what Google Play receives; splits keep each phone's download small.
+    bundle {
+        language { enableSplit = true }
+        density { enableSplit = true }
+        abi { enableSplit = true }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+// Push notifications need the Firebase file for THIS build (google-services.json). It is a per-project configuration file supplied by the build environment and
+// is never committed (see .gitignore). Without it the app still builds and runs; notifications simply stay off.
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
