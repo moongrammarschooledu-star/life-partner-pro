@@ -529,6 +529,12 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "soc:config:manage": "Change the security configuration (versioned, reason required)",
   "soc:admin_security:view": "View administrator security: MFA coverage, sessions, privilege changes and break-glass use",
   "soc:audit:view": "View the security-operations access and change log",
+  "content:view": "Open the content area and see blog and guide drafts, reviews and published items",
+  "content:create": "Create blog articles and guides (as drafts)",
+  "content:edit": "Edit blog articles and guides and submit them for review",
+  "content:publish": "Publish or schedule blog articles and guides (content policy check applies; a second person when review is required)",
+  "content:archive": "Archive blog articles and guides, or return an archived item to draft",
+  "content:delete": "Permanently delete a draft or archived blog article or guide",
   "ai:analytics:use": "Use the AI analytics assistant (answers from the metric catalog only; never SQL)",
 };
 

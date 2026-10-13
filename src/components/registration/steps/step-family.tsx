@@ -1,6 +1,7 @@
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import type { WizardData } from "@/components/registration/wizard-types";
 import { useRegistrationLocale } from "@/components/registration/locale-context";
+import { PrivacyNote } from "@/components/registration/privacy-note";
 import { OptionalSection } from "@/components/registration/steps/optional-section";
 
 export function StepFamily({
@@ -13,6 +14,7 @@ export function StepFamily({
   const { t } = useRegistrationLocale();
   return (
     <div className="grid gap-4 sm:grid-cols-2">
+      <PrivacyNote kind="family" className="sm:col-span-2" />
       <Field label={t("numberOfBrothers")} htmlFor="numberOfBrothers">
         <Input id="numberOfBrothers" type="number" min={0} value={data.numberOfBrothers} onChange={(e) => onChange("numberOfBrothers", e.target.value)} />
       </Field>

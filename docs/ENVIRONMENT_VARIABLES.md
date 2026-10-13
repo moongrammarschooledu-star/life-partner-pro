@@ -11,6 +11,8 @@ Keep three environments apart: **Development** (your laptop, its own database), 
 | `APP_URL` | no | Canonical https address used in every emailed link (`publicUrl()`) | BLOCKER; links cannot be created |
 | `NEXT_PUBLIC_APP_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `VERCEL_PROJECT_PRODUCTION_URL` | no | Older fallbacks `publicUrl()` tries after `APP_URL` | - |
 | `DATABASE_ENV_LABEL`, `STORAGE_ENV_LABEL`, `PAYMENT_ENVIRONMENT` | no | Must equal `APP_ENV`; proves a database/storage/payment account belongs to this environment | BLOCKER; mismatch is CRITICAL |
+| `LEGAL_PAGES_REVIEWED` | no | `true` hides the "wording pending legal review" notice on the privacy policy and terms once counsel has approved them (takes effect on the next deploy) | the notice stays visible |
+| `LEGAL_GOVERNING_LAW` | no | Your own governing-law / jurisdiction wording; adds a "Governing law" section to the terms. Never invented by the app | the section is not shown |
 | `APP_VERSION` | no | Set automatically from `package.json` at build (do not set by hand) | - |
 | `VERCEL_ENV`, `VERCEL_GIT_COMMIT_SHA`, `VERCEL_GIT_COMMIT_MESSAGE`, `VERCEL_GIT_COMMIT_AUTHOR_LOGIN`, `VERCEL_URL`, `NODE_ENV`, `NEXT_RUNTIME` | no | Provided by Vercel/Next | - |
 

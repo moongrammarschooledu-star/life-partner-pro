@@ -608,7 +608,14 @@ export type Permission =
   | "soc:config:view"
   | "soc:config:manage"
   | "soc:admin_security:view"
-  | "soc:audit:view";
+  | "soc:audit:view"
+  // STEP 35 — public content (blog and guides)
+  | "content:view"
+  | "content:create"
+  | "content:edit"
+  | "content:publish"
+  | "content:archive"
+  | "content:delete";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -956,6 +963,10 @@ const SOC_COMPLIANCE_PERMISSIONS: Permission[] = [
 const SOC_ALL_PERMISSIONS: Permission[] = [
   ...SOC_COMPLIANCE_PERMISSIONS, "soc:detection:run", "soc:rules:manage", "soc:containment:approve", "soc:restore:record", "soc:dr:manage", "soc:config:manage",
 ];
+
+// STEP 35 — public content. Writing and publishing are separate: the communication manager drafts and edits, only Super Admin publishes, archives or deletes.
+const CONTENT_DRAFT_PERMISSIONS: Permission[] = ["content:view", "content:create", "content:edit"];
+const CONTENT_ALL_PERMISSIONS: Permission[] = [...CONTENT_DRAFT_PERMISSIONS, "content:publish", "content:archive", "content:delete"];
 
 const ANALYTICS_VIEW_PERMISSIONS: Permission[] = [
   "analytics:view",
@@ -1354,6 +1365,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   SUPER_ADMIN: [
     ...ANALYTICS_ALL_PERMISSIONS, // STEP 31
     ...SOC_ALL_PERMISSIONS, // STEP 32
+    ...CONTENT_ALL_PERMISSIONS, // STEP 35
     "profile:view",
     "profile:edit",
     "profile:delete",
@@ -1922,6 +1934,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...MARKETING_ALL_PERMISSIONS.filter((p) => p !== "marketing:providers:manage"),
     // STEP 30 — owns day-to-day engagement (a superset of COMMUNICATION_STAFF's engagement subset).
     ...ENGAGEMENT_ALL_PERMISSIONS,
+    // STEP 35 — drafts and edits blog articles and guides; publishing needs Super Admin (or the content.publish grant).
+    ...CONTENT_DRAFT_PERMISSIONS,
     // deliberately lacks sensitive:contact:view/contact:reveal (cannot access private contact
     // details unless separately granted), contact:reveal:override, profile:edit, verification:*, finance:*.
     // Spec §9 also lists proposals.view/proposal_communications.view/meetings.view: same disclosed

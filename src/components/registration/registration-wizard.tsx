@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/registration/step-indicator";
+import { PrivacyNote } from "@/components/registration/privacy-note";
+import { RegistrationProgress } from "@/components/registration/registration-progress";
 import { StepBasic } from "@/components/registration/steps/step-basic";
 import { StepContact } from "@/components/registration/steps/step-contact";
 import { StepEducationProfession } from "@/components/registration/steps/step-education-profession";
@@ -235,7 +237,10 @@ function WizardBody() {
         </div>
       )}
 
+      {step === 0 && <PrivacyNote kind="intro" className="mb-6" />}
+
       <StepIndicator current={step} total={STEP_TITLES.length} titles={localizedTitles} />
+      <RegistrationProgress data={data} hasPhoto={!!photoFile} />
 
       <div className="mt-8">
         {step === 0 && <StepBasic data={data.basic} errors={errors} onChange={(f, v) => updateSection("basic", f, v)} />}

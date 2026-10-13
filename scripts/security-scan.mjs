@@ -86,7 +86,11 @@ add("TLS verification never disabled", tlsOff.length === 0, tlsOff.join(", "));
 const unsafe = [];
 for (const file of tracked.filter((f) => /^src\/.*\.(ts|tsx)$/.test(f) && !f.endsWith(".test.ts"))) {
   const c = readFileSync(file, "utf8");
-  if (/dangerouslySetInnerHTML/.test(c)) unsafe.push(`${file}: dangerouslySetInnerHTML`);
+  // Reviewed exception (STEP 35): JSON-LD structured data must be emitted as the text of a <script> tag, which React cannot do without this
+  // prop. Allowed in exactly one file, and only when the value is the output of serializeJsonLd() (it escapes "<" and the Unicode line
+  // separators, so no string in the data can close the tag). Any other use anywhere, or any other value here, still fails.
+  const jsonLdOnly = file === "src/components/public/json-ld.tsx" && (c.match(/dangerouslySetInnerHTML/g) ?? []).length === 1 && /dangerouslySetInnerHTML=\{\{\s*__html:\s*serializeJsonLd\(/.test(c);
+  if (/dangerouslySetInnerHTML/.test(c) && !jsonLdOnly) unsafe.push(`${file}: dangerouslySetInnerHTML`);
   if (/\beval\(|new Function\(/.test(c)) unsafe.push(`${file}: eval/Function`);
   if (/\$queryRawUnsafe|\$executeRawUnsafe/.test(c)) unsafe.push(`${file}: raw unsafe SQL`);
 }
