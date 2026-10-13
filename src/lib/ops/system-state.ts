@@ -54,7 +54,7 @@ export function evaluatePublicState(input: StateInput, now: Date = new Date()): 
 const EXEMPT_PREFIXES = [
   "/admin", "/api/admin", "/api/auth", "/api/health", "/api/system-state", "/api/webhooks",
   "/api/cron", "/api/internal", "/api/client-errors", "/maintenance", "/_next",
-  "/status", "/api/status", // STEP 36 - the public status page must stay readable while the platform is under maintenance
+  "/status", "/api/status", "/.well-known", "/api/mobile/version", "/api/mobile/config", // STEP 36 - the public status page must stay readable while the platform is under maintenance
 ];
 
 export function isExemptFromMaintenance(pathname: string): boolean {

@@ -156,7 +156,7 @@ describe("the permission model", () => {
   it("only SUPER_ADMIN, OPERATIONS_ADMIN and COMPLIANCE_MANAGER hold any platform permission, and the last two only to view", () => {
     for (const role of Object.keys(ROLE_PERMISSIONS) as AdminRole[]) {
       const p = platformPerms(role);
-      if (role === "SUPER_ADMIN") expect(p.length).toBe(23);
+      if (role === "SUPER_ADMIN") expect(p.length).toBe(26);
       else if (role === "OPERATIONS_ADMIN" || role === "COMPLIANCE_MANAGER") {
         expect(p.length, role).toBeGreaterThan(0);
         for (const x of p) expect(x, `${role} ${x}`).toMatch(/:view$/);

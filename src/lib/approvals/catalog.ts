@@ -118,6 +118,7 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   PLATFORM_FEATURE_ACTIVATION: { label: "Enable a sensitive feature in production", domain: "PLATFORM", sourceType: "PLATFORM_CONFIG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   PLATFORM_SETTING_HIGH_RISK: { label: "Change a high-risk platform setting", domain: "PLATFORM", sourceType: "PLATFORM_CONFIG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   PLATFORM_CONFIG_ROLLBACK: { label: "Roll configuration back to an earlier version", domain: "PLATFORM", sourceType: "PLATFORM_CONFIG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  MOBILE_PRODUCTION_RELEASE: { label: "Mark a mobile app release as live in production", domain: "PLATFORM", sourceType: "PLATFORM_CONFIG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_ROLLOUT: { label: "Change AI rollout phase", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_KILL_SWITCH_OVERRIDE: { label: "Use the AI kill switch", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
 

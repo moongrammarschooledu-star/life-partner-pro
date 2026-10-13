@@ -6,7 +6,7 @@ import type { PlatformEnvironment } from "@/lib/platform/environment";
 // The configuration change log (STEP 36 §6, §50–§52). Append-only: nothing here updates or deletes a row. One row per change made through the control
 // center, with a per-(kind, key) version number, who and which session, why, the approval if any, the environment, and the redacted before/after values.
 
-export type ConfigKind = "SETTING" | "FEATURE_FLAG" | "SYSTEM_CONTROL" | "MAINTENANCE" | "CHANGE_FREEZE" | "ANNOUNCEMENT" | "PROVIDER";
+export type ConfigKind = "SETTING" | "FEATURE_FLAG" | "SYSTEM_CONTROL" | "MAINTENANCE" | "CHANGE_FREEZE" | "ANNOUNCEMENT" | "PROVIDER" | "MOBILE_VERSION" | "MOBILE_RELEASE";
 
 export interface RecordChangeInput {
   kind: ConfigKind;

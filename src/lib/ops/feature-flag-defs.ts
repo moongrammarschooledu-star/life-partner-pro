@@ -92,10 +92,23 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "engagement.loyalty.enabled", description: "Referral link, referral history and reward granting through the existing referral/credit system", sensitive: true },
   { key: "ai.engagement_assistant.enabled", description: "AI engagement summaries and reminder drafts from server-computed platform activity (never sends, approves or predicts; human review required)", sensitive: true },
   { key: "ai.marketing_assistant.enabled", description: "AI marketing copy drafts from an approved phrase library (never launches, spends or approves; human review required)", sensitive: true },
+  // STEP 37 — mobile apps. The shell flags default ON (the apps are only useful if they can connect); everything that reaches a person's phone or unlocks a
+  // device feature defaults OFF until the provider / store setup behind it has been done (see MOBILE_ON_BY_DEFAULT).
+  { key: "mobile.app.enabled", description: "Mobile apps may connect (switch off to refuse every app request with a maintenance notice)", sensitive: true },
+  { key: "mobile.android.enabled", description: "The Android app may connect", sensitive: false },
+  { key: "mobile.ios.enabled", description: "The iPhone app may connect", sensitive: false },
+  { key: "mobile.push.enabled", description: "Send push notifications to registered devices (needs a configured push provider; text is always privacy-safe)", sensitive: true },
+  { key: "mobile.deep_links.enabled", description: "Open app links (the server checks the person and the record before the app opens a page)", sensitive: false },
+  { key: "mobile.biometric.enabled", description: "Offer fingerprint / face unlock for the app (a lock for this device only; nothing biometric leaves the phone)", sensitive: true },
+  { key: "mobile.new_dashboard.enabled", description: "Show the new mobile dashboard to the apps (controlled rollout)", sensitive: false },
+  { key: "mobile.payments.enabled", description: "Show membership purchase screens in the apps (store billing rules apply; the server still decides every entitlement)", sensitive: true },
+  { key: "mobile.maintenance.enabled", description: "Tell the apps the service is in maintenance (the apps show a notice instead of the account screens)", sensitive: true },
 ];
 
+const MOBILE_ON_BY_DEFAULT = new Set(["mobile.app.enabled", "mobile.android.enabled", "mobile.ios.enabled", "mobile.deep_links.enabled"]);
+
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && !d.key.startsWith("soc.") && !d.key.startsWith("content.") && d.key !== "documents.ocr.enabled"]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && !d.key.startsWith("soc.") && !d.key.startsWith("content.") && (!d.key.startsWith("mobile.") || MOBILE_ON_BY_DEFAULT.has(d.key)) && d.key !== "documents.ocr.enabled"]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

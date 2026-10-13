@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// Several checks read every file under src/, which grows with every step: give them room on a busy machine.
+vi.setConfig({ testTimeout: 30_000 });
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join, relative, sep } from "path";
 import { ADMIN_ROLES, ROLE_PERMISSIONS, SENSITIVE_PERMISSIONS, hasPermission, type AdminRole, type Permission } from "@/lib/permissions";

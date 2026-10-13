@@ -62,7 +62,7 @@ function sharedGuardNames(src) {
   const names = [];
   const re = /(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\([^)]*\)\s*(?::[^{]+)?\{([\s\S]*?)\n\}/g;
   let m;
-  while ((m = re.exec(src))) if (/requireAdmin\(|requireApplicantProfileId\(|requireFamilyMemberId\(|await auth\(\)/.test(m[2]) && !/^(GET|POST|PUT|PATCH|DELETE)$/.test(m[1])) names.push(m[1]);
+  while ((m = re.exec(src))) if (/requireAdmin\(|requireApplicantProfileId\(|requireFamilyMemberId\(|mobileGuard\(|await auth\(\)/.test(m[2]) && !/^(GET|POST|PUT|PATCH|DELETE)$/.test(m[1])) names.push(m[1]);
   return names;
 }
 
@@ -80,7 +80,7 @@ for (const file of walk(API_ROOT)) {
     let permission = null;
     const adminCall = b.match(/requireAdmin\(\s*(["'`][^"'`]+["'`])?/);
     if (adminCall) { guard = "admin"; permission = adminCall[1] ? adminCall[1].slice(1, -1) : null; }
-    else if (/requireApplicantProfileId\(|verifyProfileToken\(/.test(b)) guard = "applicant";
+    else if (/requireApplicantProfileId\(|verifyProfileToken\(|mobileGuard\(/.test(b)) guard = "applicant"; // mobileGuard = applicant or family session (STEP 37)
     else if (/requireFamilyMemberId\(/.test(b)) guard = "family";
     else if (/await auth\(\)/.test(b)) guard = "session";
     else if (/verifyWebhook\(|verifySignature|handleInbound|verifyHmac|timingSafeEqual/.test(b) || /webhook/i.test(path)) guard = "webhook-signature";
@@ -92,7 +92,7 @@ for (const file of walk(API_ROOT)) {
     let severity = "OK";
     const bump = (s) => { const order = ["OK", "LOW", "MEDIUM", "HIGH", "CRITICAL"]; if (order.indexOf(s) > order.indexOf(severity)) severity = s; };
 
-    const publicByDesign = /\/api\/(register|support|update-request|my-status|verify\/|health|status|system-state|client-errors|my-billing\/packages|family\/(register|login|logout)|marketing\/|public-events|auth\/)/.test(path) || guard === "webhook-signature" || guard === "secret" || /\/admin\/auth\/(precheck|verify-otp|forgot-password|reset-password)/.test(path);
+    const publicByDesign = /\/api\/(register|support|update-request|my-status|verify\/|health|status|mobile\/(version|config|events|deep-link)|system-state|client-errors|my-billing\/packages|family\/(register|login|logout)|marketing\/|public-events|auth\/)/.test(path) || guard === "webhook-signature" || guard === "secret" || /\/admin\/auth\/(precheck|verify-otp|forgot-password|reset-password)/.test(path);
     if (guard === "none" && !publicByDesign) { notes.push("no recognised guard"); bump(mutating ? "HIGH" : "MEDIUM"); }
     const inlinePermission = /\.permissions\.(includes|some)\(|hasPermission\(|hasAnyPermission\(|requirePermission\(|\bcan[A-Z][A-Za-z]*\(|\bassert[A-Z][A-Za-z]*\(|\bensure[A-Z][A-Za-z]*\(|\bresolve[A-Z][A-Za-z]*(?:Access|Permission)[A-Za-z]*\(|PERMISSION\[|PERMS\[|SECTION_PERMISSION|requireAdmin\(\s*[a-zA-Z_]/.test(b);
     // AI feature routes delegate to the AI pipeline, which enforces the ai:* permission, flags, rollout, consent, safety and audit itself.
