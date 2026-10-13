@@ -24,6 +24,7 @@ Legend — **Access**: Public (no sign-in) · Applicant (signed-in applicant) ·
 | `/guides`, `/guides/[slug]` | Public | Indexed (same rules) | |
 | `/register` | Public | Indexed | Registration wizard (see `APPLICANT_ONBOARDING.md`) |
 | `/privacy-policy` | Public | Indexed | `/privacy` redirects here (301). Legal-review notice until `LEGAL_PAGES_REVIEWED=true` |
+| `/delete-account` | Public | Indexed | How to ask for account deletion (website and app); linked from the app and the store listings (STEP 37) |
 | `/terms` | Public | Indexed | Same notice; governing law only from `LEGAL_GOVERNING_LAW` |
 | `/lp/[slug]` | Public | Per page (noindex by default) | STEP 29 landing pages (flag-gated) |
 

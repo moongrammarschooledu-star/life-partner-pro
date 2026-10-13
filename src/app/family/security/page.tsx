@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/utils";
+import { DevicesCard } from "@/components/mobile/devices-card";
 
 interface Session { id: string; deviceInfo: string | null; lastActiveAt: string; createdAt: string; }
 
@@ -55,6 +56,8 @@ export default function FamilySecurityPage() {
           ))}
         </CardContent>
       </Card>
+
+      <DevicesCard scope="FAMILY" />
     </div>
   );
 }

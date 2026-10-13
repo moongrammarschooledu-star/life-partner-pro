@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime, formatEnumLabel } from "@/lib/utils";
 import { ReauthDialog } from "@/components/public/account/reauth-dialog";
+import { DevicesCard } from "@/components/mobile/devices-card";
 
 interface AccountStatusInfo {
   profileCode: string;
@@ -195,6 +196,8 @@ function AccountSettingsInner() {
           )}
         </CardContent>
       </Card>
+
+      <DevicesCard scope="APPLICANT" />
 
       <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Lock className="h-4 w-4" /> Privacy</CardTitle></CardHeader>
