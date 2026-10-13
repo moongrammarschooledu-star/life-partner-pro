@@ -80,6 +80,7 @@ enum AssignmentResourceType {
   REFERRAL
   LEAD
   CRM_RECORD
+  PLATFORM_CONFIG
 }
 
 // STEP 18 — CRITICAL added to match CasePriority's 5-value scale exactly.
@@ -1393,6 +1394,17 @@ enum AuditAction {
   CONTENT_PUBLISHED
   CONTENT_ARCHIVED
   CONTENT_DELETED
+
+  // ---------- STEP 36 — platform control center ----------
+  PLATFORM_SETTING_CHANGED
+  PLATFORM_CONFIG_ROLLED_BACK
+  PLATFORM_PROVIDER_TESTED
+  PLATFORM_CHANGE_FREEZE_CHANGED
+  PLATFORM_BREAK_GLASS_GRANTED
+  PLATFORM_BREAK_GLASS_ENDED
+  PLATFORM_BREAK_GLASS_REVIEWED
+  PLATFORM_ANNOUNCEMENT_CHANGED
+  PLATFORM_CONFIG_EXPORTED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -5859,6 +5871,8 @@ model SystemControl {
   maintenanceStartsAt DateTime?
   maintenanceEndsAt   DateTime?
   maintenanceMessage  String?
+  // STEP 36 — read-only mode: pages stay viewable, but applicant, family and public WRITE requests are refused with a neutral 503 (admin area, sign-in, webhooks, cron and health are exempt).
+  readOnly            Boolean         @default(false)
 
   // Emergency switches (spec §56)
   emergencyPaymentsDisabled           Boolean @default(false)
@@ -5910,6 +5924,13 @@ model FeatureFlag {
   description String?
   updatedById String?
   updatedAt   DateTime @updatedAt
+  // STEP 36 — state, controlled rollout and targeting. `enabled` stays the answer for "is it on for everyone" (true only in state ENABLED), so every
+  // existing caller of isFeatureEnabled() behaves as before. ROLLOUT is evaluated per subject (admin, role, country, percentage, environment).
+  state          FeatureFlagState @default(ENABLED)
+  rolloutPercent Int?
+  targets        Json? // [{ "type": "ADMIN_ONLY" | "SPECIFIC_ROLE" | "SPECIFIC_USER" | "COUNTRY" | "ENVIRONMENT" | "INTERNAL", "values": [...] }]
+  version        Int              @default(1)
+  reason         String?
 }
 
 // Centralised, privacy-safe error record (spec §13/§14). message is already
@@ -10894,4 +10915,127 @@ model ContentPost {
   @@index([status, publishedAt])
   @@index([type, status])
   @@index([categoryId])
+}
+
+
+// ---------- STEP 36 — platform control center ----------
+// Governance layer over the existing configuration areas. Only what was missing is stored here: typed platform settings, one change log (history,
+// diff, rollback) for everything the control center changes, provider test results, change freezes, platform break-glass events and announcements.
+
+enum FeatureFlagState {
+  DISABLED
+  ENABLED
+  ROLLOUT
+  PAUSED
+  EMERGENCY_DISABLED
+}
+
+enum PlatformAnnouncementKind {
+  MAINTENANCE
+  SECURITY_NOTICE
+  SERVICE_INTERRUPTION
+  PLATFORM_UPDATE
+}
+
+enum PlatformAnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  RESOLVED
+  ENDED
+}
+
+// A typed setting. `value` holds the validated value; for type SECRET_REFERENCE it holds only the NAME of an environment variable, never a secret.
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  type        String // STRING | INTEGER | DECIMAL | BOOLEAN | JSON | ENUM | URL | SECRET_REFERENCE
+  environment String // DEVELOPMENT | STAGING | PRODUCTION: the environment this row belongs to
+  version     Int      @default(1)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+// Append-only. One row per change made through the control center (settings, feature flags, maintenance, freeze, announcements, system controls).
+// `before` / `after` hold redacted, safe values only. A rollback is a NEW row that points at the one it reverses.
+model PlatformConfigChange {
+  id               String   @id @default(cuid())
+  kind             String // SETTING | FEATURE_FLAG | SYSTEM_CONTROL | MAINTENANCE | CHANGE_FREEZE | ANNOUNCEMENT | PROVIDER
+  key              String
+  version          Int
+  before           Json?
+  after            Json?
+  actorId          String?
+  sessionId        String?
+  reason           String?
+  approvalId       String?
+  environment      String
+  rolledBackFromId String?
+  createdAt        DateTime @default(now())
+
+  @@unique([kind, key, version])
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+}
+
+model PlatformProviderCheck {
+  id          String   @id @default(cuid())
+  providerKey String
+  category    String
+  outcome     String // SUCCESS | FAILED | TIMEOUT | NOT_CONFIGURED
+  health      String // CONNECTED | HEALTHY | DEGRADED | UNAVAILABLE | DISABLED | NOT_CONFIGURED
+  latencyMs   Int?
+  detail      String?  @db.VarChar(200) // safe diagnostic text only, never a secret or a raw provider response
+  checkedById String?
+  checkedAt   DateTime @default(now())
+
+  @@index([providerKey, checkedAt])
+}
+
+model PlatformChangeFreeze {
+  id          String    @id @default(cuid())
+  reason      String
+  startsAt    DateTime  @default(now())
+  endsAt      DateTime?
+  createdById String
+  endedById   String?
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([endedAt])
+}
+
+// Time-limited emergency permission to change configuration during a change freeze. It never changes the administrator's role.
+model PlatformBreakGlassEvent {
+  id           String    @id @default(cuid())
+  adminId      String
+  reason       String
+  grantedAt    DateTime  @default(now())
+  expiresAt    DateTime
+  endedAt      DateTime?
+  actionsCount Int       @default(0)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+
+  @@index([adminId, grantedAt])
+  @@index([expiresAt])
+}
+
+model PlatformAnnouncement {
+  id               String                     @id @default(cuid())
+  kind             PlatformAnnouncementKind
+  title            String                     @db.VarChar(160)
+  body             String                     @db.VarChar(1200)
+  audience         String[] // ALL | APPLICANTS | FAMILY | ADMINS | ROLE:<ADMIN_ROLE>
+  status           PlatformAnnouncementStatus @default(DRAFT)
+  showOnStatusPage Boolean                    @default(false)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  resolvedAt       DateTime?
+  createdById      String
+  updatedById      String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([status, startsAt])
 }

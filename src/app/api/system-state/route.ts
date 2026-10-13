@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const state = await getPublicState();
-    return NextResponse.json({ blocked: state.blocked, reason: state.reason, message: state.message }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ blocked: state.blocked, reason: state.reason, message: state.message, readOnly: state.readOnly }, { headers: { "Cache-Control": "no-store" } });
   } catch {
-    return NextResponse.json({ blocked: false, reason: "NONE", message: "" }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ blocked: false, reason: "NONE", message: "", readOnly: false }, { headers: { "Cache-Control": "no-store" } });
   }
 }

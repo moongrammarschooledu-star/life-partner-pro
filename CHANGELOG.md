@@ -6,6 +6,22 @@ Rule for contributors: every pull request that changes behaviour adds a line und
 
 ## Unreleased
 
+### Added (STEP 36: Super Admin Control Center)
+- Control Center at Admin > Control Center: overview (platform, security, operations, business, infrastructure, deployment; each block only for the permissions held), read-only hubs for areas that keep their own editors, and its own pages for platform settings, localization, branding and public contact, feature flags, providers, maintenance, announcements, configuration history, system health and deployment.
+- Feature flag states (enabled, disabled, rollout, paused, emergency-disabled) with percentage and group rollout; an emergency kill-switch panel; an honest list of flags the application does not enforce yet.
+- Provider view in one status vocabulary with safe, rate-limited, read-only connection tests; no credential is ever shown.
+- Maintenance modes including read-only mode, production change freeze, and time-limited platform break-glass with review by a different administrator.
+- Announcements by audience and a public status page (/status, /api/status); the Contact page shows public contact details once an administrator enters them.
+- Append-only configuration change log with compare and rollback (settings and feature flags), safe search and safe export (no import).
+- 23 platform:* permissions; approval actions PLATFORM_FEATURE_ACTIVATION, PLATFORM_SETTING_HIGH_RISK, PLATFORM_CONFIG_ROLLBACK.
+- Documents: PLATFORM_CONTROL_AUDIT.md, docs/platform-control-center.md, feature-flags.md, provider-management.md, configuration-management.md, change-management.md, break-glass.md, platform-health.md, STEP_36_REPORT.md.
+- Migrations (additive): platform enums, then platform tables and flag state/rollout columns.
+
+### Changed (STEP 36)
+- PATCH /api/admin/settings only accepts an allow-listed set of fields (previously any column could be written); payment, rollout, membership and reconciliation settings are managed in their own screens.
+- The older feature-flag and system-control routes now also respect the change freeze and write to the configuration history.
+- Read-only mode refuses writes by the public and applicants with a neutral 503 while pages stay viewable.
+
 ### Added (STEP 35: public website, SEO, content, PWA, acquisition)
 - Public pages: About, Why Life Partner Pro, For Applicants, For Families, Verification, Safety, FAQ, Contact, Login, Trouble signing in, Offline; the home page, How It Works (twelve steps), Pricing, Privacy Policy and Terms were rewritten. Every page's title, description, canonical URL, Open Graph and indexing come from one registry (`src/lib/public-site/routes.ts`).
 - Navigation with a working mobile menu and a skip link; staff/admin links removed from public pages.

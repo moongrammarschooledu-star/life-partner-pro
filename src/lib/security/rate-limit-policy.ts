@@ -58,6 +58,8 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "marketing-form-submit-destination": { limit: 3, windowMs: 3_600_000 },
   "marketing-form-token": { limit: 30, windowMs: 60_000 },
   "marketing-events": { limit: 60, windowMs: 60_000 },
+  "platform-provider-test": { limit: 6, windowMs: 60_000 }, // STEP 36 - provider connection tests (per administrator)
+  "platform-export": { limit: 6, windowMs: 60_000 }, // STEP 36 - safe configuration export (per administrator)
   "marketing-webhook": { limit: 600, windowMs: 60_000 },
   // STEP 30 - applicant-side engagement writes (feedback, announcement dismissal, preference changes)
   "engagement-feedback": { limit: 5, windowMs: 3_600_000 },

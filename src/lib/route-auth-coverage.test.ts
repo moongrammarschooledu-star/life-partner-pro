@@ -41,7 +41,7 @@ const SESSION_ONLY_ADMIN = new Set(["/api/admin/view-as/status"]);
 const PUBLIC_ROUTES = new Set([
   "/api/register", "/api/support", "/api/update-request", "/api/my-status", "/api/my-status/verify", // STEP 33 — sign-in step two (rate-limited, needs the e-mailed code)
   "/api/verify/email/send", "/api/verify/email/confirm", "/api/verify/phone/send", "/api/verify/phone/confirm",
-  "/api/health", "/api/health/live", "/api/health/ready", "/api/system-state", "/api/client-errors",
+  "/api/health", "/api/health/live", "/api/health/ready", "/api/system-state", "/api/client-errors", "/api/status",
   "/api/webhooks/payments/[provider]", "/api/webhooks/notifications", "/api/webhooks/verification/[provider]",
   "/api/webhooks/email", "/api/webhooks/sms", "/api/webhooks/whatsapp", // STEP 25 - signed provider delivery webhooks
   "/api/webhooks/document-provider", "/api/webhooks/signature-provider", // STEP 26 - signed, currently unconfigured (fail closed) provider webhooks

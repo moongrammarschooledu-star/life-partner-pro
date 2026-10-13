@@ -178,6 +178,7 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
   { path: "/update-request", title: "Request a Profile Update | Life Partner Pro", description: "Ask for a change to your profile.", kind: "utility", indexable: false },
   { path: "/register/confirmation", title: "Registration Received | Life Partner Pro", description: "Your registration was received.", kind: "utility", indexable: false },
   { path: "/offline", title: "You Are Offline | Life Partner Pro", description: "You are offline.", kind: "utility", indexable: false },
+  { path: "/status", title: "Platform Status | Life Partner Pro", description: "Whether Life Partner Pro is running normally, and any planned maintenance or service notices.", kind: "utility", indexable: false },
 ];
 
 export function findPublicRoute(path: string): PublicRoute | undefined {

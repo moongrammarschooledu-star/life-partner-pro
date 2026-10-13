@@ -11,7 +11,7 @@ import type { AssignmentResourceType, ApprovalRiskLevel, ApprovalLevel, AdminRol
 // getApprovalPolicy() always reads the live ApprovalPolicy row (which an
 // admin may have edited), never this static map, once seeded.
 
-export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT" | "CRM" | "MARKETING" | "ENGAGEMENT";
+export type ApprovalDomain = "PROFILE" | "CONTACT" | "MATCHING" | "PROPOSAL" | "VERIFICATION" | "SAFETY" | "PRIVACY" | "FINANCE" | "ADMINISTRATION" | "AI" | "COMPLIANCE" | "RISK" | "COMMUNICATION" | "DOCUMENT" | "CRM" | "MARKETING" | "ENGAGEMENT" | "PLATFORM";
 
 export interface CatalogEntry {
   label: string;
@@ -114,6 +114,10 @@ export const APPROVAL_CATALOG: Record<string, CatalogEntry> = {
   AI_SAFETY_OVERRIDE: { label: "Override an AI safety block", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_CONFIGURATION_CHANGE: { label: "Change AI configuration", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_PROVIDER_CHANGE: { label: "Change AI provider", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_3", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  // ---------- PLATFORM (STEP 36) ----------
+  PLATFORM_FEATURE_ACTIVATION: { label: "Enable a sensitive feature in production", domain: "PLATFORM", sourceType: "PLATFORM_CONFIG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  PLATFORM_SETTING_HIGH_RISK: { label: "Change a high-risk platform setting", domain: "PLATFORM", sourceType: "PLATFORM_CONFIG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
+  PLATFORM_CONFIG_ROLLBACK: { label: "Roll configuration back to an earlier version", domain: "PLATFORM", sourceType: "PLATFORM_CONFIG", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_ROLLOUT: { label: "Change AI rollout phase", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "HIGH", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
   AI_KILL_SWITCH_OVERRIDE: { label: "Use the AI kill switch", domain: "AI", sourceType: "AI_SAFETY_EVENT", defaultRiskLevel: "CRITICAL", defaultRequiredLevel: "LEVEL_2", defaultAllowedRoles: ["SUPER_ADMIN"] },
 

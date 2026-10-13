@@ -6,6 +6,9 @@ import { readJson, requireReauth, requireReason } from "@/lib/ops/admin-route";
 import { getSystemControl, invalidateSystemControl } from "@/lib/ops/system-control";
 import { parseControlUpdate, sectionRequiresReauth, SECTION_PERMISSION, CONTROL_SECTIONS, type ControlSection } from "@/lib/ops/control-schema";
 import type { AuditAction } from "@prisma/client";
+import { assertNotFrozen } from "@/lib/platform/guard";
+import { recordConfigChange } from "@/lib/platform/config-change";
+import { currentEnvironment } from "@/lib/platform/environment-core";
 
 export async function GET() {
   try {
@@ -46,8 +49,14 @@ export async function PATCH(req: Request) {
     const previous: Record<string, unknown> = {};
     for (const key of Object.keys(data)) previous[key] = (before as unknown as Record<string, unknown>)[key];
 
+    // STEP 36: a production change freeze blocks these changes too, except restrictive emergency ones (switching something off) by a holder of the freeze
+    // permission or by someone with active break-glass. Every change is also written to the configuration change log.
+    const restrictive = (section === "emergency" && Object.values(data).every((v) => v === true)) || (section === "maintenance" && data.maintenanceMode !== "OFF") || (section === "state" && data.operationalState !== "NORMAL");
+    await assertNotFrozen({ admin, restrictive, what: { kind: "SYSTEM_CONTROL", key: section } });
+
     await prisma.systemControl.upsert({ where: { id: 1 }, update: { ...data, updatedById: admin.id }, create: { id: 1, ...data, updatedById: admin.id } });
     invalidateSystemControl();
+    await recordConfigChange({ kind: section === "maintenance" ? "MAINTENANCE" : "SYSTEM_CONTROL", key: section, before: previous, after: data, actor: admin, reason, environment: currentEnvironment() });
 
     let action: AuditAction = "SYSTEM_SETTING_CHANGED";
     if (section === "state") action = "OPERATIONAL_STATE_CHANGED";
