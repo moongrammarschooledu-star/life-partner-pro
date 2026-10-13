@@ -130,8 +130,13 @@ jobs:
           echo "Bundle: $AAB ($(du -h "$AAB" | cut -f1))"
           test -s "$AAB"
           unzip -l "$AAB" | grep -q "BundleConfig.pb"
-          # a key, a Firebase file or a source map must never be inside the bundle
-          if unzip -l "$AAB" | grep -Eiq '\.(keystore|jks|p12|p8|pem)$|google-services\.json|\.map$'; then echo "Forbidden file inside the bundle"; exit 1; fi
+          # A key, a Firebase file or a web source map must never be inside the bundle. BUNDLE-METADATA is the one allowed place for a .map: it holds the R8
+          # mapping file that Google Play uses to read crash reports; it is not part of what is delivered to phones.
+          if unzip -l "$AAB" | grep -v 'BUNDLE-METADATA/' | grep -Eiq '\.(keystore|jks|p12|p8|pem)$|google-services\.json|\.map$'; then
+            echo "Forbidden file inside the bundle:"
+            unzip -l "$AAB" | grep -v 'BUNDLE-METADATA/' | grep -Ei '\.(keystore|jks|p12|p8|pem)$|google-services\.json|\.map$'
+            exit 1
+          fi
       - name: Keep the artifacts
         uses: actions/upload-artifact@v4
         with:
