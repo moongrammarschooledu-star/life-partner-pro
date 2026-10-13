@@ -48,7 +48,7 @@ Header and footer link every main page; the home page links to How It Works, Ver
 
 ## Measured results
 
-None yet. LCP, INP, CLS and TTFB are measured on the deployed site and recorded in the STEP 35 report with the device, network and date; they are not estimated here.
+Measured on the live site on 2026-10-13 and recorded in `STEP_35_REPORT.md` (device, network and method included): home page FCP and LCP 848 ms on a phone-sized viewport with CLS 0; compressed HTML 6-14 KB per page; 17 URLs in the sitemap; private areas answer `X-Robots-Tag: noindex`. Search ranking and traffic are not measured and not claimed. INP was not measured.
 
 ## Owner actions that affect SEO
 

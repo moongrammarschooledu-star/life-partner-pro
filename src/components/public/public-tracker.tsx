@@ -11,10 +11,20 @@ function optedOut(): boolean {
   return nav.doNotTrack === "1" || nav.msDoNotTrack === "1" || nav.globalPrivacyControl === true;
 }
 
+// Once the server says counting is not available (the feature is off, or a limit was hit), stop sending for the rest of this page session.
+// A plain variable, not browser storage: nothing about the visitor is kept on the device.
+let unavailable = false;
+
 function send(body: { type: "PAGE_VIEW" | "CTA_CLICK" | "REGISTRATION_STARTED"; path: string; cta?: string }) {
-  if (optedOut()) return;
+  if (unavailable || optedOut()) return;
   try {
-    void fetch("/api/public-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true });
+    fetch("/api/public-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true })
+      .then((res) => {
+        if (!res.ok) unavailable = true;
+      })
+      .catch(() => {
+        unavailable = true;
+      });
   } catch {
     /* counting must never affect the page */
   }
