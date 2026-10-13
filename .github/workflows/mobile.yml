@@ -1,0 +1,253 @@
+name: Mobile release
+
+# INSTALL: this file lives in mobile/ci/ because the automated assistant's GitHub token may not create workflow files. The repository owner installs it once:
+# GitHub → Add file → Create new file → `.github/workflows/mobile.yml` → paste this content → commit. Nothing runs until it is installed.
+
+# STEP 37 §45 — the mobile pipeline: install → type check → lint → tests (including the mobile security tests) → security scan → build the Android App Bundle →
+# validate it → compile the iPhone app (and, when the owner has added the Apple secrets, archive and export it) → keep the artifacts.
+#
+# It builds and validates; it does NOT publish. Uploading to Google Play (internal testing first) and to TestFlight is done by the account owner in the store
+# consoles, because those accounts, keys and reviews belong to the owner (see ANDROID_RELEASE_GUIDE.md / IOS_RELEASE_GUIDE.md). Signing keys and Firebase / Apple
+# files come ONLY from this repository's encrypted secrets, are written to a temporary folder for the length of the job and are deleted at the end.
+# No step prints a secret. Run it from Actions → "Mobile release" → Run workflow, or by pushing a tag named mobile-v1.0.0.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "App version shown to people, e.g. 1.0.0"
+        required: true
+        default: "1.0.0"
+      build_number:
+        description: "Build number: a whole number that must rise with every upload (Android versionCode / iOS build)"
+        required: true
+        default: "1"
+      require_signing:
+        description: "Fail the Android build if no upload key is configured (use for a store build)"
+        type: boolean
+        default: false
+  push:
+    tags: ["mobile-v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Dummy, CI-only values (no real secret is used by the checks job).
+  NEXTAUTH_SECRET: ci-only-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+  APP_ENV: development
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lpp_ci?schema=public
+  MOBILE_APP_VERSION: ${{ inputs.version_name || '1.0.0' }}
+  MOBILE_BUILD_NUMBER: ${{ inputs.build_number || '1' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Tests (includes the mobile security and project-hygiene tests)
+        run: npm test
+      - name: Static security scan
+        run: npm run security:scan
+      - name: Migration validation
+        run: npm run db:migrate:validate
+
+  android:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install the mobile shell
+        working-directory: mobile
+        run: npm ci
+      - name: Firebase configuration (optional: without it the app builds and notifications stay off)
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > mobile/android/app/google-services.json
+            echo "Firebase configuration written for this job."
+          else
+            echo "No Firebase configuration secret: push notifications will be off in this build."
+          fi
+      - name: Upload key (optional for a test build, required for a store build)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.keystore"
+            echo "LPP_KEYSTORE_PATH=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+            echo "The upload key is available for this job."
+          else
+            echo "No upload key secret: the bundle will be unsigned (fine for a test, not accepted by Google Play)."
+          fi
+      - name: Sync the web shell
+        working-directory: mobile
+        run: npx cap sync android
+      - name: Build the release App Bundle (.aab)
+        working-directory: mobile/android
+        env:
+          LPP_VERSION_NAME: ${{ env.MOBILE_APP_VERSION }}
+          LPP_VERSION_CODE: ${{ env.MOBILE_BUILD_NUMBER }}
+          LPP_APP_HOST: ${{ vars.LPP_APP_HOST }}
+          LPP_ANDROID_PACKAGE_ID: ${{ vars.ANDROID_PACKAGE_ID }}
+          LPP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LPP_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LPP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          LPP_REQUIRE_SIGNING: ${{ inputs.require_signing && 'true' || 'false' }}
+          APP_URL: ${{ vars.APP_URL }}
+          MOBILE_BUILD_TYPE: release
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
+      - name: Validate the bundle
+        run: |
+          AAB=$(ls mobile/android/app/build/outputs/bundle/release/*.aab)
+          echo "Bundle: $AAB ($(du -h "$AAB" | cut -f1))"
+          test -s "$AAB"
+          unzip -l "$AAB" | grep -q "BundleConfig.pb"
+          # a key, a Firebase file or a source map must never be inside the bundle
+          if unzip -l "$AAB" | grep -Eiq '\.(keystore|jks|p12|p8|pem)$|google-services\.json|\.map$'; then echo "Forbidden file inside the bundle"; exit 1; fi
+      - name: Keep the artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-${{ env.MOBILE_APP_VERSION }}-${{ env.MOBILE_BUILD_NUMBER }}
+          path: |
+            mobile/android/app/build/outputs/bundle/release/*.aab
+            mobile/android/app/build/outputs/mapping/release/mapping.txt
+          retention-days: 14
+      - name: Remove the key material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/upload.keystore" mobile/android/app/google-services.json
+
+  ios-compile:
+    needs: checks
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install the mobile shell
+        working-directory: mobile
+        run: npm ci
+      - name: Prepare the iOS project
+        working-directory: mobile
+        env:
+          IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+          LPP_APP_HOST: ${{ vars.LPP_APP_HOST }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          npx cap sync ios
+          node scripts/configure-ios.mjs
+      - name: Compile for the simulator (no signing needed: proves the project builds)
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 25
+
+  ios-archive:
+    # Only when the owner has added the Apple secrets and switched this on (repository variable IOS_SIGNING_ENABLED = true).
+    if: ${{ vars.IOS_SIGNING_ENABLED == 'true' }}
+    needs: ios-compile
+    runs-on: macos-14
+    timeout-minutes: 45
+    environment: mobile-ios-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install the mobile shell
+        working-directory: mobile
+        run: npm ci
+      - name: Install the signing certificate and profile into a temporary keychain
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/lpp.keychain-db"
+          echo "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/dist.p12" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision")")
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          echo "PROFILE_UUID=$UUID" >> "$GITHUB_ENV"
+      - name: Prepare the iOS project
+        working-directory: mobile
+        env:
+          IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+          LPP_APP_HOST: ${{ vars.LPP_APP_HOST }}
+          APP_URL: ${{ vars.APP_URL }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          npx cap sync ios
+          node scripts/configure-ios.mjs
+      - name: Archive and export for TestFlight / the App Store
+        working-directory: mobile/ios/App
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" -destination 'generic/platform=iOS' \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" PROVISIONING_PROFILE="$PROFILE_UUID" archive | tail -n 25
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" -exportPath "$RUNNER_TEMP/export" -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" | tail -n 10
+      - name: Keep the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-${{ env.MOBILE_APP_VERSION }}-${{ env.MOBILE_BUILD_NUMBER }}
+          path: ${{ runner.temp }}/export/*.ipa
+          retention-days: 14
+      - name: Remove the key material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/lpp.keychain-db" || true
+          rm -f "$RUNNER_TEMP/dist.p12" "$RUNNER_TEMP/profile.mobileprovision"
