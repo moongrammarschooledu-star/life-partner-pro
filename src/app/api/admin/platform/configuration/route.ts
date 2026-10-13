@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, handleApiError } from "@/lib/route-guard";
+import { prisma } from "@/lib/prisma";
 import { listConfigChanges, type ConfigKind } from "@/lib/platform/config-change";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,11 @@ export async function GET(req: Request) {
       actorId: url.searchParams.get("actor")?.slice(0, 60) || undefined,
       after: url.searchParams.get("after")?.slice(0, 60) || undefined,
     });
-    return NextResponse.json(out);
+    // Show who made each change by name; the id stays the stable reference.
+    const ids = [...new Set(out.items.map((i) => i.actorId).filter((x): x is string => !!x))];
+    const people = ids.length ? await prisma.adminUser.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
+    const names = new Map(people.map((a) => [a.id, a.name]));
+    return NextResponse.json({ ...out, items: out.items.map((i) => ({ ...i, actorName: i.actorId ? names.get(i.actorId) ?? null : null })) });
   } catch (error) {
     return handleApiError(error);
   }

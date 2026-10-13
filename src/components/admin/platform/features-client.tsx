@@ -83,9 +83,9 @@ export function FeaturesClient({ permissions }: { permissions: string[] }) {
                 <tr key={k.key} className="align-top">
                   <td className="px-2 py-2 font-medium">{k.label}</td>
                   <td className="px-2 py-2 text-muted">{k.effect}</td>
-                  <td className="px-2 py-2">{k.engaged === null ? <Badge variant="muted">managed elsewhere</Badge> : k.engaged ? <Badge variant="danger">engaged</Badge> : <Badge variant="success">released</Badge>}</td>
+                  <td className="px-2 py-2">{k.engaged === null || k.mechanism === "external" ? <Badge variant="muted">{k.engaged ? "engaged · own workflow" : "own workflow"}</Badge> : k.engaged ? <Badge variant="danger">engaged</Badge> : <Badge variant="success">released</Badge>}</td>
                   <td className="px-2 py-2 text-right">
-                    {k.engaged !== null && permissions.includes("platform:features:manage") && <Button size="sm" variant={k.engaged ? "outline" : "danger"} onClick={() => setKs({ item: k, engage: !k.engaged })}>{k.engaged ? "Release" : "Engage"}</Button>}
+                    {k.engaged !== null && k.mechanism !== "external" && permissions.includes("platform:features:manage") && <Button size="sm" variant={k.engaged ? "outline" : "danger"} onClick={() => setKs({ item: k, engage: !k.engaged })}>{k.engaged ? "Release" : "Engage"}</Button>}
                     {k.href && <Link href={k.href} className="ml-2 text-sm text-primary hover:underline">Open</Link>}
                   </td>
                 </tr>
