@@ -22,7 +22,7 @@
 
   --brand-pink: #d6407a;
 
-  --muted: #8a7a72;
+  --muted: #6b5b54; /* was #8a7a72 (about 3.7:1 on the page background); this is 5.4:1, above the 4.5:1 minimum for normal text */
 
   --success: #2f7a4f;
   --warning: #b8873a;

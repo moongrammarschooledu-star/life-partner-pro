@@ -62,7 +62,7 @@ export function PublicFooter() {
               <div key={col.title} className="flex flex-col gap-2">
                 <span className="font-medium text-foreground">{col.title}</span>
                 {col.links.map((l) => (
-                  <Link key={l.href} href={l.href} className="text-muted hover:text-foreground">
+                  <Link key={l.href} href={l.href} className="py-1 text-muted hover:text-foreground">
                     {l.label}
                   </Link>
                 ))}

@@ -49,13 +49,14 @@ export function PublicNavbar() {
   }, [pathname]);
 
   const linkClass = (href: string) => cn("text-muted hover:text-foreground", pathname === href && "text-foreground");
+  const ThemeIcon = theme === "dark" ? Sun : Moon;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Life Partner Pro — home">
-          <Image src="/logo-icon.png" alt="" width={32} height={32} className="h-8 w-8" priority />
-          <span className="font-heading text-lg font-semibold">Life Partner Pro</span>
+        <Link href="/" className="flex min-w-0 items-center gap-2" aria-label="Life Partner Pro — home">
+          <Image src="/logo-icon.png" alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+          <span className="truncate font-heading text-lg font-semibold">Life Partner Pro</span>
         </Link>
 
         <nav aria-label="Main" className="hidden items-center gap-5 text-sm font-medium lg:flex">
@@ -67,21 +68,22 @@ export function PublicNavbar() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
-          <NotificationBell />
+        <div className="flex shrink-0 items-center gap-2">
+          {accountMode && <NotificationBell />}
+          {/* On a phone the dark-mode switch lives in the menu, so the header keeps room for the brand and the main action. */}
           <button
             onClick={toggle}
             aria-label="Toggle dark mode"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground"
+            className="hidden h-9 w-9 items-center justify-center rounded-lg border border-border text-muted hover:text-foreground sm:flex"
           >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <ThemeIcon className="h-4 w-4" />
           </button>
           {!accountMode && (
             <>
               <Link href="/login" className={buttonClass({ variant: "outline", size: "sm", className: "hidden sm:inline-flex" })}>
                 Login
               </Link>
-              <Link href="/register" data-cta="nav-create-profile" className={buttonClass({ size: "sm" })}>
+              <Link href="/register" data-cta="nav-create-profile" className={buttonClass({ size: "sm", className: "whitespace-nowrap" })}>
                 Create Profile
               </Link>
             </>
@@ -117,6 +119,12 @@ export function PublicNavbar() {
                 <Link href="/login" className="block py-3 text-sm font-medium">Login</Link>
               </li>
             )}
+            <li className="sm:hidden">
+              <button type="button" onClick={toggle} className="flex w-full items-center gap-2 py-3 text-left text-sm font-medium">
+                <ThemeIcon className="h-4 w-4" aria-hidden="true" />
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
+            </li>
           </ul>
         </nav>
       )}
