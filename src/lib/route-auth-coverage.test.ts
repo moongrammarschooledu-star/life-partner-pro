@@ -50,6 +50,8 @@ const PUBLIC_ROUTES = new Set([
   "/api/marketing/forms/[id]/token", "/api/marketing/forms/[id]/submit", "/api/marketing/events", "/api/marketing/webhooks/[provider]",
   // STEP 35 - anonymous public-site beacon: flag-gated (default OFF), same-origin, rate limited, strict allow-list, honours Do Not Track.
   "/api/public-events",
+  // STEP 37 - mobile apps. Public by necessity (the app asks before anyone is signed in): flag-gated, rate limited, no personal data in or out. The signed-in mobile routes are checked below.
+  "/api/mobile/version", "/api/mobile/config", "/api/mobile/events", "/api/mobile/deep-link/resolve",
   "/api/cron/notifications", "/api/internal/ci-evidence",
   "/api/auth/[...nextauth]",
   "/api/my-billing/packages", // public package catalogue (no personal data)
@@ -66,6 +68,8 @@ const ADMIN_AUTH = /requireAdmin\(/;
 // (never /api/my-family/*, which is applicant-facing and already covered by
 // APPLICANT_AUTH above).
 const FAMILY_MEMBER_AUTH = /requireFamilyMemberId\(/;
+// STEP 37 — signed-in mobile routes use the shared mobile guard (applicant or family session, app switched on, rate limited).
+const MOBILE_AUTH = /mobileGuard\(/;
 
 describe("API route authorization coverage", () => {
   it("finds the route tree (sanity)", () => {
@@ -94,9 +98,14 @@ describe("API route authorization coverage", () => {
     expect(missing).toEqual([]);
   });
 
+  it("every signed-in mobile route uses the mobile guard; the rest are on the reviewed public list", () => {
+    const missing = routes.filter((r) => /^\/api\/mobile\//.test(r.path) && !PUBLIC_ROUTES.has(r.path) && !MOBILE_AUTH.test(r.source)).map((r) => r.path);
+    expect(missing).toEqual([]);
+  });
+
   it("no other route is public unless it is on the reviewed allowlist", () => {
     const unexpected = routes
-      .filter((r) => !r.path.startsWith("/api/admin/") && !/^\/api\/my-/.test(r.path) && !/^\/api\/family\//.test(r.path))
+      .filter((r) => !r.path.startsWith("/api/admin/") && !/^\/api\/my-/.test(r.path) && !/^\/api\/family\//.test(r.path) && !/^\/api\/mobile\//.test(r.path))
       .filter((r) => !PUBLIC_ROUTES.has(r.path))
       .map((r) => r.path);
     expect(unexpected).toEqual([]);

@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Android / iOS shell is its own project (STEP 37) with its own tooling.
+    "mobile/**",
   ]),
 ]);
 

@@ -76,3 +76,15 @@ Keep three environments apart: **Development** (your laptop, its own database), 
 2. Adding a variable: add its name here and to `.env.example`, validate it in `src/lib/config/validate.ts` if production needs it.
 3. Rotation: see `docs/runbooks/security-incident.md` (rotate at the provider, update Vercel, redeploy production, re-set Preview by hand).
 4. Never paste a value into chat, a ticket or a document.
+
+## Mobile apps (STEP 37)
+
+Names only; the full table (purpose, which are secrets, the build and CI variables) is in `docs/mobile/MOBILE_ENVIRONMENT_VARIABLES.md`.
+
+`ANDROID_PACKAGE_ID`, `IOS_BUNDLE_ID`, `MOBILE_ALLOWED_HOSTS`, `ANDROID_SHA256_CERT_FINGERPRINTS`, `APPLE_TEAM_ID`, `MOBILE_ANALYTICS_ENABLED` - public identifiers and switches (not secret).
+
+`MOBILE_ENCRYPTION_KEY` - optional dedicated key (32+ characters) that encrypts push tokens at rest; if unset, a key derived from `NEXTAUTH_SECRET` is used. Secret.
+
+`FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` - Firebase Cloud Messaging (Android push). `FCM_PRIVATE_KEY` and the service-account e-mail are secret.
+
+`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY`, `APNS_BUNDLE_ID`, `APNS_ENVIRONMENT` - Apple Push Notification service (iPhone push). `APNS_PRIVATE_KEY` and the key id are secret.

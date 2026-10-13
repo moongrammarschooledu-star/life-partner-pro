@@ -163,6 +163,15 @@ export const PUBLIC_ROUTES: PublicRoute[] = [
     priority: 0.4,
   },
   {
+    path: "/delete-account",
+    title: "Delete Your Account | Life Partner Pro",
+    description: "How to ask for your Life Partner Pro account and personal information to be deleted, from the website or the app, and what happens next.",
+    kind: "legal",
+    indexable: true,
+    changeFrequency: "yearly",
+    priority: 0.3,
+  },
+  {
     path: "/terms",
     title: "Terms & Conditions | Life Partner Pro",
     description: "The terms for using Life Partner Pro: account use, acceptable use, verification limits, membership and payments.",

@@ -1405,6 +1405,10 @@ enum AuditAction {
   PLATFORM_BREAK_GLASS_REVIEWED
   PLATFORM_ANNOUNCEMENT_CHANGED
   PLATFORM_CONFIG_EXPORTED
+  MOBILE_VERSION_POLICY_CHANGED
+  MOBILE_RELEASE_CHANGED
+  MOBILE_PUSH_TEST_SENT
+  MOBILE_DEVICE_REMOVED_BY_ADMIN
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -2093,6 +2097,7 @@ model AdminUser {
 // ---------- Core profile ----------
 
 model Profile {
+  mobileDevices MobileDevice[]
   id          String @id @default(cuid())
   profileCode String @unique // e.g. LPP-000001, cosmetic display id only
 
@@ -3347,6 +3352,9 @@ model CommunicationLog {
 model NotificationPreference {
   id        String @id @default(cuid())
   profileId String @unique
+
+  // STEP 37 — what a push notification may show on the lock screen: FULL | PRIVATE | MINIMAL | OFF. PRIVATE is the default so nothing about a proposal is shown unless the person chooses.
+  pushDisplayMode String @default("PRIVATE") @db.VarChar(10)
 
   inAppProposalUpdates   Boolean @default(true)
   inAppMeetingUpdates    Boolean @default(true)
@@ -6176,6 +6184,18 @@ enum SecurityEventType {
   AI_PROMPT_INJECTION_SUSPECTED // AI input matched a prompt-injection pattern (pattern code only, never the text)
   AI_UNAUTHORIZED_ACTION_ATTEMPT // AI output or input asked for an action the AI is never allowed to take
   SECURITY_CONFIG_CHANGED // a security configuration was changed
+  // STEP 37 — mobile app (device and session signals; never tokens, never contact details)
+  MOBILE_DEVICE_REGISTERED
+  MOBILE_DEVICE_REMOVED
+  MOBILE_SESSION_CREATED
+  MOBILE_SESSION_REVOKED
+  MOBILE_PUSH_TOKEN_CHANGED
+  MOBILE_LOGIN_FAILED
+  MOBILE_BIOMETRIC_ENABLED
+  MOBILE_BIOMETRIC_DISABLED
+  MOBILE_DEEP_LINK_OPENED
+  MOBILE_APP_UPDATED
+  MOBILE_SECURITY_WARNING
 }
 
 enum SecurityIncidentControl {
@@ -7551,6 +7571,7 @@ model FamilyGroup {
 // (Decision 2), entirely separate from the applicant's passwordless
 // ProfileSession. Never carries any AdminRole/Permission.
 model FamilyMember {
+  mobileDevices MobileDevice[]
   id              String             @id @default(cuid())
   familyAccount   FamilyAccount      @relation(fields: [familyAccountId], references: [id], onDelete: Cascade)
   familyAccountId String
@@ -11038,4 +11059,129 @@ model PlatformAnnouncement {
   updatedAt        DateTime                   @updatedAt
 
   @@index([status, startsAt])
+}
+
+// ---------- Mobile app (STEP 37) ----------
+// The mobile apps are a native shell around the existing web application: they use the same cookie sessions, the same API and the same authorization.
+// These tables hold only what the shell adds: which installed app belongs to which signed-in account (so a device can be removed and push can be sent),
+// the delivery record of push notifications, the minimum/recommended app versions, and the release log. Sessions, security events and audit use the existing tables.
+
+enum MobilePlatform {
+  ANDROID
+  IOS
+}
+
+enum MobileDeviceStatus {
+  ACTIVE
+  REMOVED
+  TOKEN_INVALID
+}
+
+enum MobileReleaseStatus {
+  DRAFT
+  INTERNAL_TESTING
+  CLOSED_TESTING
+  OPEN_TESTING
+  PRODUCTION
+  PAUSED
+  RETIRED
+}
+
+model MobileDevice {
+  id               String             @id @default(cuid())
+  // Random id the app generates once per install. One installation has exactly one current owner: signing in as someone else moves it.
+  installationId   String             @unique @db.VarChar(64)
+  platform         MobilePlatform
+  ownerKind        String             @db.VarChar(10) // PROFILE | FAMILY
+  profileId        String?
+  familyMemberId   String?
+  // The ProfileSession / FamilyMemberSession this device signed in with: revoking that session ends the device's push eligibility.
+  sessionId        String?
+  appVersion       String             @db.VarChar(32)
+  osVersion        String?            @db.VarChar(32)
+  deviceLabel      String?            @db.VarChar(80)
+  pushProvider     String?            @db.VarChar(8) // FCM | APNS
+  // The push token is encrypted at rest and never returned by any API; the hash lets a moved or invalid token be found without decrypting.
+  pushTokenEnc     String?
+  pushTokenHash    String?            @db.VarChar(64)
+  pushTokenAt      DateTime?
+  displayMode      String?            @db.VarChar(10) // overrides the account's pushDisplayMode when set
+  biometricEnabled Boolean            @default(false)
+  status           MobileDeviceStatus @default(ACTIVE)
+  lastSeenAt       DateTime           @default(now())
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  removedAt        DateTime?
+
+  profile      Profile?             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember?        @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  deliveries   MobilePushDelivery[]
+
+  @@index([profileId, status])
+  @@index([familyMemberId, status])
+  @@index([pushTokenHash])
+  @@index([platform, status, lastSeenAt])
+  @@index([sessionId])
+}
+
+model MobilePushDelivery {
+  id                String       @id @default(cuid())
+  deviceId          String
+  notificationId    String?
+  notificationType  String       @db.VarChar(60)
+  status            String       @db.VarChar(14) // SENT | FAILED | INVALID_TOKEN | SKIPPED
+  reason            String?      @db.VarChar(60)
+  providerMessageId String?      @db.VarChar(120)
+  createdAt         DateTime     @default(now())
+
+  device MobileDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, createdAt])
+  @@index([status, createdAt])
+}
+
+// One row per platform: the lowest app version that may still connect, the version we recommend, and the newest released one.
+model MobileVersionPolicy {
+  id                      String         @id @default(cuid())
+  platform                MobilePlatform @unique
+  minimumSupportedVersion String         @db.VarChar(32)
+  recommendedVersion      String         @db.VarChar(32)
+  latestVersion           String         @db.VarChar(32)
+  // Only the official store listing (play.google.com / apps.apple.com) is accepted here.
+  storeUrl                String?        @db.VarChar(300)
+  version                 Int            @default(1)
+  updatedById             String?
+  updatedAt               DateTime       @updatedAt
+}
+
+model MobileRelease {
+  id                  String              @id @default(cuid())
+  platform            MobilePlatform
+  version             String              @db.VarChar(32)
+  buildNumber         Int
+  environment         String              @default("PRODUCTION") @db.VarChar(12)
+  releaseNotes        String              @db.VarChar(2000)
+  status              MobileReleaseStatus @default(DRAFT)
+  createdById         String
+  approvedById        String?
+  releasedAt          DateTime?
+  rollbackReferenceId String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@unique([platform, version, buildNumber])
+  @@index([status, platform])
+}
+
+// Aggregate-only app usage counts (STEP 37 §33): per day, platform, app version and event NAME. No person, device, profile or session is ever recorded here.
+model MobileEventCounter {
+  id         String         @id @default(cuid())
+  day        DateTime       @db.Date
+  platform   MobilePlatform
+  appVersion String         @db.VarChar(32)
+  event      String         @db.VarChar(40)
+  count      Int            @default(0)
+
+  @@unique([day, platform, appVersion, event])
+  @@index([day])
 }

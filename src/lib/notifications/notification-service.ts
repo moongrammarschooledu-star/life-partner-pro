@@ -50,7 +50,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
       profileId: data.relatedProfileId,
     });
 
-    await prisma.notification.create({
+    const created = await prisma.notification.create({
       data: {
         recipientProfileId: profileId ?? null,
         recipientAdminId: adminId ?? null,
@@ -65,6 +65,18 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
         category: describeNotification(type).category,
       },
     });
+
+    // STEP 37 — mirror to the person's registered phones as a push notification (privacy-safe text, their own display choice, quiet hours, preferences;
+    // switched off by default and fail-open). Admin recipients have no phones registered.
+    if (created && (profileId || familyMemberId)) {
+      try {
+        // Loaded on demand so the notification service itself carries none of the push code unless a notification is actually created.
+        const { dispatchPushForNotification } = await import("@/lib/mobile/push-service");
+        await dispatchPushForNotification({ id: created.id, type, title: created.title, body: created.body, actionUrl: created.actionUrl, category: created.category, priority: created.priority, profileId: profileId ?? null, familyMemberId: familyMemberId ?? null });
+      } catch {
+        /* push is best effort and never affects the notification */
+      }
+    }
 
     if (!profileId) return; // admin/family recipients get in-app only — no external dispatch
 

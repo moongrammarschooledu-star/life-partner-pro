@@ -1,0 +1,33 @@
+# Mobile shell (STEP 37). Build output and anything secret never goes into Git.
+node_modules/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+android/app/release/
+*.apk
+*.aab
+*.ap_
+*.keystore
+*.jks
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+# Per-project Firebase / Apple credentials supplied by the build environment
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+# Capacitor copies these from the web folder and the config on every sync
+android/app/src/main/assets/public
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+ios/App/App/public
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/App/Pods/
+ios/DerivedData/
+ios/App/build/
+*.xcuserstate
+xcuserdata/

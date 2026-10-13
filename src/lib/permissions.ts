@@ -639,7 +639,11 @@ export type Permission =
   | "platform:break_glass"
   | "platform:change_freeze"
   | "platform:announcements:view"
-  | "platform:announcements:manage";
+  | "platform:announcements:manage"
+  // STEP 37 — mobile apps
+  | "platform:mobile:view"
+  | "platform:mobile:manage"
+  | "platform:mobile:push";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
@@ -651,6 +655,8 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   "platform:configuration:rollback",
   "platform:providers:manage",
   "platform:settings:manage",
+  "platform:mobile:manage", // STEP 37
+  "platform:mobile:push",
   "golive:manage", // STEP 34
   "soc:containment:approve", // STEP 32
   "soc:rules:manage",
@@ -1000,10 +1006,11 @@ const PLATFORM_ALL_PERMISSIONS: Permission[] = [
   "platform:providers:manage", "platform:branding:view", "platform:branding:manage", "platform:workflows:view", "platform:workflows:manage", "platform:maintenance:view",
   "platform:maintenance:manage", "platform:deployment:view", "platform:health:view", "platform:configuration:view", "platform:configuration:manage",
   "platform:configuration:rollback", "platform:audit:view", "platform:break_glass", "platform:change_freeze", "platform:announcements:view", "platform:announcements:manage",
+  "platform:mobile:view", "platform:mobile:manage", "platform:mobile:push",
 ];
 const PLATFORM_OPERATIONS_VIEW_PERMISSIONS: Permission[] = [
   "platform:control_center:view", "platform:settings:view", "platform:features:view", "platform:providers:view", "platform:workflows:view", "platform:maintenance:view", "platform:deployment:view",
-  "platform:health:view", "platform:announcements:view",
+  "platform:health:view", "platform:announcements:view", "platform:mobile:view",
 ];
 const PLATFORM_COMPLIANCE_VIEW_PERMISSIONS: Permission[] = [
   "platform:control_center:view", "platform:settings:view", "platform:features:view", "platform:configuration:view", "platform:audit:view", "platform:announcements:view",

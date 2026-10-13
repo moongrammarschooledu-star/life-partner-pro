@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import Script from "next/script";
 import { PwaRegister } from "@/components/public/pwa-register";
+import { NativeBridge } from "@/components/mobile/native-bridge";
+import { OfflineBanner } from "@/components/mobile/offline-banner";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, siteUrl } from "@/lib/public-site/config";
 import "./globals.css";
 
@@ -50,6 +52,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <ToastProvider>{children}</ToastProvider>
         </ThemeProvider>
         <PwaRegister />
+        <OfflineBanner />
+        <NativeBridge />
       </body>
     </html>
   );

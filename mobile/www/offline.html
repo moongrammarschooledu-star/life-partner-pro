@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Life Partner Pro</title>
+<style>
+  :root { --bg: #fdf1f4; --fg: #2a1a1f; --muted: #6b5a5f; --brand: #7a0f31; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #16100f; --fg: #f4eaec; --muted: #b8a9ad; --brand: #e07a96; } }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-align: center; }
+  main { max-width: 22rem; }
+  h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+  p { color: var(--muted); margin: 0 0 1rem; }
+  button { min-height: 44px; padding: 0 1.25rem; border: 0; border-radius: .5rem; background: var(--brand); color: #fff; font: inherit; font-weight: 600; }
+  button:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main role="main">
+  <h1>You&rsquo;re offline</h1>
+  <p>Some private account features are temporarily unavailable. We will reconnect automatically when your internet is back.</p>
+  <button type="button" id="retry">Try again</button>
+</main>
+<script>
+  // Nothing private lives in this page or in the app. It only waits for the network and reloads the site.
+  function go() { window.location.replace("/"); }
+  document.getElementById("retry").addEventListener("click", go);
+  window.addEventListener("online", go);
+</script>
+</body>
+</html>

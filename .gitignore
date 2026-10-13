@@ -56,3 +56,14 @@ next-env.d.ts
 
 # STEP 33 scratch output of the audit scripts
 .audit-tmp/
+
+# STEP 37 - mobile signing and push credentials are never committed (they live in the build environment's secret store)
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+mobile/node_modules/

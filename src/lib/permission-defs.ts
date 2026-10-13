@@ -557,7 +557,10 @@ const DESCRIPTIONS: Partial<Record<Permission, string>> = {
   "platform:break_glass": "Take time-limited emergency access to change configuration during a change freeze (reason, re-authentication, review afterwards)",
   "platform:change_freeze": "Start or end a production change freeze",
   "platform:announcements:view": "View platform announcements and the status page content",
-  "platform:announcements:manage": "Create, publish and resolve platform announcements",  "ai:analytics:use": "Use the AI analytics assistant (answers from the metric catalog only; never SQL)",
+  "platform:announcements:manage": "Create, publish and resolve platform announcements",
+  "platform:mobile:view": "View the mobile apps: versions, installed devices, push delivery health, releases and security events (never tokens or personal details)",
+  "platform:mobile:manage": "Set the minimum / recommended app versions and record app releases (moving a release to production needs approval)",
+  "platform:mobile:push": "Send a generic test notification to a registered device",  "ai:analytics:use": "Use the AI analytics assistant (answers from the metric catalog only; never SQL)",
 };
 
 function moduleAndAction(key: Permission): { module: string; action: string } {

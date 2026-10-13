@@ -1,0 +1,29 @@
+{
+  "name": "life-partner-pro-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android and iOS shell for Life Partner Pro (STEP 37). A native wrapper around the website: it holds no business logic and no secrets.",
+  "scripts": {
+    "sync": "cap sync",
+    "doctor": "cap doctor",
+    "android:debug": "cap sync android && cd android && gradlew assembleDebug",
+    "android:bundle": "cap sync android && cd android && gradlew bundleRelease",
+    "android:open": "cap open android",
+    "ios:open": "cap open ios"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "^9.1.2",
+    "@capacitor-community/privacy-screen": "^6.0.0",
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/device": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@capacitor/push-notifications": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "^5.6.0"
+  }
+}

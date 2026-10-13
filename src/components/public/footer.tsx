@@ -39,6 +39,7 @@ const COLUMNS: Array<{ title: string; links: Array<{ href: string; label: string
     links: [
       { href: "/privacy-policy", label: "Privacy Policy" },
       { href: "/terms", label: "Terms & Conditions" },
+      { href: "/delete-account", label: "Delete Your Account" },
       { href: "/report-concern", label: "Report a Concern" },
     ],
   },

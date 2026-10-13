@@ -4,10 +4,18 @@ import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { startCheckout, CheckoutError } from "@/lib/finance/checkout";
 import { withRequestMetrics } from "@/lib/observability/metrics";
+import { isFeatureEnabled } from "@/lib/ops/feature-flags";
+import { parseAppUserAgent } from "@/lib/mobile/version";
 
 async function postHandler(req: Request) {
   const profileId = await requireApplicantProfileId();
   if (!profileId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+
+  // STEP 37 — store rules decide whether the apps may sell memberships. Until the owner has settled that (and switched mobile.payments.enabled on), a
+  // purchase cannot be started from inside the Android or iPhone app. The website is unaffected, and what a person is entitled to is still decided by the server.
+  if (parseAppUserAgent(req.headers.get("user-agent")) && !(await isFeatureEnabled("mobile.payments.enabled"))) {
+    return NextResponse.json({ error: "Purchases are not available in the app.", code: "APP_PURCHASES_OFF" }, { status: 403 });
+  }
 
   const limited = await enforceConfiguredLimit(req, "my-billing-checkout", { limit: 10, windowMs: 60_000 });
   if (limited) return limited;

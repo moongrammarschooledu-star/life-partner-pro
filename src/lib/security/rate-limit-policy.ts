@@ -60,6 +60,12 @@ export const KNOWN_LIMITS: Record<string, LimitDefaults> = {
   "marketing-events": { limit: 60, windowMs: 60_000 },
   "platform-provider-test": { limit: 6, windowMs: 60_000 }, // STEP 36 - provider connection tests (per administrator)
   "platform-export": { limit: 6, windowMs: 60_000 }, // STEP 36 - safe configuration export (per administrator)
+  "mobile-public": { limit: 60, windowMs: 60_000 }, // STEP 37 - app version / config (public)
+  "mobile-device": { limit: 60, windowMs: 60_000 }, // STEP 37 - device registration and management (per signed-in person)
+  "mobile-push-test": { limit: 3, windowMs: 600_000 }, // STEP 37 - a person's own test notification
+  "mobile-deep-link": { limit: 60, windowMs: 60_000 }, // STEP 37 - deep link resolution
+  "mobile-events": { limit: 30, windowMs: 60_000 }, // STEP 37 - anonymous app usage counts
+  "mobile-admin-push-test": { limit: 6, windowMs: 60_000 }, // STEP 37 - administrator test notification
   "marketing-webhook": { limit: 600, windowMs: 60_000 },
   // STEP 30 - applicant-side engagement writes (feedback, announcement dismissal, preference changes)
   "engagement-feedback": { limit: 5, windowMs: 3_600_000 },
