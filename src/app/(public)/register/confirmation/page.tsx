@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
+import { pageMetadata } from "@/lib/public-site/seo";
+
+// The address carries the applicant's Profile ID (?code=), so this page must never be indexed.
+export const metadata = pageMetadata("/register/confirmation");
 
 export default async function ConfirmationPage({ searchParams }: PageProps<"/register/confirmation">) {
   const params = await searchParams;

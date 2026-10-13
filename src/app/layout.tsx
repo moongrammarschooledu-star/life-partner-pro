@@ -1,7 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
+import { PwaRegister } from "@/components/public/pwa-register";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, siteUrl } from "@/lib/public-site/config";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -15,10 +17,24 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+// Pages set their own title, description, canonical and indexing through pageMetadata(); these are the site-wide defaults and the
+// base that relative canonical / Open Graph URLs resolve against.
 export const metadata: Metadata = {
-  title: "Life Partner Pro — Finding the Right Life Partner, With Trust.",
-  description:
-    "A private, admin-managed matrimonial matchmaking platform. Submit your profile securely; our team handles the matchmaking.",
+  metadataBase: new URL(siteUrl()),
+  title: { default: `${SITE_NAME} — ${SITE_TAGLINE}`, template: `%s | ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "default" },
+  openGraph: { type: "website", siteName: SITE_NAME, locale: "en" },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#7a0f31" },
+    { media: "(prefers-color-scheme: dark)", color: "#16100f" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -28,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeProvider>
           <ToastProvider>{children}</ToastProvider>
         </ThemeProvider>
+        <PwaRegister />
       </body>
     </html>
   );

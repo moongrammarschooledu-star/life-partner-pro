@@ -104,7 +104,7 @@ describe("cancel audit trail", () => {
 describe("the audit action exists in the schema and has a migration", () => {
   const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
   it("ORDER_CANCELLED is an AuditAction value added by an enum-only migration", () => {
-    expect(read("prisma/schema.prisma")).toMatch(/enum AuditAction \{[\s\S]*?\n\s+ORDER_CANCELLED\r?\n\}/);
+    expect(read("prisma/schema.prisma")).toMatch(/enum AuditAction \{(?:(?!\n\})[\s\S])*?\n\s+ORDER_CANCELLED\r?\n/);
     const sql = read("prisma/migrations/20261013090000_order_cancel_audit_enum/migration.sql");
     expect(sql).toContain(`ALTER TYPE "AuditAction" ADD VALUE 'ORDER_CANCELLED';`);
     expect(sql).not.toMatch(/CREATE TABLE|INSERT|UPDATE|DROP/i);

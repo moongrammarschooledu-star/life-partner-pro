@@ -16,6 +16,7 @@ interface SupportMessageRow {
   message: string;
   resolved: boolean;
   createdAt: string;
+  category: string | null;
 }
 
 export default function AdminSupportPage() {
@@ -65,7 +66,10 @@ export default function AdminSupportPage() {
                       {m.email} {m.profileCode && <>&middot; {m.profileCode}</>} &middot; {formatDateTime(m.createdAt)}
                     </p>
                   </div>
-                  <Badge variant={m.resolved ? "success" : "warning"}>{m.resolved ? "Resolved" : "Open"}</Badge>
+                  <div className="flex items-center gap-2">
+                    {m.category && <Badge variant="default">{m.category.charAt(0) + m.category.slice(1).toLowerCase()}</Badge>}
+                    <Badge variant={m.resolved ? "success" : "warning"}>{m.resolved ? "Resolved" : "Open"}</Badge>
+                  </div>
                 </div>
                 <p className="text-sm">{m.message}</p>
                 {!m.resolved && (

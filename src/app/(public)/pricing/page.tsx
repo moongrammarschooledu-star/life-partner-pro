@@ -1,72 +1,39 @@
-"use client";
+import { PageShell, PageHeading, Notice, CtaBand } from "@/components/public/page-kit";
+import { PricingPackages } from "@/components/public/pricing-packages";
+import { pageMetadata } from "@/lib/public-site/seo";
+import { getPublicPackagesSafe } from "@/lib/public-site/packages";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Check } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { formatMoney } from "@/lib/finance/money";
-import { formatEnumLabel } from "@/lib/utils";
+export const metadata = pageMetadata("/pricing");
 
-interface PackageItem {
-  id: string;
-  name: string;
-  description: string;
-  billingType: string;
-  trialDays: number;
-  price: { amountMinor: number; currencyCode: string } | null;
-  features: string[];
-}
+// Regenerated at most every five minutes, so a price change shows up quickly without a database read on every visit.
+export const revalidate = 300;
 
-// STEP 27 §24 — public, unauthenticated package comparison. Reuses the
-// existing public /api/my-billing/packages endpoint (STEP 14) rather than
-// standing up a second, duplicate package-listing route. No guarantees
-// about matrimonial outcomes are ever stated here (spec's absolute rule).
-export default function PricingPage() {
-  const [packages, setPackages] = useState<PackageItem[] | null>(null);
-
-  useEffect(() => {
-    fetch("/api/my-billing/packages").then((r) => (r.ok ? r.json() : { items: [] })).then((j) => setPackages(j.items ?? []));
-  }, []);
-
+// STEP 27: the packages shown here are the live configuration (see PricingPackages). The wording around them is neutral on purpose:
+// a package provides platform features and limits, never a better or guaranteed matrimonial outcome.
+export default async function PricingPage() {
+  const packages = await getPublicPackagesSafe();
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-16 sm:px-6">
-      <div className="text-center">
-        <h1 className="font-heading text-3xl font-semibold">Packages</h1>
-        <p className="mt-2 text-muted">Choose the package that fits your search. Features and limits are configured by our team and may change over time.</p>
+    <PageShell path="/pricing" title="Pricing" description="Available membership packages, their features, billing period and price." width="max-w-5xl">
+      <PageHeading title="Membership & packages" lead="Platform features and limits, as currently configured by our team. They may change over time." />
+      <PricingPackages packages={packages} />
+      <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        <Notice title="How to read a package">
+          <ul className="list-disc space-y-1 pl-4">
+            <li><strong>Free</strong> packages have no charge.</li>
+            <li><strong>One-time</strong> packages are paid once.</li>
+            <li><strong>Subscription</strong> packages renew each billing period shown.</li>
+          </ul>
+        </Notice>
+        <Notice title="Taxes and refunds">
+          Applicable taxes, where configured for your country, are calculated and shown at checkout before you pay. Refunds, where applicable, follow the refund note for the package and are handled by our team.
+        </Notice>
       </div>
-
-      {!packages ? (
-        <p className="text-center text-sm text-muted">Loading...</p>
-      ) : packages.length === 0 ? (
-        <p className="text-center text-sm text-muted">No packages are currently available.</p>
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {packages.map((p) => (
-            <Card key={p.id} className="flex flex-col">
-              <CardContent className="flex flex-1 flex-col space-y-3">
-                <div>
-                  <h2 className="font-heading text-lg font-semibold">{p.name}</h2>
-                  <p className="text-xs text-muted">{formatEnumLabel(p.billingType)}</p>
-                </div>
-                <p className="text-2xl font-semibold">{p.price ? formatMoney(p.price.amountMinor, p.price.currencyCode) : "Contact us"}</p>
-                <p className="text-sm text-muted">{p.description}</p>
-                {p.trialDays > 0 && <p className="text-xs text-primary">{p.trialDays}-day trial included</p>}
-                <ul className="flex-1 space-y-1 text-sm">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2">
-                      <Check className="h-4 w-4 shrink-0 text-primary" />
-                      <span>{formatEnumLabel(f)}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link href="/my-billing"><Button className="w-full">Choose Package</Button></Link>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-      <p className="text-center text-xs text-muted">Packages provide configured features and services. They do not guarantee a match, a response, or a marriage outcome.</p>
-    </div>
+      <div className="mt-6">
+        <Notice title="No guarantee">
+          Packages provide platform features and services. They do not guarantee a match, a response or a marriage, and a different package does not mean a better outcome.
+        </Notice>
+      </div>
+      <CtaBand title="Not sure which features you need?" primary={{ href: "/faq", label: "Read the FAQ" }} secondary={{ href: "/register", label: "Create Your Profile" }} />
+    </PageShell>
   );
 }

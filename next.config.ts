@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { readFileSync } from "fs";
+import { PRIVATE_NOINDEX_PATHS } from "./src/lib/public-site/routes";
 
 const pkg = JSON.parse(readFileSync("./package.json", "utf8")) as { version: string };
 const isProd = process.env.NODE_ENV === "production";
@@ -38,6 +39,13 @@ const securityHeaders = [
   ...(isProd ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }] : []),
 ];
 
+// Signed-in and private areas must never appear in search results (STEP 35 §25). robots.txt asks crawlers to stay away; this header is the second,
+// independent layer: a page that is reached anyway still says "noindex". The list lives next to the route registry, and a test compares it with the account page folders.
+const noindexHeaders = PRIVATE_NOINDEX_PATHS.flatMap((p) => [p, `${p}/:path*`]).map((source) => ({
+  source,
+  headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+}));
+
 const nextConfig: NextConfig = {
   serverExternalPackages: ["sharp", "bcryptjs"],
   poweredByHeader: false,
@@ -46,7 +54,28 @@ const nextConfig: NextConfig = {
   experimental: { webpackMemoryOptimizations: true },
   env: { APP_VERSION: pkg.version },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      ...noindexHeaders,
+      // The service worker must never be served from a cache, so a fixed worker reaches every device on the next visit.
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+    ];
+  },
+  // The spec names /privacy; the page that exists is /privacy-policy. One permanent redirect instead of a second copy of the page.
+  async redirects() {
+    return [
+      { source: "/privacy", destination: "/privacy-policy", permanent: true },
+      // Campaign-style addresses from the brief. The query string (utm_*, click ids) is carried through; landing pages record it, the registration form does not.
+      { source: "/campaign/:slug", destination: "/lp/:slug", permanent: false },
+      { source: "/join", destination: "/register", permanent: false },
+    ];
   },
 };
 

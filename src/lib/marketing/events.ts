@@ -11,6 +11,7 @@ export interface MarketingEventInput {
   landingPageId?: string | null;
   leadId?: string | null;
   variantKey?: string | null;
+  path?: string | null;
   subject?: string | null;
   occurredAt?: Date;
 }
@@ -24,6 +25,7 @@ export async function recordMarketingEvent(input: MarketingEventInput): Promise<
         landingPageId: input.landingPageId ?? null,
         leadId: input.leadId ?? null,
         variantKey: input.variantKey ?? null,
+        path: input.path ?? null,
         subjectHash: input.subject ? hashSubject(input.subject) : null,
         occurredAt: input.occurredAt ?? new Date(),
       },

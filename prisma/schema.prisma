@@ -1385,6 +1385,14 @@ enum AuditAction {
 
   // ---------- Applicant order cancellation ----------
   ORDER_CANCELLED
+
+  // ---------- STEP 35 — public content (blog and guides) ----------
+  CONTENT_CREATED
+  CONTENT_UPDATED
+  CONTENT_SUBMITTED
+  CONTENT_PUBLISHED
+  CONTENT_ARCHIVED
+  CONTENT_DELETED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
@@ -4234,6 +4242,10 @@ model SupportMessage {
   message     String
   resolved    Boolean  @default(false)
   createdAt   DateTime @default(now())
+  // STEP 35 — public contact form: what the enquiry is about (GENERAL, TECHNICAL, PRIVACY, ACCOUNT, MEMBERSHIP) and when the sender agreed
+  // to us using these details to reply. Both are null on messages sent before this existed.
+  category    String?
+  consentAt   DateTime?
 
   @@index([resolved])
 }
@@ -9459,9 +9471,12 @@ model MarketingEvent {
   leadId        String?
   variantKey    String?            @db.VarChar(40)
   subjectHash   String?            @db.VarChar(64)
+  // STEP 35 — public-site funnel events: the public page the event happened on ("/pricing"), never a query string. Null for landing-page events.
+  path          String?            @db.VarChar(80)
   occurredAt    DateTime           @default(now())
 
   @@index([campaignId, type, occurredAt])
+  @@index([type, path, occurredAt])
   @@index([occurredAt])
 }
 
@@ -10806,4 +10821,77 @@ model GoLiveEvent {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+}
+
+
+// ---------- STEP 35 — public content: blog articles and guides ----------
+// Body text is a small, safe Markdown subset (headings, paragraphs, lists, bold/italic, links). It is rendered to React elements by our own
+// renderer — never as raw HTML — so stored content cannot inject script. Ids of admins are kept as plain strings (no relation) so the
+// existing admin tables are untouched.
+
+enum ContentType {
+  ARTICLE
+  GUIDE
+}
+
+enum ContentStatus {
+  DRAFT
+  IN_REVIEW
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+model ContentAuthor {
+  id        String        @id @default(cuid())
+  name      String
+  bio       String?
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  posts     ContentPost[]
+}
+
+model ContentCategory {
+  id          String        @id @default(cuid())
+  type        ContentType
+  slug        String
+  name        String
+  description String?
+  sortOrder   Int           @default(0)
+  posts       ContentPost[]
+
+  @@unique([type, slug])
+}
+
+model ContentPost {
+  id             String           @id @default(cuid())
+  type           ContentType
+  slug           String
+  title          String
+  summary        String
+  body           String
+  status         ContentStatus    @default(DRAFT)
+  categoryId     String?
+  category       ContentCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  authorId       String
+  author         ContentAuthor    @relation(fields: [authorId], references: [id])
+  tags           String[]
+  seoTitle       String?
+  seoDescription String?
+  noindex        Boolean          @default(false)
+  scheduledFor   DateTime?
+  publishedAt    DateTime?
+  archivedAt     DateTime?
+  readingMinutes Int              @default(1)
+  version        Int              @default(1)
+  createdById    String
+  updatedById    String
+  publishedById  String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([type, slug])
+  @@index([status, publishedAt])
+  @@index([type, status])
+  @@index([categoryId])
 }

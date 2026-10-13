@@ -1,6 +1,7 @@
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import type { WizardData } from "@/components/registration/wizard-types";
 import { useRegistrationLocale } from "@/components/registration/locale-context";
+import { PrivacyNote } from "@/components/registration/privacy-note";
 import { OptionalSection } from "@/components/registration/steps/optional-section";
 
 const JOB_TYPES = new Set(["GOVERNMENT", "PRIVATE"]);
@@ -28,6 +29,7 @@ export function StepEducationProfession({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
+      {!hideIncome && <PrivacyNote kind="income" className="sm:col-span-2" />}
       <Field label={t("educationLevel")} error={errors.educationLevel} htmlFor="educationLevel">
         <Select id="educationLevel" value={data.educationLevel} onChange={(e) => onChange("educationLevel", e.target.value)}>
           <option value="">Select</option>

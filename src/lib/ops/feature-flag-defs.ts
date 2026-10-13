@@ -63,6 +63,7 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "marketing.enabled", description: "Marketing center: campaign management, provider sync and marketing automation master switch", sensitive: true },
   { key: "marketing.public_pages.enabled", description: "Publicly serve published marketing landing pages (/lp/...)", sensitive: true },
   { key: "marketing.lead_capture.enabled", description: "Accept public marketing lead-form submissions", sensitive: true },
+  { key: "marketing.site_events.enabled", description: "Count anonymous public-site page views, call-to-action clicks and registration starts (salted-hash visitor key, no query strings, honours Do Not Track and Global Privacy Control)", sensitive: true },
   { key: "marketing.provider_sync.enabled", description: "Daily ad-provider metric sync and provider webhook processing", sensitive: true },
   { key: "marketing.automation.enabled", description: "Run marketing automation rules (whitelisted actions only; never launches, spends or messages unconsented people)", sensitive: true },
   { key: "marketing.conversion_api.enabled", description: "Send allow-listed server-side conversion events to an ad provider (never personal data)", sensitive: true },
@@ -86,13 +87,15 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "soc.detection.enabled", description: "Run the threat-detection rules (daily job and manual run) and raise security alerts; never acts on a person automatically", sensitive: true },
   { key: "soc.escalation.enabled", description: "Escalate unacknowledged security alerts to the next tier with an in-app notice (code, severity and category only)", sensitive: true },
   { key: "soc.restore_drills.enabled", description: "Record restore drills and reviewer sign-off (the app never restores into production)", sensitive: true },
+  // STEP 35 — public content (blog and guides). Defaults OFF: publishing stays a one-person action until the owner turns the review rule on.
+  { key: "content.approval_required", description: "Blog and guides: publishing needs a second person (the publisher must not be the last editor of the article)", sensitive: false },
   { key: "engagement.loyalty.enabled", description: "Referral link, referral history and reward granting through the existing referral/credit system", sensitive: true },
   { key: "ai.engagement_assistant.enabled", description: "AI engagement summaries and reminder drafts from server-computed platform activity (never sends, approves or predicts; human review required)", sensitive: true },
   { key: "ai.marketing_assistant.enabled", description: "AI marketing copy drafts from an approved phrase library (never launches, spends or approves; human review required)", sensitive: true },
 ];
 
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && !d.key.startsWith("soc.") && d.key !== "documents.ocr.enabled"]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && !d.key.startsWith("soc.") && !d.key.startsWith("content.") && d.key !== "documents.ocr.enabled"]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

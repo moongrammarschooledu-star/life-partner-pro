@@ -1,12 +1,14 @@
 import type { MetadataRoute } from "next";
 import { marketingBaseUrl } from "@/lib/marketing/hosts";
+import { PRIVATE_PATH_PREFIXES } from "@/lib/public-site/routes";
 
-// Private areas are never crawlable. Landing pages decide their own indexing through per-page robots metadata
-// (noindex by default), so /lp/ is not blocked here — a blocked path could not be fetched to read its noindex tag.
+// Private and signed-in areas are never crawlable (the list lives next to the route registry). Public utility pages (sign-in, report a
+// concern, ...) and landing pages are NOT blocked here: a blocked path cannot be fetched, so its own noindex tag could never be read.
+// Each of those decides its indexing through page metadata (noindex by default for utility pages and landing pages).
 export default function robots(): MetadataRoute.Robots {
   const base = marketingBaseUrl();
   return {
-    rules: [{ userAgent: "*", disallow: ["/admin", "/api/", "/dashboard", "/family", "/my-", "/maintenance"] }],
-    ...(base ? { sitemap: `${base}/sitemap.xml` } : {}),
+    rules: [{ userAgent: "*", allow: "/", disallow: [...PRIVATE_PATH_PREFIXES] }],
+    ...(base ? { sitemap: `${base}/sitemap.xml`, host: base } : {}),
   };
 }

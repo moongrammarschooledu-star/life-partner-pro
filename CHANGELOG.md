@@ -6,6 +6,26 @@ Rule for contributors: every pull request that changes behaviour adds a line und
 
 ## Unreleased
 
+### Added (STEP 35: public website, SEO, content, PWA, acquisition)
+- Public pages: About, Why Life Partner Pro, For Applicants, For Families, Verification, Safety, FAQ, Contact, Login, Trouble signing in, Offline; the home page, How It Works (twelve steps), Pricing, Privacy Policy and Terms were rewritten. Every page's title, description, canonical URL, Open Graph and indexing come from one registry (`src/lib/public-site/routes.ts`).
+- Navigation with a working mobile menu and a skip link; staff/admin links removed from public pages.
+- SEO: dynamic `sitemap.xml` (indexable pages, live blog/guides, opted-in landing pages), complete `robots.txt`, `X-Robots-Tag: noindex` on every private area, JSON-LD (Organization, WebSite, WebPage, BreadcrumbList, FAQPage, Article), default social image.
+- Blog and Guides with an admin editor (Admin > Blog & Guides): draft, review, scheduled, published, archived; authors, categories, tags; safe Markdown subset; content-policy check before publishing; permissions `content:view|create|edit|publish|archive|delete`; optional second-person review (flag `content.approval_required`, off by default).
+- PWA: web app manifest, icons, dismissible install suggestion, service worker that caches only public static files (never pages, API responses or private data) and an offline page.
+- Contact and support form: category, consent line, honeypot, duplicate guard; the admin support list shows the category.
+- Registration: live completion percentage, privacy statement and privacy notes at the family, income and photo steps.
+- Anonymous visitor counting (flag `marketing.site_events.enabled`, off by default; honours Do Not Track / Global Privacy Control) and Admin > Public Website (funnel and site checks).
+- Documents: `PUBLIC_WEBSITE_AUDIT.md`, `PUBLIC_ROUTE_MAP.md`, `SEO_IMPLEMENTATION.md`, `APPLICANT_ONBOARDING.md`. New settings `LEGAL_PAGES_REVIEWED`, `LEGAL_GOVERNING_LAW`.
+- Migrations (all additive): `ORDER_CANCELLED` audit value, support category and consent columns, content tables and audit values, marketing-event path column.
+
+### Changed (STEP 35)
+- The privacy policy no longer says data is never shared with third parties (service providers are named generically); marketing copy no longer says every profile is verified.
+- The support page no longer shows example phone, WhatsApp and e-mail channels or opening hours that were not configured.
+- Removed 1.1 MB of unused public images and shrank the logo.
+
+### Added
+- Order cancellation by an applicant now writes an `ORDER_CANCELLED` audit row.
+
 ### Changed
 - Readiness: while payments are off (rollout stage DISABLED and the master switch off), the payment-provider, sandbox-checklist, reconciliation, refund and kill-switch gates are advisory warnings instead of launch blockers. They become required again the moment payments are switched on or the rollout stage leaves DISABLED; the payment-environment safety gate is always required.
 
