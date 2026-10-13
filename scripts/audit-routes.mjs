@@ -92,7 +92,7 @@ for (const file of walk(API_ROOT)) {
     let severity = "OK";
     const bump = (s) => { const order = ["OK", "LOW", "MEDIUM", "HIGH", "CRITICAL"]; if (order.indexOf(s) > order.indexOf(severity)) severity = s; };
 
-    const publicByDesign = /\/api\/(register|support|update-request|my-status|verify\/|health|system-state|client-errors|my-billing\/packages|family\/(register|login|logout)|marketing\/|public-events|auth\/)/.test(path) || guard === "webhook-signature" || guard === "secret" || /\/admin\/auth\/(precheck|verify-otp|forgot-password|reset-password)/.test(path);
+    const publicByDesign = /\/api\/(register|support|update-request|my-status|verify\/|health|status|system-state|client-errors|my-billing\/packages|family\/(register|login|logout)|marketing\/|public-events|auth\/)/.test(path) || guard === "webhook-signature" || guard === "secret" || /\/admin\/auth\/(precheck|verify-otp|forgot-password|reset-password)/.test(path);
     if (guard === "none" && !publicByDesign) { notes.push("no recognised guard"); bump(mutating ? "HIGH" : "MEDIUM"); }
     const inlinePermission = /\.permissions\.(includes|some)\(|hasPermission\(|hasAnyPermission\(|requirePermission\(|\bcan[A-Z][A-Za-z]*\(|\bassert[A-Z][A-Za-z]*\(|\bensure[A-Z][A-Za-z]*\(|\bresolve[A-Z][A-Za-z]*(?:Access|Permission)[A-Za-z]*\(|PERMISSION\[|PERMS\[|SECTION_PERMISSION|requireAdmin\(\s*[a-zA-Z_]/.test(b);
     // AI feature routes delegate to the AI pipeline, which enforces the ai:* permission, flags, rollout, consent, safety and audit itself.

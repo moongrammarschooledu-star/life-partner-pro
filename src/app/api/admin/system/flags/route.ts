@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
-import { writeAudit } from "@/lib/audit";
 import { readJson, requireReason } from "@/lib/ops/admin-route";
 import { FEATURE_FLAG_DEFS, isKnownFeatureFlag } from "@/lib/ops/feature-flag-defs";
-import { getAllFeatureFlags, invalidateFeatureFlags } from "@/lib/ops/feature-flags";
+import { applyLegacyFlagToggle } from "@/lib/platform/flags";
+import { getAllFeatureFlags } from "@/lib/ops/feature-flags";
 
 export async function GET() {
   try {
@@ -27,15 +27,10 @@ export async function PATCH(req: Request) {
     if (typeof body.enabled !== "boolean") throw new ApiError(400, "enabled must be true or false.");
     const reason = requireReason(body.reason);
 
-    const before = await prisma.featureFlag.findUnique({ where: { key: body.key } });
-    const def = FEATURE_FLAG_DEFS.find((d) => d.key === body.key)!;
-    const updated = await prisma.featureFlag.upsert({
-      where: { key: body.key },
-      update: { enabled: body.enabled, updatedById: admin.id },
-      create: { key: body.key, enabled: body.enabled, description: def.description, updatedById: admin.id },
-    });
-    invalidateFeatureFlags();
-    await writeAudit({ action: "FEATURE_FLAG_CHANGED", adminId: admin.id, meta: { key: body.key, previous: before?.enabled ?? true, new: body.enabled, reason } });
+    // STEP 36: same write path as the Control Center (change freeze, approval for enabling a sensitive flag in production, version history, audit).
+    const result = await applyLegacyFlagToggle(admin, body.key, body.enabled, reason);
+    if (result.approvalRequired) return NextResponse.json({ approvalRequired: true, approvalCode: result.approvalCode, status: result.status }, { status: 202 });
+    const updated = await prisma.featureFlag.findUnique({ where: { key: body.key } });
     return NextResponse.json(updated);
   } catch (error) {
     return handleApiError(error);

@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/auth.config";
-import { isExemptFromMaintenance } from "@/lib/ops/system-state";
+import { isBlockedByReadOnly, isExemptFromMaintenance } from "@/lib/ops/system-state";
 
 // Renamed from middleware.ts (deprecated in Next 16; Proxy runs on Node.js).
 //
@@ -59,21 +59,21 @@ const adminAuth = auth((req) => {
 // Reads the public system state through a tiny endpoint with a 15 s
 // per-instance cache. Fails OPEN on any error/timeout: a proxy problem must
 // never turn into a self-inflicted outage.
-let stateCache: { blocked: boolean; message: string; at: number } | null = null;
+let stateCache: { blocked: boolean; message: string; readOnly: boolean; at: number } | null = null;
 
-async function isPublicTrafficBlocked(origin: string): Promise<{ blocked: boolean; message: string }> {
+async function isPublicTrafficBlocked(origin: string): Promise<{ blocked: boolean; message: string; readOnly: boolean }> {
   if (stateCache && Date.now() - stateCache.at < 15_000) return stateCache;
   try {
     const res = await fetch(`${origin}/api/system-state`, { cache: "no-store", signal: AbortSignal.timeout(1500) });
     if (res.ok) {
-      const json = (await res.json()) as { blocked?: boolean; message?: string };
-      stateCache = { blocked: Boolean(json.blocked), message: json.message ?? "", at: Date.now() };
+      const json = (await res.json()) as { blocked?: boolean; message?: string; readOnly?: boolean };
+      stateCache = { blocked: Boolean(json.blocked), message: json.message ?? "", readOnly: Boolean(json.readOnly), at: Date.now() };
       return stateCache;
     }
   } catch {
     // fall through to stale/open
   }
-  return stateCache ?? { blocked: false, message: "" };
+  return stateCache ?? { blocked: false, message: "", readOnly: false };
 }
 
 export default async function proxy(req: NextRequest, evt: Parameters<typeof adminAuth>[1]) {
@@ -92,6 +92,10 @@ export default async function proxy(req: NextRequest, evt: Parameters<typeof adm
       const rewrite = NextResponse.rewrite(new URL("/maintenance", req.url), { status: 503 });
       rewrite.headers.set("Retry-After", "300");
       return rewrite;
+    }
+    // STEP 36 — read-only mode: pages are served, writes are refused (see isBlockedByReadOnly).
+    if (state.readOnly && isBlockedByReadOnly(req.method, pathname)) {
+      return NextResponse.json({ error: state.message || "The platform is in read-only mode. Changes cannot be saved right now." }, { status: 503, headers: { "Retry-After": "300" } });
     }
   }
 

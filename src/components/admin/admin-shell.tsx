@@ -84,6 +84,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; permissi
   { href: "/admin/public-site", label: "Public Website", icon: Newspaper, permission: "marketing:analytics:view" },
   { href: "/admin/engagement", label: "Engagement & Retention", icon: HeartHandshake, permission: "engagement:view" },
   { href: "/admin/executive", label: "Executive Dashboard", icon: Gauge, permission: "analytics:dashboard:view" },
+  { href: "/admin/control-center", label: "Control Center", icon: Settings2, permission: "platform:control_center:view" },
   { href: "/admin/security-operations", label: "Security Operations", icon: ShieldAlert, permission: "soc:view" },
   { href: "/admin/analytics", label: "Analytics & BI", icon: LineChart, permission: "analytics:view" },
   { href: "/admin/matching", label: "Matching Center", icon: Sparkles, permission: "match:run" },

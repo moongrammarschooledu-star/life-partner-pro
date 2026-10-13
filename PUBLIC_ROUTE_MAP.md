@@ -37,6 +37,7 @@ Legend — **Access**: Public (no sign-in) · Applicant (signed-in applicant) ·
 | `/update-request` | Applicant | Noindex | |
 | `/register/confirmation` | Public (carries `?code=`) | Noindex | Contains the Profile ID in the address |
 | `/offline` | Public | Noindex | Shown by the service worker when the network is down |
+| `/status` | Public | Noindex | Platform status and service notices (STEP 36); stays reachable during maintenance |
 | `/my-status` | Public sign-in form | Blocked | Applicant sign-in (Profile ID + e-mail code) |
 
 ## Private areas (never indexed)

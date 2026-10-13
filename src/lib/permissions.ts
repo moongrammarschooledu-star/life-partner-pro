@@ -615,13 +615,42 @@ export type Permission =
   | "content:edit"
   | "content:publish"
   | "content:archive"
-  | "content:delete";
+  | "content:delete"
+  // STEP 36 — platform control center (the brief's platform.settings.view etc., in the repository's module:action form)
+  | "platform:control_center:view"
+  | "platform:settings:view"
+  | "platform:settings:manage"
+  | "platform:features:view"
+  | "platform:features:manage"
+  | "platform:providers:view"
+  | "platform:providers:manage"
+  | "platform:branding:view"
+  | "platform:branding:manage"
+  | "platform:workflows:view"
+  | "platform:workflows:manage"
+  | "platform:maintenance:view"
+  | "platform:maintenance:manage"
+  | "platform:deployment:view"
+  | "platform:health:view"
+  | "platform:configuration:view"
+  | "platform:configuration:manage"
+  | "platform:configuration:rollback"
+  | "platform:audit:view"
+  | "platform:break_glass"
+  | "platform:change_freeze"
+  | "platform:announcements:view"
+  | "platform:announcements:manage";
 
 // STEP 17 §17 — the canonical list of sensitive permissions for the
 // "Sensitive Permissions" UI, the Effective Permissions view and the
 // Permission Matrix's "S" annotation. Never automatically implied by holding
 // a manager/broad role; always granted (or not) independently per role below.
 export const SENSITIVE_PERMISSIONS: Permission[] = [
+  "platform:break_glass", // STEP 36
+  "platform:change_freeze",
+  "platform:configuration:rollback",
+  "platform:providers:manage",
+  "platform:settings:manage",
   "golive:manage", // STEP 34
   "soc:containment:approve", // STEP 32
   "soc:rules:manage",
@@ -962,6 +991,22 @@ const SOC_COMPLIANCE_PERMISSIONS: Permission[] = [
 ];
 const SOC_ALL_PERMISSIONS: Permission[] = [
   ...SOC_COMPLIANCE_PERMISSIONS, "soc:detection:run", "soc:rules:manage", "soc:containment:approve", "soc:restore:record", "soc:dr:manage", "soc:config:manage",
+];
+
+// STEP 36 — platform control center. SUPER_ADMIN holds everything; operations gets a read-only view of the control centre and its health; compliance gets the
+// read-only history and audit views. Nobody else gets any platform permission, and break-glass / change-freeze / rollback / provider and setting changes are sensitive.
+const PLATFORM_ALL_PERMISSIONS: Permission[] = [
+  "platform:control_center:view", "platform:settings:view", "platform:settings:manage", "platform:features:view", "platform:features:manage", "platform:providers:view",
+  "platform:providers:manage", "platform:branding:view", "platform:branding:manage", "platform:workflows:view", "platform:workflows:manage", "platform:maintenance:view",
+  "platform:maintenance:manage", "platform:deployment:view", "platform:health:view", "platform:configuration:view", "platform:configuration:manage",
+  "platform:configuration:rollback", "platform:audit:view", "platform:break_glass", "platform:change_freeze", "platform:announcements:view", "platform:announcements:manage",
+];
+const PLATFORM_OPERATIONS_VIEW_PERMISSIONS: Permission[] = [
+  "platform:control_center:view", "platform:settings:view", "platform:features:view", "platform:providers:view", "platform:workflows:view", "platform:maintenance:view", "platform:deployment:view",
+  "platform:health:view", "platform:announcements:view",
+];
+const PLATFORM_COMPLIANCE_VIEW_PERMISSIONS: Permission[] = [
+  "platform:control_center:view", "platform:settings:view", "platform:features:view", "platform:configuration:view", "platform:audit:view", "platform:announcements:view",
 ];
 
 // STEP 35 — public content. Writing and publishing are separate: the communication manager drafts and edits, only Super Admin publishes, archives or deletes.
@@ -1366,6 +1411,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     ...ANALYTICS_ALL_PERMISSIONS, // STEP 31
     ...SOC_ALL_PERMISSIONS, // STEP 32
     ...CONTENT_ALL_PERMISSIONS, // STEP 35
+    ...PLATFORM_ALL_PERMISSIONS, // STEP 36
     "profile:view",
     "profile:edit",
     "profile:delete",
@@ -1625,6 +1671,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   OPERATIONS_ADMIN: [
     ...ANALYTICS_OPERATIONS_PERMISSIONS, // STEP 31
     ...SOC_OPERATIONS_PERMISSIONS, // STEP 32
+    ...PLATFORM_OPERATIONS_VIEW_PERMISSIONS, // STEP 36
     "profile:view",
     "profile:edit",
     "profile:archive",
@@ -1970,6 +2017,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   COMPLIANCE_MANAGER: [
     ...ANALYTICS_VIEW_PERMISSIONS, "analytics:risk:view", "analytics:security:view", "analytics:audit:view", // STEP 31
     ...SOC_COMPLIANCE_PERMISSIONS, // STEP 32
+    ...PLATFORM_COMPLIANCE_VIEW_PERMISSIONS, // STEP 36
     "profile:view",
     ...COMPLIANCE_ALL_PERMISSIONS,
     "ai:compliance:use",
