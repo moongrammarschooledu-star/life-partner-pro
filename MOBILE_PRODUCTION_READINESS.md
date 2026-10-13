@@ -4,13 +4,13 @@ Status date: 2026-10-13. Every number below was produced on this machine on that
 
 ## Overall status: **MOBILE_NOT_READY** for a store release
 
-The server side (device registry, push, deep links, version policy, release log, Control Center page, privacy and deletion page, tests, documents) is built and tested. The apps themselves **have not been built into a signed bundle or run on a phone**, and none of the account-owner steps has been done. The brief asks that `MOBILE_PRODUCTION_READY` not be claimed until build, signing, push, deep-link and production checks pass; those checks cannot pass until the items under "Requires …" below are done. The honest label is therefore *not ready*; the path to *ready with warnings* is listed in section 6.
+The server side (device registry, push, deep links, version policy, release log, Control Center page, privacy and deletion page, tests, documents) is built and tested. The apps themselves **have been built in CI (Android bundle, iOS simulator compile) but not signed, and have not been run on a phone**, and none of the account-owner steps has been done. The brief asks that `MOBILE_PRODUCTION_READY` not be claimed until build, signing, push, deep-link and production checks pass; those checks cannot pass until the items under "Requires …" below are done. The honest label is therefore *not ready*; the path to *ready with warnings* is listed in section 6.
 
 | Part | Status |
 |---|---|
 | Website, PWA, backend, Control Center, tests, documents | Built; ready to merge and deploy (additive migrations) |
-| Android project | Generated and hardened; **never built here** (no Java / Android SDK on this machine). CI is prepared to build the bundle |
-| iOS project | Generated and hardened; **never built** (needs macOS). CI is prepared to compile it and optionally archive it |
+| Android project | Generated and hardened. **First CI run (2026-10-13): the release bundle built successfully (unsigned, 3.6 MB).** Not yet signed with an upload key, not installed on a phone |
+| iOS project | Generated and hardened. **First CI run: the app compiled for the simulator** (no signing). Not archived, not signed, not installed on a phone |
 | Push notifications | Built and unit-tested against recorded requests; **never sent to a real phone** (needs Firebase and Apple keys) |
 | Deep links / App Links / Universal Links | Logic built and tested; the verification files are empty until the owner supplies fingerprints and the Team ID; **never opened on a device** |
 | Store listings | Drafts written; screenshots, feature graphic and accounts are the owner's |
@@ -31,6 +31,10 @@ The server side (device registry, push, deep links, version policy, release log,
 * Hardened native projects, adaptive icons, splash screens and launch pages generated from the brand mark; `mobile/` has its own ignore rules; signing keys, Firebase and Apple files can never be committed (ignore rules + a test).
 * CI workflow `mobile.yml` (checks → Android bundle build and validation → iOS compile → optional signed iOS archive), no step prints a secret, nothing is published.
 * Documents: architecture, Android and iOS release guides, both store checklists, security, privacy, push, deep links, testing, release process, environment variables (`docs/mobile/`).
+
+### CI build result (GitHub Actions run 38431467924, 2026-10-13, unsigned)
+
+All jobs green: checks, Android release bundle, iOS simulator compile. The downloaded `.aab` was opened and inspected: 3.6 MB, 653 entries, code shrunk by R8 (mapping present only in `BUNDLE-METADATA`), no keystore / key / Firebase file / source map outside that folder, unsigned as expected (no upload key supplied), and the baked-in shell config shows `https://lifepartnerpro.vercel.app` only, `cleartext: false`, web debugging off, logging off. Not yet done: signing with an upload key, installing on a phone.
 
 ### Verification run (this machine, 2026-10-13)
 
@@ -74,7 +78,7 @@ App ID with Push and Associated Domains; APNs key; App Store Connect record; pri
 ### What must happen to move to "READY_WITH_WARNINGS"
 
 1. Merge, deploy, apply the migrations; create the approval policies.
-2. Run *Mobile release* in CI and get a green Android bundle; fix whatever the first real Gradle / Xcode run reports (expected: small things such as plugin versions or signing details; the project could not be compiled on this machine).
+2. Run *Mobile release* in CI with the upload key (`require signing`) and get a green signed bundle. *Done so far:* an unsigned run built the bundle and compiled the iOS app; the only failure was my own over-strict bundle check, corrected.
 3. Install on at least one current and one older phone per platform and pass `MOBILE_TESTING_GUIDE.md` scripts 1–13. **Script 1 matters most**: it confirms the plugin bridge is available to a remotely loaded site; if not, push, links and the lock need a small change in the shell.
 4. Configure Firebase / Apple push and prove a notification arrives with generic text.
 5. Verify App Links / Universal Links on a device.

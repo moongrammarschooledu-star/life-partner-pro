@@ -66,7 +66,7 @@ Release builds are minified and shrunk (R8), not debuggable, and do not allow pl
 
 1. Play Console → create the app (name *Life Partner Pro*, free, app not a game). Complete the store listing and the policy forms using `GOOGLE_PLAY_STORE_CHECKLIST.md`.
 2. Testing → **Internal testing** → create a release → upload the `.aab` → add testers. Install from the Play link and run `MOBILE_TESTING_GUIDE.md`.
-3. Upload `mapping.txt` with the release (it lets crash reports show readable names). It is never shipped inside the app.
+3. Crash reports are made readable by the R8 mapping, which the bundle already carries in `BUNDLE-METADATA` (Google Play reads it; it is not delivered to phones). The workflow also keeps `mapping.txt` as an artifact if you want to upload it separately.
 4. App integrity → copy the **SHA-256 certificate fingerprint(s)** of both the upload key and the *app signing key* into the website setting `ANDROID_SHA256_CERT_FINGERPRINTS` (comma separated) and redeploy. `https://<host>/.well-known/assetlinks.json` then lists the app, and Android verifies the links.
 5. Closed testing → Open testing → Production, using the staged rollout. Record each step in Control Center → Mobile apps → Releases (moving a build to *production* needs approval).
 
