@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "@/lib/http-error";
+import { writeAudit } from "@/lib/audit";
+import { logger } from "@/lib/observability/logger";
 import { isValidOrderStatusTransition, isValidPaymentStatusTransition } from "@/lib/finance/status-transitions";
 
 // An applicant can withdraw an order that has not been paid and for which no bank-transfer reference was submitted. Found by the sandbox payment test:
@@ -28,6 +30,14 @@ export async function cancelPendingOrder(params: { profileId: string; orderCode:
     // A coupon used on an order that was never paid is given back.
     await tx.couponRedemption.updateMany({ where: { orderId: order.id, status: "REDEEMED" }, data: { status: "RELEASED" } });
   });
+
+  // The order is already cancelled at this point, so a failure to write the audit row must not turn the applicant's cancellation into an error;
+  // it is logged instead. No amounts, no payment references, no applicant details: only the order code and the status it was cancelled from.
+  try {
+    await writeAudit({ action: "ORDER_CANCELLED", targetProfileId: order.profileId, meta: { orderCode: order.orderCode, from: order.status, by: "applicant" } });
+  } catch (err) {
+    logger.error("order-cancel audit row could not be written", { orderCode: order.orderCode, error: err instanceof Error ? err.message : String(err) });
+  }
 
   return { orderCode: order.orderCode };
 }

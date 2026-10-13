@@ -1382,6 +1382,9 @@ enum AuditAction {
   GO_LIVE_APPROVED
   GO_LIVE_RECORDED_LIVE
   GO_LIVE_BLOCKED
+
+  // ---------- Applicant order cancellation ----------
+  ORDER_CANCELLED
 }
 
 // ---------- Notification & Communication (STEP 9) ----------
