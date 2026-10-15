@@ -1,8 +1,35 @@
 import { Field, Input, Select, Checkbox, Textarea } from "@/components/ui/form";
+import { COUNTRIES } from "@/lib/geo-data";
 import type { WizardData } from "@/components/registration/wizard-types";
 import { useRegistrationLocale } from "@/components/registration/locale-context";
 import { HeightSelect } from "@/components/registration/steps/height-select";
 import { OptionalSection } from "@/components/registration/steps/optional-section";
+
+// Same values as the education drop-down on the Education step, so "Minimum education" can be compared with a profile's education level.
+const EDUCATION_CHOICES: Array<[string, string]> = [
+  ["Matric", "Matric / O-Level"],
+  ["Intermediate", "Intermediate / A-Level"],
+  ["Diploma", "Diploma"],
+  ["Bachelors", "Bachelor's"],
+  ["Masters", "Master's"],
+  ["MPhil", "MPhil"],
+  ["PhD", "PhD"],
+];
+
+function EducationSelect({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  const custom = value && !EDUCATION_CHOICES.some(([v]) => v === value) ? value : null; // an older free-text value stays selectable
+  return (
+    <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Any</option>
+      {custom && <option value={custom}>{custom}</option>}
+      {EDUCATION_CHOICES.map(([v, label]) => (
+        <option key={v} value={v}>
+          {label}
+        </option>
+      ))}
+    </Select>
+  );
+}
 
 const LOCATION_SCOPES = ["Same Area", "Same City", "Same Region", "Anywhere in Country", "International", "Flexible"];
 
@@ -37,15 +64,15 @@ export function StepPreference({
   const { t } = useRegistrationLocale();
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">{t("skipStepHint")}</p>
+      <p className="text-sm text-muted">{t("requiredHint")}</p>
 
       <div>
         <p className="mb-3 text-sm font-medium">{t("agePreference")}</p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t("minAge")} htmlFor="minAge">
+          <Field label={`${t("minAge")} *`} error={errors.minAge} htmlFor="minAge">
             <Input id="minAge" type="number" min={18} value={data.minAge} onChange={(e) => onChange("minAge", e.target.value)} />
           </Field>
-          <Field label={t("maxAge")} htmlFor="maxAge">
+          <Field label={`${t("maxAge")} *`} error={errors.maxAge} htmlFor="maxAge">
             <Input id="maxAge" type="number" min={18} value={data.maxAge} onChange={(e) => onChange("maxAge", e.target.value)} />
           </Field>
         </div>
@@ -54,8 +81,16 @@ export function StepPreference({
       <div>
         <p className="mb-3 text-sm font-medium">{t("locationPreference")}</p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t("country")} htmlFor="preferredCountry">
-            <Input id="preferredCountry" value={data.preferredCountry} onChange={(e) => onChange("preferredCountry", e.target.value)} />
+          <Field label={`${t("country")} *`} error={errors.preferredCountry} htmlFor="preferredCountry">
+            <Select id="preferredCountry" value={data.preferredCountry} onChange={(e) => onChange("preferredCountry", e.target.value)}>
+              <option value="">{t("selectCountry")}</option>
+              {data.preferredCountry && !COUNTRIES.includes(data.preferredCountry) && <option value={data.preferredCountry}>{data.preferredCountry}</option>}
+              {COUNTRIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label={t("city")} htmlFor="preferredCity">
             <Input id="preferredCity" value={data.preferredCity} onChange={(e) => onChange("preferredCity", e.target.value)} />
@@ -104,10 +139,10 @@ export function StepPreference({
             <p className="mb-3 text-sm font-medium">{t("educationPreference")}</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Minimum Education" htmlFor="minEducation">
-                <Input id="minEducation" value={data.minEducation} onChange={(e) => onChange("minEducation", e.target.value)} placeholder="e.g. Bachelors" />
+                <EducationSelect id="minEducation" value={data.minEducation} onChange={(v) => onChange("minEducation", v)} />
               </Field>
               <Field label="Preferred Education" htmlFor="preferredEducation">
-                <Input id="preferredEducation" value={data.preferredEducation} onChange={(e) => onChange("preferredEducation", e.target.value)} placeholder="e.g. Masters" />
+                <EducationSelect id="preferredEducation" value={data.preferredEducation} onChange={(v) => onChange("preferredEducation", v)} />
               </Field>
             </div>
           </div>

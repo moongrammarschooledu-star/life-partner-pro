@@ -24,7 +24,7 @@ export function StepContact({
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("mobileNumber")} error={errors.mobileNumber} htmlFor="mobileNumber">
+        <Field label={`${t("mobileNumber")} *`} error={errors.mobileNumber} htmlFor="mobileNumber">
           <Input
             id="mobileNumber"
             value={data.mobileNumber}

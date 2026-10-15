@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { INSTALL_DISMISS_DAYS, INSTALL_MIN_PAGEVIEWS, installPromptVisible } from "@/lib/public-site/install-policy";
+import {
+  INSTALL_DISMISS_DAYS,
+  INSTALL_MANUAL_DELAY_MS,
+  detectInstallEnvironment,
+  installMode,
+  installPromptVisible,
+  type InstallEnvironment,
+} from "@/lib/public-site/install-policy";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -40,20 +47,22 @@ function writeNumber(storage: "local" | "session", key: string, value: number) {
 
 // "Install Life Partner Pro": offered on the very first page a visitor opens, never while already installed, and a dismissal is remembered for 60 days.
 // The browser fires its install event early, often before the page has finished loading, so a tiny script in the root layout catches it and this component
-// picks it up (otherwise the offer would only appear after a later page view). Browsers that cannot show an install dialog (iPhone Safari) get a one-line instruction.
+// picks it up. Many visitors arrive from Facebook / Instagram / WhatsApp, whose built-in browsers cannot install a site at all, and some browsers (iPhone,
+// Firefox, Samsung Internet) never send the event: for those the box explains how to install instead of showing nothing (see install-policy.ts).
 export function InstallPrompt() {
   const pathname = usePathname();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [ios, setIos] = useState(false);
+  const [env, setEnv] = useState<InstallEnvironment>({ ios: false, android: false, inApp: false });
   const [standalone, setStandalone] = useState(true); // hidden until we know
   const [views, setViews] = useState(0);
   const [dismissedUntil, setDismissedUntil] = useState(0);
   const [now, setNow] = useState(0); // read once the page is in the browser; never during render
+  const [waited, setWaited] = useState(false); // the install event had its chance to arrive
 
   useEffect(() => {
     setNow(Date.now());
     setStandalone(window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true);
-    setIos(/iPad|iPhone|iPod/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent));
+    setEnv(detectInstallEnvironment(navigator.userAgent));
     setDismissedUntil(readNumber("local", DISMISS_KEY));
     if (window.__lppInstall) setDeferred(window.__lppInstall);
     const onEarly = () => setDeferred(window.__lppInstall ?? null);
@@ -66,10 +75,12 @@ export function InstallPrompt() {
       window.__lppInstall = undefined;
       setDeferred(null);
     };
+    const timer = window.setTimeout(() => setWaited(true), INSTALL_MANUAL_DELAY_MS);
     window.addEventListener("lpp-install-ready", onEarly);
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener("lpp-install-ready", onEarly);
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
@@ -98,20 +109,24 @@ export function InstallPrompt() {
     dismiss();
   }
 
-  if (!installPromptVisible({ canPrompt: deferred !== null, ios, standalone, views, dismissedUntil, now })) return null;
+  const mode = installMode({ canPrompt: deferred !== null, env, waitedMs: waited ? INSTALL_MANUAL_DELAY_MS : 0 });
+  if (!installPromptVisible({ canPrompt: mode !== "none", ios: false, standalone, views, dismissedUntil, now })) return null;
 
   return (
     <aside role="region" aria-label="Install Life Partner Pro" className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-md items-start gap-3 rounded-xl border border-border bg-surface p-4 shadow-lg">
       <Download className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
       <div className="flex-1 text-sm">
         <p className="font-medium">Install Life Partner Pro</p>
-        {deferred ? (
-          <p className="mt-1 text-muted">Add it to your home screen for quick access. Nothing private is stored for offline use.</p>
-        ) : (
-          <p className="mt-1 text-muted">On iPhone: tap the Share button, then &ldquo;Add to Home Screen&rdquo;.</p>
+        {mode === "native" && <p className="mt-1 text-muted">Add it to your home screen for quick access. Nothing private is stored for offline use.</p>}
+        {mode === "inapp" && (
+          <p className="mt-1 text-muted">
+            To install the app, open this page in your phone&apos;s browser: tap the menu (&#8942; or &hellip;) at the top and choose &ldquo;Open in browser&rdquo; or &ldquo;Open in Chrome / Safari&rdquo;.
+          </p>
         )}
+        {mode === "ios" && <p className="mt-1 text-muted">On iPhone: tap the Share button, then &ldquo;Add to Home Screen&rdquo;.</p>}
+        {mode === "manual" && <p className="mt-1 text-muted">Open your browser menu (&#8942;) and tap &ldquo;Install app&rdquo; or &ldquo;Add to Home screen&rdquo;.</p>}
         <div className="mt-3 flex gap-2">
-          {deferred && <Button size="sm" onClick={install}>Install</Button>}
+          {mode === "native" && <Button size="sm" onClick={install}>Install</Button>}
           <Button size="sm" variant="outline" onClick={dismiss}>Not now</Button>
         </div>
       </div>

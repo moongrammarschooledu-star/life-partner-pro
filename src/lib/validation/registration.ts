@@ -21,15 +21,15 @@ const priorityEnum = z.enum(["MUST_HAVE", "PREFERRED", "FLEXIBLE"]).default("PRE
 export const basicInfoSchema = z
   .object({
     fullName: z.string().trim().min(2, "Please enter your full name.").max(120),
-    gender: z.enum(["MALE", "FEMALE"]),
-    dateOfBirth: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Enter a valid date"),
-    maritalStatus: z.enum(["NEVER_MARRIED", "DIVORCED", "WIDOWED", "ANNULLED", "SEPARATED", "OTHER"]),
+    gender: z.enum(["MALE", "FEMALE"], "Please select your gender."),
+    dateOfBirth: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Please choose your day, month and year of birth."),
+    maritalStatus: z.enum(["NEVER_MARRIED", "DIVORCED", "WIDOWED", "ANNULLED", "SEPARATED", "OTHER"], "Please select your marital status."),
     hasChildren: z.boolean().nullable().optional(),
     numberOfChildren: optionalNumber(0, 20),
-    heightCm: z.coerce.number().int().min(100).max(230),
+    heightCm: z.coerce.number("Please select your height.").int("Please select your height.").min(100, "Please select your height.").max(230, "Please select your height."),
     city: z.string().trim().min(1, "Please select your city.").max(80),
     area: z.string().trim().max(80).optional().or(z.literal("")),
-    country: z.string().trim().min(1, "Country is required").max(80),
+    country: z.string().trim().min(1, "Please select your country.").max(80),
     nationality: z.string().trim().max(80).optional().or(z.literal("")),
   })
   .refine((v) => !Number.isNaN(new Date(v.dateOfBirth).getTime()) && new Date(v.dateOfBirth) <= new Date(), {
@@ -51,13 +51,13 @@ export const contactInfoSchema = z.object({
 });
 
 export const educationProfessionSchema = z.object({
-  educationLevel: z.string().trim().min(1, "Education level is required").max(60),
+  educationLevel: z.string().trim().min(1, "Please select your education level.").max(60),
   degree: z.string().trim().max(120).optional().or(z.literal("")),
   institution: z.string().trim().max(150).optional().or(z.literal("")),
-  profession: z.string().trim().min(1, "Profession is required").max(120),
+  profession: z.string().trim().min(1, "Please enter your profession.").max(120),
   jobTitle: z.string().trim().max(120).optional().or(z.literal("")),
   companyName: z.string().trim().max(150).optional().or(z.literal("")),
-  employmentType: z.enum(["GOVERNMENT", "PRIVATE", "BUSINESS_OWNER", "SELF_EMPLOYED", "FREELANCE", "NOT_WORKING", "STUDENT"]),
+  employmentType: z.enum(["GOVERNMENT", "PRIVATE", "BUSINESS_OWNER", "SELF_EMPLOYED", "FREELANCE", "NOT_WORKING", "STUDENT"], "Please select your employment type."),
   monthlyIncome: optionalNumber(0, 10_000_000),
   annualIncome: optionalNumber(0, 100_000_000),
   workLocation: z.string().trim().max(120).optional().or(z.literal("")),
@@ -71,8 +71,8 @@ export const familyInfoSchema = z.object({
   motherOccupation: z.string().trim().max(120).optional().or(z.literal("")),
   numberOfBrothers: z.coerce.number().int().min(0).max(30).default(0),
   numberOfSisters: z.coerce.number().int().min(0).max(30).default(0),
-  familyType: z.enum(["NUCLEAR", "JOINT", "EXTENDED"]),
-  familyStatus: z.enum(["MIDDLE_CLASS", "UPPER_MIDDLE_CLASS", "UPPER_CLASS", "WELL_SETTLED"]),
+  familyType: z.enum(["NUCLEAR", "JOINT", "EXTENDED"], "Please select your family type."),
+  familyStatus: z.enum(["MIDDLE_CLASS", "UPPER_MIDDLE_CLASS", "UPPER_CLASS", "WELL_SETTLED"], "Please select your family status."),
   familyLocation: z.string().trim().max(120).optional().or(z.literal("")),
   familyBackground: z.string().trim().max(500).optional().or(z.literal("")),
   additionalInfo: z.string().trim().max(500).optional().or(z.literal("")),
@@ -116,6 +116,33 @@ export const partnerPreferenceSchema = z.object({
   additionalExpectations: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 
+// What a NEW registration must give for matching to work (compulsory); the admin edit form keeps using the plain schemas above, so an existing profile can
+// still be saved without them. Religion (and, for Islam, the sect) and the partner's age range and country are what the matching scores are built on.
+export const registrationLifestyleSchema = lifestyleSchema
+  .extend({ religion: z.string().trim().min(1, "Please select your religion.").max(60) })
+  .superRefine((v, ctx) => {
+    if (/islam|muslim/i.test(v.religion) && !v.sect?.trim()) ctx.addIssue({ code: "custom", path: ["sect"], message: "Please select your sect." });
+  });
+
+function requiredAge(message: string) {
+  return z.preprocess(
+    (val) => (val === "" || val === undefined || val === null ? undefined : val),
+    z.coerce.number(message).int(message).min(18, "The age must be 18 or more.").max(80, "The age must be 80 or less.")
+  );
+}
+
+export const registrationPreferenceSchema = partnerPreferenceSchema
+  .extend({
+    minAge: requiredAge("Please enter the youngest age you would accept."),
+    maxAge: requiredAge("Please enter the oldest age you would accept."),
+    preferredCountry: z.string().trim().min(1, "Please select the country you prefer.").max(80),
+  })
+  .superRefine((v, ctx) => {
+    if (typeof v.minAge === "number" && typeof v.maxAge === "number" && v.minAge > v.maxAge) {
+      ctx.addIssue({ code: "custom", path: ["maxAge"], message: "The oldest age cannot be lower than the youngest age." });
+    }
+  });
+
 // Three checkboxes are genuinely required (accuracy, storage, review-disclosure);
 // the fourth (contact/communication consent) is explicitly optional per spec
 // §15 — a profile can be submitted without it.
@@ -132,8 +159,8 @@ export const registrationSchema = z.object({
   contact: contactInfoSchema,
   educationProfession: educationProfessionSchema,
   family: familyInfoSchema,
-  lifestyle: lifestyleSchema,
-  preference: partnerPreferenceSchema,
+  lifestyle: registrationLifestyleSchema,
+  preference: registrationPreferenceSchema,
   consent: consentSchema,
 });
 

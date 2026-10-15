@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
@@ -10,6 +11,10 @@ import { redactForAudit } from "@/lib/privacy/audit-redaction";
 import { enforceApprovalGate, markApprovalExecuted } from "@/lib/approvals/gate";
 import { resolvePurposeForPermission } from "@/lib/compliance/purpose-mapping";
 import { assertSwitchOpen } from "@/lib/ops/system-control";
+import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
+import { contactInfoSchema } from "@/lib/validation/registration";
+import { emailOptionalAtRegistration } from "@/lib/verification/contact-code";
+import { recomputeStoredCompleteness } from "@/lib/verification/status";
 
 // Reveals contact info for a single profile. Every call is audited — this is
 // the only code path in the app that ever reads ContactInfo for display.
@@ -128,6 +133,65 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (gate.requiresApproval) await markApprovalExecuted(gate.approvalRequestId, admin.id);
 
     return NextResponse.json({ ok: true, sharedAt: share.sharedAt, accessLevel: accessResult.level });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+// An administrator can correct a person's mobile number, WhatsApp number or e-mail address (for example one that was typed wrongly at registration). It needs
+// the profile-edit permission AND the same contact access as revealing, the new values are checked like registration (valid, not already used by another
+// profile), a changed number or address is no longer counted as verified, and the audit row records WHICH fields changed, never the values.
+const contactEditSchema = z.object({
+  mobileNumber: contactInfoSchema.shape.mobileNumber,
+  whatsappNumber: contactInfoSchema.shape.whatsappNumber,
+  email: contactInfoSchema.shape.email,
+});
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const admin = await requireAdmin("profile:edit");
+    const { id } = await params;
+    if (resolveAdHocContactAccessLevel(admin) === "HIDDEN") {
+      throw new ApiError(403, "You do not have permission to change contact information.");
+    }
+    await assertProfileAssignmentAccess(admin, id);
+
+    const parsed = contactEditSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) throw new ApiError(400, parsed.error.issues[0]?.message ?? "Please check the contact details.");
+
+    const existing = await prisma.contactInfo.findUnique({ where: { profileId: id } });
+    if (!existing) throw new ApiError(404, "Contact info not found");
+
+    const mobileNumber = parsed.data.mobileNumber.trim();
+    const whatsappNumber = parsed.data.whatsappNumber?.trim() || null;
+    const email = parsed.data.email?.trim() || null;
+    if (!email && !(await emailOptionalAtRegistration())) throw new ApiError(400, "An e-mail address is required.");
+
+    // Nothing about the other profile is revealed, only that the number or address is taken.
+    const taken = await prisma.contactInfo.findFirst({
+      where: { profileId: { not: id }, OR: [{ mobileNumber }, ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])] },
+      select: { profileId: true },
+    });
+    if (taken) throw new ApiError(409, "Another profile already uses this mobile number or e-mail address.");
+
+    const changed: string[] = [];
+    if (mobileNumber !== existing.mobileNumber) changed.push("mobileNumber");
+    if ((whatsappNumber ?? "") !== (existing.whatsappNumber ?? "")) changed.push("whatsappNumber");
+    if ((email ?? "").toLowerCase() !== (existing.email ?? "").toLowerCase()) changed.push("email");
+    if (changed.length === 0) return NextResponse.json({ ok: true, changed });
+
+    await prisma.contactInfo.update({ where: { profileId: id }, data: { mobileNumber, whatsappNumber, email } });
+    // A different number or address has not been confirmed by its owner, so it must not keep the old "verified" mark.
+    if (changed.includes("mobileNumber") || changed.includes("email")) {
+      await prisma.profileVerification.updateMany({
+        where: { profileId: id },
+        data: { ...(changed.includes("mobileNumber") ? { phoneVerifiedAt: null } : {}), ...(changed.includes("email") ? { emailVerifiedAt: null } : {}) },
+      });
+    }
+    await writeAudit({ action: "PROFILE_EDITED", adminId: admin.id, targetProfileId: id, meta: { sections: ["contact"], changed } });
+    await recomputeStoredCompleteness(id);
+
+    return NextResponse.json({ ok: true, changed, mobileNumber, whatsappNumber, email });
   } catch (error) {
     return handleApiError(error);
   }

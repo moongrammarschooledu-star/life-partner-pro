@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PhotoUpload } from "@/components/ui/photo-upload";
 import { Loader2, Save, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -133,6 +134,33 @@ export function EditProfileForm({ profile, onSaved, onCancel }: { profile: Profi
   const [data, setData] = useState<EditableSections>(() => toEditableSections(profile));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [newPhoto, setNewPhoto] = useState<File | null>(null);
+  const [photoKey, setPhotoKey] = useState(0); // changing the key clears the picker after an upload
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Adds a photo to this profile (it becomes the main photo). Same checks and processing as a photo the person uploads themselves.
+  async function uploadPhoto() {
+    if (!newPhoto) return;
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append("photo", newPhoto);
+      const res = await fetch(`/api/admin/profiles/${profile.id}/photo`, { method: "POST", body: formData });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        show(json.error ?? "Could not upload the photo.", "error");
+        return;
+      }
+      show("Photo uploaded", "success");
+      setNewPhoto(null);
+      setPhotoKey((k) => k + 1);
+      onSaved();
+    } catch {
+      show("Something went wrong. Please try again.", "error");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   const canViewFamily = profile.permissionFlags.canViewFamily;
   const canViewIncome = profile.permissionFlags.canViewIncome;
@@ -270,6 +298,19 @@ export function EditProfileForm({ profile, onSaved, onCancel }: { profile: Profi
           </CardHeader>
           <CardContent>
             <StepPreference data={data.preference} errors={errors} onChange={(f, v) => updateSection("preference", f, v)} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Photo</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted">Choose a photo and press Upload. It becomes the main photo of this profile.</p>
+            <PhotoUpload key={photoKey} onChange={setNewPhoto} />
+            <Button size="sm" onClick={uploadPhoto} disabled={!newPhoto || uploadingPhoto}>
+              {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Upload photo
+            </Button>
           </CardContent>
         </Card>
 
