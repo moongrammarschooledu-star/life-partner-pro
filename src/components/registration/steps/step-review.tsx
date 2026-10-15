@@ -133,7 +133,7 @@ export function StepReview({
       </SectionCard>
 
       <SectionCard title={t("photo")} step={6} onEdit={onEditStep}>
-        <p className="text-sm text-muted">{photoFile ? photoFile.name : "No photo uploaded"}</p>
+        <p className="text-sm text-muted">{photoFile ? photoFile.name : "No photo added yet (required)"}</p>
       </SectionCard>
 
       <div className="rounded-lg border border-border bg-surface-muted p-4">

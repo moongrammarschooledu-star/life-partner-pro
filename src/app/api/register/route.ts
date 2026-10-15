@@ -67,6 +67,9 @@ async function postHandler(req: Request) {
       }
     }
 
+    // A photo is compulsory for a self-registration: a profile without one is of little use for matching. Admin-created profiles go through a different route.
+    if (!photoData) return NextResponse.json({ error: "Please add your photo." }, { status: 400 });
+
     let profile: { id: string };
     let profileCode: string;
     try {

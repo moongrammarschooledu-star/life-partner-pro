@@ -129,7 +129,8 @@ const en = {
   privateNotice: "This information is private and will only be reviewed by the Life Partner Pro matchmaking team.",
 
   step7Title: "Profile Photo",
-  step7Subtitle: "Add a clear photo for our matchmaking team.",
+  step7Subtitle: "A clear photo is required. It is private and seen only by our matchmaking team.",
+  errorPhoto: "Please add your photo to continue.",
   photoPrivateTitle: "Your Photo Is Private",
   photoPrivateBody: "Your profile photo will not be publicly displayed. It will only be available to authorized Life Partner Pro administrators for matchmaking purposes.",
   uploadPhoto: "Upload Photo",
@@ -305,7 +306,8 @@ const ur: Record<StringKey, string> = {
   privateNotice: "یہ معلومات نجی ہیں اور صرف Life Partner Pro کی رشتہ کرانے والی ٹیم ہی اس کا جائزہ لے گی۔",
 
   step7Title: "پروفائل تصویر",
-  step7Subtitle: "ہماری ٹیم کے لیے ایک واضح تصویر شامل کریں۔",
+  step7Subtitle: "ایک واضح تصویر لازمی ہے۔ یہ نجی ہے اور صرف ہماری ٹیم دیکھتی ہے۔",
+  errorPhoto: "جاری رکھنے کے لیے اپنی تصویر شامل کریں۔",
   photoPrivateTitle: "آپ کی تصویر نجی ہے",
   photoPrivateBody: "آپ کی پروفائل تصویر عوامی طور پر ظاہر نہیں کی جائے گی۔ یہ صرف رشتہ کرانے کے مقصد کے لیے مجاز منتظمین کو دستیاب ہوگی۔",
   uploadPhoto: "تصویر اپ لوڈ کریں",

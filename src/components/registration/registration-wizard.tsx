@@ -142,6 +142,10 @@ function WizardBody({ emailOptional, helpWhatsappUrl }: { emailOptional: boolean
       const result = registrationPreferenceSchema.safeParse(data.preference);
       if (!result.success) return (setErrors(zodErrorsToMap(result.error)), false);
     }
+    if (step === 6 && !photoFile) {
+      setErrors({ photo: t("errorPhoto") });
+      return false;
+    }
     if (step === 7) {
       const newErrors: Record<string, string> = {};
       if (!data.consent.accurate) newErrors.accurate = t("errorConsent");
