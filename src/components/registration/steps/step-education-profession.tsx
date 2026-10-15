@@ -30,7 +30,7 @@ export function StepEducationProfession({
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {!hideIncome && <PrivacyNote kind="income" className="sm:col-span-2" />}
-      <Field label={t("educationLevel")} error={errors.educationLevel} htmlFor="educationLevel">
+      <Field label={`${t("educationLevel")} *`} error={errors.educationLevel} htmlFor="educationLevel">
         <Select id="educationLevel" value={data.educationLevel} onChange={(e) => onChange("educationLevel", e.target.value)}>
           <option value="">Select</option>
           <option value="Primary">Primary</option>
@@ -45,7 +45,7 @@ export function StepEducationProfession({
           <option value="Other">Other</option>
         </Select>
       </Field>
-      <Field label={t("profession")} error={errors.profession} htmlFor="profession">
+      <Field label={`${t("profession")} *`} error={errors.profession} htmlFor="profession">
         <Input id="profession" value={data.profession} onChange={(e) => onChange("profession", e.target.value)} placeholder="e.g. Software Engineer" />
       </Field>
       <Field label={t("employmentType")} htmlFor="employmentType">

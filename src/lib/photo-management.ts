@@ -21,7 +21,7 @@ function toValidationError(err: unknown): PhotoManagementError {
   throw err;
 }
 
-export async function uploadApplicantPhoto(profileId: string, file: Buffer, mimeType: string) {
+export async function uploadApplicantPhoto(profileId: string, file: Buffer, mimeType: string, actorAdminId?: string) {
   const count = await prisma.profilePhoto.count({ where: { profileId } });
   if (count >= MAX_PHOTOS_PER_PROFILE) {
     throw new PhotoManagementError(400, `You can have at most ${MAX_PHOTOS_PER_PROFILE} photos.`);
@@ -38,7 +38,7 @@ export async function uploadApplicantPhoto(profileId: string, file: Buffer, mime
     data: { profileId, storageKey: data.storageKey, mimeType: data.mimeType, sizeBytes: data.sizeBytes, ivBase64: data.ivBase64, authTagBase64: data.authTagBase64, isPrimary: count === 0 },
   });
 
-  await writeAudit({ action: "PHOTO_UPLOADED", targetProfileId: profileId, meta: { photoId: photo.id } });
+  await writeAudit({ action: "PHOTO_UPLOADED", adminId: actorAdminId, targetProfileId: profileId, meta: { photoId: photo.id } });
   await recomputeStoredCompleteness(profileId);
   return photo;
 }
@@ -95,7 +95,7 @@ export async function deleteApplicantPhoto(profileId: string, photoId: string) {
   await recomputeStoredCompleteness(profileId);
 }
 
-export async function setPrimaryPhoto(profileId: string, photoId: string) {
+export async function setPrimaryPhoto(profileId: string, photoId: string, actorAdminId?: string) {
   const existing = await prisma.profilePhoto.findFirst({ where: { id: photoId, profileId } });
   if (!existing) throw new PhotoManagementError(404, "Photo not found.");
 
@@ -104,5 +104,5 @@ export async function setPrimaryPhoto(profileId: string, photoId: string) {
     prisma.profilePhoto.update({ where: { id: photoId }, data: { isPrimary: true } }),
   ]);
 
-  await writeAudit({ action: "PHOTO_SET_PRIMARY", targetProfileId: profileId, meta: { photoId } });
+  await writeAudit({ action: "PHOTO_SET_PRIMARY", adminId: actorAdminId, targetProfileId: profileId, meta: { photoId } });
 }

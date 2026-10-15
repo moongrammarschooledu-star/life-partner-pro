@@ -27,7 +27,7 @@ export function StepBasic({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label={t("fullName")} error={errors.fullName} htmlFor="fullName">
+      <Field label={`${t("fullName")} *`} error={errors.fullName} htmlFor="fullName">
         <Input
           id="fullName"
           value={data.fullName}
@@ -36,20 +36,20 @@ export function StepBasic({
           aria-invalid={!!errors.fullName}
         />
       </Field>
-      <Field label={t("gender")} error={errors.gender} htmlFor="gender">
+      <Field label={`${t("gender")} *`} error={errors.gender} htmlFor="gender">
         <Select id="gender" value={data.gender} onChange={(e) => onChange("gender", e.target.value as WizardData["basic"]["gender"])}>
           <option value="">{t("selectGender")}</option>
           <option value="MALE">{t("male")}</option>
           <option value="FEMALE">{t("female")}</option>
         </Select>
       </Field>
-      <Field label={t("dateOfBirth")} error={errors.dateOfBirth} htmlFor="dob">
+      <Field label={`${t("dateOfBirth")} *`} error={errors.dateOfBirth} htmlFor="dob">
         <DobSelect id="dob" value={data.dateOfBirth} onChange={(iso) => onChange("dateOfBirth", iso)} error={!!errors.dateOfBirth} />
       </Field>
       <Field label={t("age")} htmlFor="age" hint={t("ageAuto")}>
         <Input id="age" value={age ?? ""} readOnly disabled className="bg-surface-muted" />
       </Field>
-      <Field label={t("maritalStatus")} error={errors.maritalStatus} htmlFor="maritalStatus">
+      <Field label={`${t("maritalStatus")} *`} error={errors.maritalStatus} htmlFor="maritalStatus">
         <Select
           id="maritalStatus"
           value={data.maritalStatus}
@@ -87,10 +87,10 @@ export function StepBasic({
           )}
         </>
       )}
-      <Field label={t("height")} error={errors.heightCm} htmlFor="heightCm">
+      <Field label={`${t("height")} *`} error={errors.heightCm} htmlFor="heightCm">
         <HeightSelect id="heightCm" value={data.heightCm} onChange={(v) => onChange("heightCm", v)} />
       </Field>
-      <Field label={t("country")} error={errors.country} htmlFor="country">
+      <Field label={`${t("country")} *`} error={errors.country} htmlFor="country">
         <Select id="country" value={data.country} onChange={(e) => onChange("country", e.target.value)}>
           <option value="">{t("selectCountry")}</option>
           {COUNTRIES.map((c) => (
@@ -100,7 +100,7 @@ export function StepBasic({
           ))}
         </Select>
       </Field>
-      <Field label={t("city")} error={errors.city} htmlFor="city">
+      <Field label={`${t("city")} *`} error={errors.city} htmlFor="city">
         <Input
           id="city"
           list="city-options"

@@ -149,7 +149,7 @@ export const initialWizardData: WizardData = {
     minAge: "",
     maxAge: "",
     agePriority: "PREFERRED",
-    preferredCountry: "",
+    preferredCountry: "Pakistan",
     preferredCity: "",
     preferredArea: "",
     locationScope: "",

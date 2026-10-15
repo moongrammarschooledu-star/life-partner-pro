@@ -21,7 +21,8 @@ import {
   contactInfoSchema,
   educationProfessionSchema,
   familyInfoSchema,
-  partnerPreferenceSchema,
+  registrationLifestyleSchema,
+  registrationPreferenceSchema,
 } from "@/lib/validation/registration";
 import { useToast } from "@/components/ui/toast";
 import { RegistrationLocaleProvider, LocaleToggle, useRegistrationLocale } from "@/components/registration/locale-context";
@@ -76,6 +77,7 @@ function WizardBody({ emailOptional, helpWhatsappUrl }: { emailOptional: boolean
   // Silent autosave — survives an accidental refresh/close (spec §20).
   useEffect(() => {
     if (draftBanner) return; // don't overwrite the draft before the user decides
+    if (step === 0 && JSON.stringify(data) === JSON.stringify(initialWizardData)) return; // nothing typed yet: no draft to offer next time
     const handle = setTimeout(() => {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
@@ -132,8 +134,12 @@ function WizardBody({ emailOptional, helpWhatsappUrl }: { emailOptional: boolean
       const result = familyInfoSchema.safeParse(data.family);
       if (!result.success) return (setErrors(zodErrorsToMap(result.error)), false);
     }
+    if (step === 4) {
+      const result = registrationLifestyleSchema.safeParse(data.lifestyle);
+      if (!result.success) return (setErrors(zodErrorsToMap(result.error)), false);
+    }
     if (step === 5) {
-      const result = partnerPreferenceSchema.safeParse(data.preference);
+      const result = registrationPreferenceSchema.safeParse(data.preference);
       if (!result.success) return (setErrors(zodErrorsToMap(result.error)), false);
     }
     if (step === 7) {
@@ -155,12 +161,6 @@ function WizardBody({ emailOptional, helpWhatsappUrl }: { emailOptional: boolean
       return;
     }
     setStep((s) => Math.min(s + 1, STEP_TITLES.length - 1));
-  }
-
-  // Lifestyle, Partner Requirements and Photo carry no required field, so a person who only wants to finish can go straight to the review.
-  function skipToReview() {
-    setErrors({});
-    setStep(STEP_TITLES.length - 1);
   }
 
   function back() {
@@ -280,14 +280,6 @@ function WizardBody({ emailOptional, helpWhatsappUrl }: { emailOptional: boolean
         {step === 4 && <StepLifestyle data={data.lifestyle} errors={errors} onChange={(f, v) => updateSection("lifestyle", f, v)} />}
         {step === 5 && <StepPreference data={data.preference} errors={errors} onChange={(f, v) => updateSection("preference", f, v)} />}
         {step === 6 && <StepPhoto onChange={setPhotoFile} error={errors.photo} />}
-        {step >= 4 && step <= 6 && (
-          <div className="mt-8 rounded-xl border border-dashed border-border p-4 text-center">
-            <p className="mb-2 text-xs text-muted">{t("skipOptionalHint")}</p>
-            <Button variant="outline" size="sm" onClick={skipToReview}>
-              {t("skipOptional")} <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
         {step === 7 && (
           <StepReview
             data={data}

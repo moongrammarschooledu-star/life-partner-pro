@@ -14,7 +14,7 @@ import { PUBLIC_ROUTES, PRIVATE_PATH_PREFIXES, findPublicRoute, isApplicantAppPa
 import { pageMetadata, contentMetadata } from "@/lib/public-site/seo";
 import { organizationLd, websiteLd, webPageLd, breadcrumbLd, faqLd, articleLd, serializeJsonLd } from "@/lib/public-site/structured-data";
 import { FAQ_CATEGORIES, allFaqItems } from "@/lib/public-site/faq";
-import { installPromptVisible, INSTALL_MIN_PAGEVIEWS } from "@/lib/public-site/install-policy";
+import { installPromptVisible, installMode, detectInstallEnvironment, INSTALL_MIN_PAGEVIEWS, INSTALL_MANUAL_DELAY_MS } from "@/lib/public-site/install-policy";
 import { billingPeriodLabel, priceLabel } from "@/lib/public-site/pricing-display";
 import { legalPagesReviewed, governingLawText } from "@/lib/public-site/legal";
 import { contactSchema } from "@/lib/public-site/contact";
@@ -248,6 +248,38 @@ describe("install prompt policy", () => {
     expect(installPromptVisible({ ...base, standalone: true })).toBe(false);
     expect(installPromptVisible({ ...base, dismissedUntil: 5_000 })).toBe(false);
     expect(installPromptVisible({ ...base, dismissedUntil: 500 })).toBe(true);
+  });
+});
+
+describe("install mode by browser", () => {
+  const ua = {
+    chromeAndroid: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+    facebookAndroid: "Mozilla/5.0 (Linux; Android 13; SM-A135F; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/125.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/460.0.0.0;]",
+    instagramIphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90 Instagram 330.0.0.0",
+    safariIphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+    chromeIphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0 Mobile/15E148 Safari/604.1",
+    firefoxAndroid: "Mozilla/5.0 (Android 14; Mobile; rv:127.0) Gecko/127.0 Firefox/127.0",
+    chromeDesktop: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  };
+  const mode = (agent: string, canPrompt = false, waitedMs = 10_000) => installMode({ canPrompt, env: detectInstallEnvironment(agent), waitedMs });
+
+  it("uses the browser's own install button whenever it sent the install event", () => {
+    expect(mode(ua.chromeAndroid, true, 0)).toBe("native");
+  });
+  it("tells people inside Facebook / Instagram to open the real browser", () => {
+    expect(mode(ua.facebookAndroid)).toBe("inapp");
+    expect(mode(ua.instagramIphone)).toBe("inapp");
+  });
+  it("shows the Add to Home Screen steps on an iPhone in Safari or Chrome", () => {
+    expect(mode(ua.safariIphone)).toBe("ios");
+    expect(mode(ua.chromeIphone)).toBe("ios");
+  });
+  it("gives Android browsers without the event a how-to line, but only after the wait", () => {
+    expect(mode(ua.firefoxAndroid, false, 0)).toBe("none");
+    expect(mode(ua.firefoxAndroid, false, INSTALL_MANUAL_DELAY_MS)).toBe("manual");
+  });
+  it("shows nothing on a desktop browser that has no install path", () => {
+    expect(mode(ua.chromeDesktop)).toBe("none");
   });
 });
 
