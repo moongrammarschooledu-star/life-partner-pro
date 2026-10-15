@@ -6,12 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 
+import { whatsappChatUrl } from "@/lib/whatsapp-link";
+
 interface Contact {
   mobileNumber: string;
   whatsappNumber: string | null;
-  email: string;
+  email: string | null;
   preferredContactMethod: string;
 }
+
+const GREETING = "Assalam-o-Alaikum, this is Life Partner Pro. ";
 
 export function ContactPanel({ profileId }: { profileId: string }) {
   const { show } = useToast();
@@ -30,6 +34,9 @@ export function ContactPanel({ profileId }: { profileId: string }) {
       setLoading(false);
     }
   }
+
+  // The WhatsApp number when the person gave one, otherwise the mobile number.
+  const chatUrl = contact ? whatsappChatUrl(contact.whatsappNumber || contact.mobileNumber, GREETING) : null;
 
   return (
     <Card>
@@ -56,9 +63,22 @@ export function ContactPanel({ profileId }: { profileId: string }) {
                 <MessageCircle className="h-4 w-4 text-muted" /> {contact.whatsappNumber}
               </p>
             )}
-            <p className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted" /> {contact.email}
-            </p>
+            {contact.email && (
+              <p className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted" /> {contact.email}
+              </p>
+            )}
+            {chatUrl && (
+              // Opens WhatsApp on this device with the message written; the admin presses send from their own WhatsApp number. Nothing is sent by the server.
+              <a
+                href={chatUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-muted"
+              >
+                <MessageCircle className="h-4 w-4 text-primary" /> Message on WhatsApp
+              </a>
+            )}
             <p className="text-xs text-muted pt-1">Preferred: {contact.preferredContactMethod}</p>
           </div>
         )}

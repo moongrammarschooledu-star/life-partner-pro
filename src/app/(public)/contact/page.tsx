@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ContactForm } from "@/components/public/contact-form";
 import { pageMetadata } from "@/lib/public-site/seo";
 import { getSettingValues } from "@/lib/platform/settings";
+import { whatsappChatUrl } from "@/lib/whatsapp-link";
 
 export const metadata = pageMetadata("/contact");
 export const revalidate = 300;
@@ -16,6 +17,7 @@ export default async function ContactPage() {
   const email = text("contact.public_email");
   const phone = text("contact.public_phone");
   const whatsapp = text("contact.public_whatsapp");
+  const chatUrl = whatsappChatUrl(whatsapp, "Assalam-o-Alaikum, I would like to know more about Life Partner Pro.");
   const address = text("contact.public_address");
   const hours = text("contact.support_hours");
   const any = email || phone || whatsapp || address || hours;
@@ -33,7 +35,14 @@ export default async function ContactPage() {
         <dl className="mt-6 grid gap-3 rounded-xl border border-border bg-surface p-4 text-sm sm:grid-cols-2">
           {email && <div><dt className="text-xs text-muted">E-mail</dt><dd><a className="underline" href={`mailto:${email}`}>{email}</a></dd></div>}
           {phone && <div><dt className="text-xs text-muted">Phone</dt><dd>{phone}</dd></div>}
-          {whatsapp && <div><dt className="text-xs text-muted">WhatsApp</dt><dd>{whatsapp}</dd></div>}
+          {whatsapp && (
+            <div>
+              <dt className="text-xs text-muted">WhatsApp</dt>
+              <dd>
+                {chatUrl ? <a className="underline" href={chatUrl} target="_blank" rel="noopener noreferrer">Chat on WhatsApp ({whatsapp})</a> : whatsapp}
+              </dd>
+            </div>
+          )}
           {hours && <div><dt className="text-xs text-muted">Support hours</dt><dd>{hours}</dd></div>}
           {address && <div className="sm:col-span-2"><dt className="text-xs text-muted">Address</dt><dd>{address}</dd></div>}
         </dl>
