@@ -56,7 +56,7 @@ function timeAgo(ms: number): string {
   return `${Math.round(hours / 24)} day(s) ago`;
 }
 
-function WizardBody() {
+function WizardBody({ emailOptional }: { emailOptional: boolean }) {
   const router = useRouter();
   const { show } = useToast();
   const { t, locale } = useRegistrationLocale();
@@ -122,6 +122,7 @@ function WizardBody() {
     if (step === 1) {
       const result = contactInfoSchema.safeParse(data.contact);
       if (!result.success) return (setErrors(zodErrorsToMap(result.error)), false);
+      if (!emailOptional && !data.contact.email.trim()) return (setErrors({ email: "Please enter a valid email address." }), false);
     }
     if (step === 2) {
       const result = educationProfessionSchema.safeParse(data.educationProfession);
@@ -244,7 +245,7 @@ function WizardBody() {
 
       <div className="mt-8">
         {step === 0 && <StepBasic data={data.basic} errors={errors} onChange={(f, v) => updateSection("basic", f, v)} />}
-        {step === 1 && <StepContact data={data.contact} errors={errors} onChange={(f, v) => updateSection("contact", f, v)} />}
+        {step === 1 && <StepContact data={data.contact} emailOptional={emailOptional} errors={errors} onChange={(f, v) => updateSection("contact", f, v)} />}
         {step === 2 && (
           <StepEducationProfession
             data={data.educationProfession}
@@ -290,10 +291,10 @@ function WizardBody() {
   );
 }
 
-export function RegistrationWizard() {
+export function RegistrationWizard({ emailOptional = false }: { emailOptional?: boolean }) {
   return (
     <RegistrationLocaleProvider>
-      <WizardBody />
+      <WizardBody emailOptional={emailOptional} />
     </RegistrationLocaleProvider>
   );
 }

@@ -3,6 +3,7 @@ import type { CommunicationEnvironment, CommunicationProvider as ProviderRow, No
 import { currentEnvironment, isTestRecipient } from "@/lib/communications/environment";
 import { EmailProviderAdapter } from "@/lib/communications/providers/email-adapter";
 import { SmsProviderAdapter } from "@/lib/communications/providers/sms-adapter";
+import { SmsGatewayAdapter } from "@/lib/communications/providers/sms-gateway-adapter";
 import { WhatsAppProviderAdapter } from "@/lib/communications/providers/whatsapp-adapter";
 import { SandboxProviderAdapter } from "@/lib/communications/providers/sandbox-adapter";
 import { InAppProviderAdapter } from "@/lib/communications/providers/inapp-adapter";
@@ -43,6 +44,8 @@ export function buildAdapter(adapterKey: string, channel: NotificationChannel, e
       return channel === "EMAIL" ? new EmailProviderAdapter(env) : null;
     case "SMS_TWILIO":
       return channel === "SMS" ? new SmsProviderAdapter(env) : null;
+    case "SMS_GATEWAY":
+      return channel === "SMS" ? new SmsGatewayAdapter(env) : null;
     case "WHATSAPP_META":
       return channel === "WHATSAPP" ? new WhatsAppProviderAdapter(env) : null;
     case "INAPP":
@@ -56,7 +59,9 @@ export function buildAdapter(adapterKey: string, channel: NotificationChannel, e
 
 function builtinFor(channel: NotificationChannel, env: Record<string, string | undefined>): { adapter: CommunicationProvider; providerKey: string } {
   if (channel === "IN_APP") return { adapter: new InAppProviderAdapter(), providerKey: "inapp" };
-  const real = buildAdapter(channel === "EMAIL" ? "EMAIL_SMTP" : channel === "SMS" ? "SMS_TWILIO" : "WHATSAPP_META", channel, env);
+  // SMS: an HTTP gateway (a local provider) is preferred when its address is configured, otherwise Twilio.
+  const smsKey = new SmsGatewayAdapter(env).isConfigured() ? "SMS_GATEWAY" : "SMS_TWILIO";
+  const real = buildAdapter(channel === "EMAIL" ? "EMAIL_SMTP" : channel === "SMS" ? smsKey : "WHATSAPP_META", channel, env);
   if (real && real.isConfigured()) return { adapter: real, providerKey: `builtin-${real.adapterKey.toLowerCase()}` };
   return { adapter: new SandboxProviderAdapter(channel, env), providerKey: `sandbox-${channel.toLowerCase()}` };
 }

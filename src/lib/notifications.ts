@@ -13,6 +13,7 @@ export interface NotificationPayload {
   to: string;
   subject?: string;
   body: string;
+  code?: string; // the one-time code itself, passed separately for providers that must send it inside an approved template (WhatsApp)
   profileId?: string; // optional: records a body-less delivery-status row for the applicant
 }
 

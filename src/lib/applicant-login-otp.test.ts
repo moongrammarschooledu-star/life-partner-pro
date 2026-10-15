@@ -12,18 +12,22 @@ let confirmResult: { ok: true } | { ok: false; error: string } = { ok: true };
 const confirmCalls: Array<{ profileId: string; code: string }> = [];
 const securityEvents: Array<{ eventType: string; outcome?: string }> = [];
 
-const profileRow = { id: "p1", profileCode: "LPP-000001", status: "ACTIVE", verified: true, profileCompletion: 80, createdAt: new Date("2026-01-01"), softDeleted: false, contact: { email: "Asha@Example.com" } };
+const profileRow = { id: "p1", profileCode: "LPP-000001", status: "ACTIVE", verified: true, profileCompletion: 80, createdAt: new Date("2026-01-01"), softDeleted: false, contact: { email: "Asha@Example.com", mobileNumber: "0300 1234567", whatsappNumber: null } };
 
 vi.mock("next/headers", () => ({ cookies: async () => ({ set: (name: string, value: string) => { cookiesSet.push({ name, value }); }, get: () => undefined }) }));
 vi.mock("@/lib/prisma", () => ({
-  prisma: { profile: { findUnique: async ({ where }: { where: { profileCode: string } }) => (where.profileCode === "LPP-000001" ? { ...profileRow } : null) } },
+  prisma: {
+    profile: { findUnique: async ({ where }: { where: { profileCode: string } }) => (where.profileCode === "LPP-000001" ? { ...profileRow } : null) },
+    contactInfo: { findUnique: async () => ({ mobileNumber: "0300 1234567", whatsappNumber: null, email: "Asha@Example.com" }) },
+  },
 }));
 vi.mock("@/lib/security/rate-limit-policy", () => ({ enforceConfiguredLimit: async () => null }));
 vi.mock("@/lib/ops/rate-limit-persistent", () => ({
   rateLimitPersistent: async () => ({ allowed: limiterAllows, count: 1 }),
   tooManyRequests: () => new Response(JSON.stringify({ error: "Too many requests." }), { status: 429 }),
 }));
-vi.mock("@/lib/ops/feature-flags", () => ({ isFeatureEnabled: async () => flagOn }));
+// Only the sign-in code switch is under test here; the phone switch stays OFF, so the code goes to the e-mail address as before STEP 38.
+vi.mock("@/lib/ops/feature-flags", () => ({ isFeatureEnabled: async (key: string) => key === "auth.applicant_otp_login.enabled" && flagOn }));
 vi.mock("@/lib/profile-restrictions", () => ({ hasActiveRestriction: async () => restricted }));
 vi.mock("@/lib/applicant-session", () => ({ signProfileToken: (id: string) => `tok:${id}`, signSessionId: (id: string) => `sid:${id}`, APPLICANT_COOKIE: "lpp_session", APPLICANT_SESSION_ID_COOKIE: "lpp_sid" }));
 vi.mock("@/lib/profile-session", () => ({ createProfileSession: async () => ({ id: "sess1" }) }));

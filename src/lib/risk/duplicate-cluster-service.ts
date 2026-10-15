@@ -183,7 +183,7 @@ export async function evaluateProfileDuplicates(profileId: string): Promise<{ si
     take: 25,
   });
 
-  const toCandidate = (id: string, fullName: string, dob: Date, mobile: string, email: string): DuplicateCandidateProfile => ({ id, fullName, dateOfBirth: dob.toISOString(), mobileNumber: mobile, email });
+  const toCandidate = (id: string, fullName: string, dob: Date, mobile: string, email: string | null): DuplicateCandidateProfile => ({ id, fullName, dateOfBirth: dob.toISOString(), mobileNumber: mobile, email });
   const self = toCandidate(profile.id, profile.fullName, profile.dateOfBirth, profile.contact.mobileNumber, profile.contact.email);
   const pool = new Map<string, DuplicateCandidateProfile>();
   for (const c of sameContact) if (!c.profile.softDeleted) pool.set(c.profileId, toCandidate(c.profileId, c.profile.fullName, c.profile.dateOfBirth, c.mobileNumber, c.email));

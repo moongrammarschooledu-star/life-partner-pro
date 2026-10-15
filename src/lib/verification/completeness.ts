@@ -26,7 +26,7 @@ export interface CompletenessInput {
   nationality?: string | null;
   area?: string | null;
 
-  contact: { mobileNumber: string; email: string; whatsappNumber?: string | null } | null;
+  contact: { mobileNumber: string; email: string | null; whatsappNumber?: string | null } | null;
   phoneVerified: boolean;
   emailVerified: boolean;
 
@@ -100,10 +100,11 @@ export function computeProfileCompleteness(input: CompletenessInput): { percent:
     ]),
     scoreCategory("contact", "Contact", 10, [
       { field: "Mobile number", present: has(input.contact?.mobileNumber) },
-      { field: "Email", present: has(input.contact?.email) },
+      // The e-mail items count only for a person who gave an e-mail address (it is optional).
+      ...(has(input.contact?.email) ? [{ field: "Email", present: true }] : []),
       { field: "WhatsApp number", present: has(input.contact?.whatsappNumber) },
       { field: "Mobile verified", present: input.phoneVerified },
-      { field: "Email verified", present: input.emailVerified },
+      ...(has(input.contact?.email) ? [{ field: "Email verified", present: input.emailVerified }] : []),
     ]),
     scoreCategory("education", "Education", 15, [
       { field: "Education level", present: has(input.education?.level) },

@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   const profile = await prisma.profile.findUnique({ where: { id: profileId }, include: { contact: true } });
   if (!profile || profile.softDeleted || !profile.contact) return NextResponse.json({ error: "Not found." }, { status: 401 });
 
+  if (!profile.contact.email?.trim()) return NextResponse.json({ error: "There is no e-mail address on your profile to verify. Add one first if you want to." }, { status: 400 });
   const { destinationMasked } = await sendOtp(profileId, "EMAIL", profile.contact.email);
   await writeAudit({ action: "EMAIL_VERIFICATION_SENT", targetProfileId: profileId });
 

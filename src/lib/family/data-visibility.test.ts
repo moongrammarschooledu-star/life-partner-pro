@@ -93,6 +93,7 @@ vi.mock("@/lib/prisma", () => ({
     profileVerification: {
       findUnique: vi.fn(async ({ where }: { where: { profileId: string } }) => verifications.get(where.profileId) ?? null),
     },
+    contactInfo: { findUnique: vi.fn(async () => ({ email: "applicant@example.com" })) }, // an e-mail on the profile, so the e-mail check applies
     securityFlag: {
       findFirst: vi.fn(async ({ where }: { where: { profileId: string; status: { in: string[] }; severity: { in: string[] } } }) =>
         flags.find((f) => f.profileId === where.profileId && where.status.in.includes(f.status) && where.severity.in.includes(f.severity)) ?? null

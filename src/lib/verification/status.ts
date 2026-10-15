@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { emailRequirementMet } from "@/lib/verification/email-requirement";
 import { writeAudit } from "@/lib/audit";
 import { notifyProfileVerificationChanged, notifyProfileSuspended } from "@/lib/notifications/events";
 import { syncCrmStageOnVerification, syncCrmStageFromProfileStatus } from "@/lib/crm/profile-status-sync";
@@ -32,7 +33,7 @@ export async function recomputeStoredCompleteness(profileId: string): Promise<vo
     area: profile.area,
     contact: profile.contact,
     phoneVerified: !!profile.verification?.phoneVerifiedAt,
-    emailVerified: !!profile.verification?.emailVerifiedAt,
+    emailVerified: emailRequirementMet(profile.verification?.emailVerifiedAt, profile.contact?.email),
     education: profile.education,
     profession: profile.profession,
     family: profile.family,

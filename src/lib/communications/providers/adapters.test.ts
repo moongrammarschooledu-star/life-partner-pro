@@ -93,7 +93,9 @@ describe("Twilio SMS adapter (mocked fetch)", () => {
 describe("Meta WhatsApp Cloud API adapter (mocked fetch)", () => {
   it("refuses free-text business-initiated messages: approved templates only", async () => {
     const a = new WhatsAppProviderAdapter(META);
-    for (const r of [await a.sendMessage(), await a.sendOTP({ to: "+923001234567", body: "123456" }), await a.sendTransactional({ to: "+923001234567", body: "x" })]) {
+    // A code can only go by WhatsApp through an approved authentication template (WHATSAPP_OTP_TEMPLATE_NAME); without it the caller falls back to SMS / e-mail.
+    expect(await a.sendOTP({ to: "+923001234567", body: "123456", otpCode: "123456" })).toMatchObject({ ok: false, error: "WHATSAPP_OTP_TEMPLATE_NOT_CONFIGURED" });
+    for (const r of [await a.sendMessage(), await a.sendTransactional({ to: "+923001234567", body: "x" })]) {
       expect(r).toMatchObject({ ok: false, error: "WHATSAPP_REQUIRES_APPROVED_TEMPLATE" });
     }
     expect(fetchMock).not.toHaveBeenCalled();

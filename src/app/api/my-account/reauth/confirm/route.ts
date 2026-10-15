@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
-import { confirmOtp } from "@/lib/verification/otp-service";
+import { confirmNewestOtp } from "@/lib/verification/otp-service";
 import { issueApplicantReauthToken } from "@/lib/privacy/applicant-reauth";
 
 // Step 2 — confirms the OTP and issues a short-lived reauth token the
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Enter the code you received." }, { status: 400 });
   }
 
-  const result = await confirmOtp(profileId, "EMAIL", code);
+  const result = await confirmNewestOtp(profileId, code);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 
   return NextResponse.json({ reauthToken: issueApplicantReauthToken(profileId) });

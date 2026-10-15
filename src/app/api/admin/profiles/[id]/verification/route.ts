@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { emailRequirementMet } from "@/lib/verification/email-requirement";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, handleApiError, ApiError } from "@/lib/route-guard";
 import { profileDetailInclude, toDetailDto } from "@/lib/serializers";
@@ -40,7 +41,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // WhatsApp value — this route uses profileDetailInclude specifically
     // because ContactInfo must never be fetched outside the explicit
     // reveal endpoint (see serializers.ts).
-    const hasWhatsapp = !!(await prisma.contactInfo.findUnique({ where: { profileId: id }, select: { whatsappNumber: true } }))?.whatsappNumber;
+    const contactRow = await prisma.contactInfo.findUnique({ where: { profileId: id }, select: { whatsappNumber: true, email: true } });
+    const hasWhatsapp = !!contactRow?.whatsappNumber;
+    const hasEmail = !!contactRow?.email?.trim();
 
     const [documents, flags, notes] = await Promise.all([
       prisma.verificationDocument.findMany({ where: { profileId: id }, orderBy: { uploadedAt: "desc" } }),
@@ -64,9 +67,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       area: profile.area,
       // Mobile/email are required at registration, so their presence can be
       // assumed without fetching the raw values (see the hasWhatsapp query above).
-      contact: { mobileNumber: "present", email: "present", whatsappNumber: hasWhatsapp ? "present" : null },
+      contact: { mobileNumber: "present", email: hasEmail ? "present" : null, whatsappNumber: hasWhatsapp ? "present" : null },
       phoneVerified: !!verification?.phoneVerifiedAt,
-      emailVerified: !!verification?.emailVerifiedAt,
+      emailVerified: emailRequirementMet(verification?.emailVerifiedAt, contactRow?.email),
       education: profile.education,
       profession: profile.profession,
       family: profile.family,
@@ -81,7 +84,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     const confidence = computeConfidence({
       phoneVerified: !!verification?.phoneVerifiedAt,
-      emailVerified: !!verification?.emailVerifiedAt,
+      emailVerified: emailRequirementMet(verification?.emailVerifiedAt, contactRow?.email),
       checklistCompletionRatio: applicableItems > 0 ? completedItems / applicableItems : 0,
       adminReviewCompleted: verification?.status === "VERIFIED",
       documentVerificationEnabled: !!settings?.documentVerificationEnabled,

@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 interface Otp { id: string; profileId: string; channel: "EMAIL" | "PHONE"; codeHash: string; destinationMasked: string; attempts: number; maxAttempts: number; status: string; expiresAt: Date; createdAt: Date }
 let otps: Otp[];
 let seq = 0;
-const sent: Array<{ subject?: string; body: string }> = [];
+const sent: Array<{ subject?: string; body: string; channel?: string; to?: string; code?: string }> = [];
 const touched: string[] = [];
 
 vi.mock("@/lib/prisma", () => ({
@@ -30,7 +30,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 vi.mock("@/lib/audit", () => ({ writeAudit: async () => {} }));
-vi.mock("@/lib/notifications", () => ({ notificationService: { send: async (m: { subject?: string; body: string }) => { sent.push(m); } } }));
+vi.mock("@/lib/notifications", () => ({ notificationService: { send: async (m: { subject?: string; body: string; channel?: string; to?: string; code?: string }) => { sent.push(m); } } }));
 vi.mock("@/lib/notifications/notification-service", () => ({ sendNotification: async () => { touched.push("sendNotification"); } }));
 vi.mock("@/lib/verification/status", () => ({ recomputeStoredCompleteness: async () => { touched.push("recomputeStoredCompleteness"); } }));
 vi.mock("@/lib/security/event-bus", () => ({ publishSecurityEvent: async () => {} }));
@@ -107,5 +107,29 @@ describe("confirmOtp (e-mail verification) is unchanged", () => {
     expect(await confirmOtp("p1", "EMAIL", "tok")).toEqual({ ok: true });
     expect(touched).toContain("profileVerification.upsert");
     expect(touched).toContain("sendNotification");
+  });
+});
+
+describe("a sign-in code sent to a phone (STEP 38)", () => {
+  it("goes through the chosen channel with the plain code attached, and signs in without recording a phone verification", async () => {
+    await sendOtp("p1", "PHONE", "+923001234567", "LOGIN", { deliverVia: "WHATSAPP" });
+    expect(sent[0]).toMatchObject({ channel: "WHATSAPP", to: "+923001234567", code: expect.stringMatching(/^\d{6}$/) });
+    expect(otps[0].channel).toBe("PHONE");
+    expect(otps[0].destinationMasked).not.toContain("1234567");
+    expect(await confirmLoginOtp("p1", codeFrom(0))).toEqual({ ok: true });
+    expect(touched).toEqual([]);
+  });
+
+  it("defaults to SMS", async () => {
+    await sendOtp("p1", "PHONE", "+923001234567", "LOGIN");
+    expect(sent[0]).toMatchObject({ channel: "SMS" });
+  });
+
+  it("a newer phone code retires an older e-mailed one, so only the newest works", async () => {
+    await sendOtp("p1", "EMAIL", "a@example.com", "LOGIN");
+    await sendOtp("p1", "PHONE", "+923001234567", "LOGIN", { deliverVia: "SMS" });
+    expect(otps.filter((o) => o.status === "PENDING")).toHaveLength(1);
+    expect((await confirmLoginOtp("p1", codeFrom(0))).ok).toBe(false);
+    expect((await confirmLoginOtp("p1", codeFrom(1))).ok).toBe(true);
   });
 });

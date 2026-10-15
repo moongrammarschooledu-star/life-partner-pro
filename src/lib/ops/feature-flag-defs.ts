@@ -29,6 +29,9 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   // person must also type a one-time code sent to the e-mail address on the profile. Turning it OFF returns to the old, weaker sign-in:
   // only do that if e-mail delivery is down and people are locked out, and turn it back ON as soon as delivery works again.
   { key: "auth.applicant_otp_login.enabled", description: "Applicant sign-in requires a one-time code e-mailed to the profile's address (turn OFF only if e-mail delivery is down)", sensitive: true },
+  // STEP 38 - phone-first sign-in. OFF until an SMS gateway and / or WhatsApp is configured and a code has been received on a real phone: with it ON a person can sign in with a
+  // mobile number and codes go by WhatsApp, else SMS, else e-mail, and a new applicant may register without an e-mail address (see PHONE_FIRST_OFF_BY_DEFAULT).
+  { key: "auth.phone_login.enabled", description: "Phone-first sign-in (also needs the applicant sign-in code switch ON): mobile number as the sign-in identifier, codes by WhatsApp / SMS / e-mail, e-mail optional at registration (turn ON only after a code has been received on a real phone)", sensitive: true },
   { key: "uploads.enabled", description: "File uploads (photos, documents, evidence)", sensitive: true },
   { key: "payments.enabled", description: "Payments master switch", sensitive: true, managedElsewhere: "Finance Center → Rollout" },
   // STEP 16 — AI Assistant. Every flag defaults to OFF (see FEATURE_FLAG_DEFAULTS) and the rollout phase in AiConfig must also allow use.
@@ -105,10 +108,11 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "mobile.maintenance.enabled", description: "Tell the apps the service is in maintenance (the apps show a notice instead of the account screens)", sensitive: true },
 ];
 
+const PHONE_FIRST_OFF_BY_DEFAULT = "auth.phone_login.enabled";
 const MOBILE_ON_BY_DEFAULT = new Set(["mobile.app.enabled", "mobile.android.enabled", "mobile.ios.enabled", "mobile.deep_links.enabled"]);
 
 // AI/OCR flags default to OFF: a database hiccup or a fresh install must never switch them on.
-export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && !d.key.startsWith("soc.") && !d.key.startsWith("content.") && (!d.key.startsWith("mobile.") || MOBILE_ON_BY_DEFAULT.has(d.key)) && d.key !== "documents.ocr.enabled"]));
+export const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = Object.fromEntries(FEATURE_FLAG_DEFS.map((d) => [d.key, !d.key.startsWith("ai.") && !d.key.startsWith("communications.") && !d.key.startsWith("marketing.") && !d.key.startsWith("engagement.") && !d.key.startsWith("analytics.") && !d.key.startsWith("soc.") && !d.key.startsWith("content.") && (!d.key.startsWith("mobile.") || MOBILE_ON_BY_DEFAULT.has(d.key)) && d.key !== PHONE_FIRST_OFF_BY_DEFAULT && d.key !== "documents.ocr.enabled"]));
 
 export function isKnownFeatureFlag(key: string): boolean {
   return FEATURE_FLAG_DEFS.some((d) => d.key === key && !d.managedElsewhere);

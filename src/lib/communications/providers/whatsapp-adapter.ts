@@ -32,7 +32,7 @@ export class WhatsAppProviderAdapter implements CommunicationProvider {
     return `https://graph.facebook.com/${version}/${path}`;
   }
 
-  async sendTemplate(msg: OutboundTemplateMessage): Promise<SendResult> {
+  async sendTemplate(msg: OutboundTemplateMessage, componentsOverride?: unknown[]): Promise<SendResult> {
     const check = this.validateRecipient(msg.to);
     if (!check.valid) return { ok: false, failureClass: "PERMANENT", rejected: true, error: `INVALID_RECIPIENT:${check.reason}` };
     if (!this.isConfigured()) return { ok: false, failureClass: "PERMANENT", error: "WHATSAPP_PROVIDER_NOT_CONFIGURED" };
@@ -45,7 +45,7 @@ export class WhatsAppProviderAdapter implements CommunicationProvider {
       template: {
         name: msg.providerTemplateName,
         language: { code: msg.providerTemplateLanguage || "en" },
-        ...(msg.templateParams.length ? { components: [{ type: "body", parameters: msg.templateParams.map((text) => ({ type: "text", text })) }] } : {}),
+        ...(componentsOverride ? { components: componentsOverride } : msg.templateParams.length ? { components: [{ type: "body", parameters: msg.templateParams.map((text) => ({ type: "text", text })) }] } : {}),
       },
     };
     const controller = new AbortController();
@@ -77,7 +77,18 @@ export class WhatsAppProviderAdapter implements CommunicationProvider {
     return { ok: false, failureClass: "PERMANENT", error: "WHATSAPP_REQUIRES_APPROVED_TEMPLATE" };
   }
   sendTransactional = (msg: OutboundMessage) => this.sendMessage(msg);
-  sendOTP = (msg: OutboundMessage) => this.sendMessage(msg);
+  // One-time codes go through Meta's AUTHENTICATION template (WHATSAPP_OTP_TEMPLATE_NAME, approved in WhatsApp Manager). That template type carries the code in
+  // its body and in a "copy code" button; set WHATSAPP_OTP_TEMPLATE_BUTTON=false for a plain template that has no button. Without the template name a code is
+  // never sent here (free text is not allowed), and the caller falls back to another channel.
+  sendOTP = (msg: OutboundMessage): Promise<SendResult> => {
+    const name = this.env.WHATSAPP_OTP_TEMPLATE_NAME?.trim();
+    if (!name) return Promise.resolve({ ok: false, failureClass: "PERMANENT", error: "WHATSAPP_OTP_TEMPLATE_NOT_CONFIGURED" });
+    const code = msg.otpCode;
+    if (!code || !/^[A-Za-z0-9]{4,10}$/.test(code)) return Promise.resolve({ ok: false, failureClass: "PERMANENT", error: "WHATSAPP_OTP_CODE_MISSING" });
+    const components: unknown[] = [{ type: "body", parameters: [{ type: "text", text: code }] }];
+    if (this.env.WHATSAPP_OTP_TEMPLATE_BUTTON?.trim().toLowerCase() !== "false") components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] });
+    return this.sendTemplate({ ...msg, providerTemplateName: name, providerTemplateLanguage: this.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE?.trim() || "en", templateParams: [code] }, components);
+  };
   sendBulk = (msgs: OutboundMessage[]) => defaultBulk(() => this.sendMessage(), msgs);
 
   async getMessageStatus(): Promise<{ supported: boolean; status: DeliveryStatus | null }> {

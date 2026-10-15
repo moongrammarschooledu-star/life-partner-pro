@@ -10,14 +10,15 @@ import { buildAdapter } from "@/lib/communications/providers/registry";
 // languages, retry policy and the NAMES of the environment variables that hold credentials. A secret value can never be entered
 // here, is never returned, and never appears in an audit entry - credentials live in server environment variables only.
 
-export const ADAPTERS: Record<string, NotificationChannel> = { EMAIL_SMTP: "EMAIL", SMS_TWILIO: "SMS", WHATSAPP_META: "WHATSAPP", INAPP: "IN_APP", SANDBOX: "EMAIL" }; // SANDBOX is allowed on any channel (checked below)
+export const ADAPTERS: Record<string, NotificationChannel> = { EMAIL_SMTP: "EMAIL", SMS_TWILIO: "SMS", SMS_GATEWAY: "SMS", WHATSAPP_META: "WHATSAPP", INAPP: "IN_APP", SANDBOX: "EMAIL" }; // SANDBOX is allowed on any channel (checked below)
 const ENVIRONMENTS: CommunicationEnvironment[] = ["DEVELOPMENT", "STAGING", "SANDBOX", "PRODUCTION"];
 
 // Environment variable names each adapter reads, so "which secrets are configured" can be reported WITHOUT their values.
 export const ADAPTER_SECRET_NAMES: Record<string, string[]> = {
   EMAIL_SMTP: ["SMTP_USER", "SMTP_PASS", "EMAIL_WEBHOOK_SECRET"],
   SMS_TWILIO: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER|TWILIO_MESSAGING_SERVICE_SID"],
-  WHATSAPP_META: ["WHATSAPP_ENABLED", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"],
+  SMS_GATEWAY: ["SMS_GATEWAY_URL"],
+  WHATSAPP_META: ["WHATSAPP_ENABLED", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_OTP_TEMPLATE_NAME"],
   INAPP: [],
   SANDBOX: [],
 };

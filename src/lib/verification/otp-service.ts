@@ -24,15 +24,21 @@ interface SendResult {
 
 export type OtpPurpose = "VERIFY" | "LOGIN";
 
-export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", destination: string, purpose: OtpPurpose = "VERIFY"): Promise<SendResult> {
+// A code for a PHONE destination is a short number. It can be delivered by SMS (the default) or by WhatsApp (an approved authentication template, see the WhatsApp adapter).
+export interface SendOtpOptions {
+  deliverVia?: "SMS" | "WHATSAPP";
+}
+
+export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", destination: string, purpose: OtpPurpose = "VERIFY", options: SendOtpOptions = {}): Promise<SendResult> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
   const expiryMinutes = settings?.otpExpiryMinutes ?? 10;
   const maxAttempts = settings?.otpMaxAttempts ?? 5;
 
   // STEP 33 — a sign-in code is a short number the person types, and only the NEWEST one may work: any earlier pending code for this
   // profile and channel is retired first, so a request-and-wait loop can never leave several valid codes lying in a mailbox.
+  // Since STEP 38 a sign-in code can arrive by phone or by e-mail, so retiring is across both: a code sent by WhatsApp must not leave an older e-mailed one usable.
   if (purpose === "LOGIN") {
-    await prisma.otpVerification.updateMany({ where: { profileId, channel: channel as OtpChannel, status: "PENDING" }, data: { status: "EXPIRED" } });
+    await prisma.otpVerification.updateMany({ where: { profileId, status: "PENDING" }, data: { status: "EXPIRED" } });
   }
 
   const code = channel === "PHONE" || purpose === "LOGIN" ? generateOtpCode() : generateEmailToken();
@@ -50,10 +56,12 @@ export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", des
     },
   });
 
-  await notificationService.send({
-    channel: channel === "PHONE" ? "SMS" : "EMAIL",
+  try {
+    await notificationService.send({
+    channel: channel === "PHONE" ? (options.deliverVia ?? "SMS") : "EMAIL",
     to: destination,
     profileId,
+    code,
     subject: purpose === "LOGIN" ? "Your Life Partner Pro sign-in code" : channel === "EMAIL" ? "Verify your Life Partner Pro email" : undefined,
     body:
       purpose === "LOGIN"
@@ -61,7 +69,12 @@ export async function sendOtp(profileId: string, channel: "PHONE" | "EMAIL", des
         : channel === "PHONE"
           ? `Your Life Partner Pro verification code is ${code}. It expires in ${expiryMinutes} minutes.`
           : `Your Life Partner Pro email verification code is ${code}. It expires in ${expiryMinutes} minutes.`,
-  });
+    });
+  } catch (error) {
+    // The code never reached the person: retire it, so a failed delivery leaves nothing usable behind, and let the caller decide what to do next.
+    await prisma.otpVerification.update({ where: { id: otp.id }, data: { status: "EXPIRED" } }).catch(() => {});
+    throw error;
+  }
 
   await writeAudit({ action: "OTP_SENT", targetProfileId: profileId, meta: { channel, purpose } });
   await publishSecurityEvent({ eventType: "OTP_REQUESTED", profileId, source: purpose === "LOGIN" ? "applicant-login" : "otp-service", meta: { channel, purpose } });
@@ -106,9 +119,18 @@ async function checkOtp(profileId: string, channel: "PHONE" | "EMAIL", submitted
 // STEP 33 — completes an applicant sign-in. Only proves control of the e-mail address: it deliberately does NOT touch the verification
 // record, the completeness figure or send an "e-mail verified" notice, none of which a routine sign-in should produce.
 export async function confirmLoginOtp(profileId: string, submittedCode: string): Promise<ConfirmOutcome> {
-  const outcome = await checkOtp(profileId, "EMAIL", submittedCode.slice(0, 64), "applicant-login");
-  if (outcome.ok) await writeAudit({ action: "OTP_VERIFIED", targetProfileId: profileId, meta: { channel: "EMAIL", purpose: "LOGIN" } });
+  // The newest pending code decides which channel is checked (it is the only one that can still work: sending a new code retires the others).
+  const newest = await prisma.otpVerification.findFirst({ where: { profileId, status: "PENDING" }, orderBy: { createdAt: "desc" }, select: { channel: true } });
+  const channel: "PHONE" | "EMAIL" = newest?.channel === "PHONE" ? "PHONE" : "EMAIL";
+  const outcome = await checkOtp(profileId, channel, submittedCode.slice(0, 64), "applicant-login");
+  if (outcome.ok) await writeAudit({ action: "OTP_VERIFIED", targetProfileId: profileId, meta: { channel, purpose: "LOGIN" } });
   return outcome;
+}
+
+// Re-confirming identity before a high-risk account action (deactivate, delete, export): the same idea, for a code that was sent for that purpose.
+export async function confirmNewestOtp(profileId: string, submittedCode: string): Promise<ConfirmOutcome> {
+  const newest = await prisma.otpVerification.findFirst({ where: { profileId, status: "PENDING" }, orderBy: { createdAt: "desc" }, select: { channel: true } });
+  return confirmOtp(profileId, newest?.channel === "PHONE" ? "PHONE" : "EMAIL", submittedCode);
 }
 
 export async function confirmOtp(profileId: string, channel: "PHONE" | "EMAIL", submittedCode: string): Promise<ConfirmOutcome> {

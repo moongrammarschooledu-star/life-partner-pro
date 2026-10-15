@@ -6,6 +6,8 @@ import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { notifyAdminProfileUpdatePending } from "@/lib/notifications/events";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { blockedResponse } from "@/lib/ops/guards";
+import { identifierMatchesContact } from "@/lib/applicant-login";
+import { phoneLoginEnabled } from "@/lib/verification/contact-code";
 
 // Lightweight self-service verification: matching Profile Code + email is
 // enough to look up and submit an update request. This is intentionally not
@@ -16,7 +18,7 @@ async function findProfileByCodeAndEmail(profileCode: string, email: string) {
     where: { profileCode },
     include: { contact: true, preference: true },
   });
-  if (!profile || !profile.contact || profile.contact.email.toLowerCase() !== email.toLowerCase()) {
+  if (!profile || !profile.contact || !identifierMatchesContact(email, profile.contact, await phoneLoginEnabled())) {
     return null;
   }
   return profile;

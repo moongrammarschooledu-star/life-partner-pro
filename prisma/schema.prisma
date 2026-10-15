@@ -2219,7 +2219,8 @@ model ContactInfo {
 
   mobileNumber           String
   whatsappNumber         String?
-  email                  String
+  // Optional since STEP 38: the phone number is the primary contact and sign-in identifier; an e-mail address is no longer required.
+  email                  String?
   preferredContactMethod ContactMethod @default(PHONE)
   contactVerified        Boolean       @default(false)
 

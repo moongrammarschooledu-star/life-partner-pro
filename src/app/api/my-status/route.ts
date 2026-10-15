@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { enforceConfiguredLimit } from "@/lib/security/rate-limit-policy";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { findProfileForLogin, isLoginRestricted, loginStatusPayload, otpLoginRequired, publishFailedLogin, startApplicantSession } from "@/lib/applicant-login";
-import { sendOtp } from "@/lib/verification/otp-service";
+import { NoCodeChannelError, sendContactCode } from "@/lib/verification/contact-code";
 import { rateLimitPersistent, tooManyRequests } from "@/lib/ops/rate-limit-persistent";
 
 // Deliberately narrow: status/verification/completion only, never contact,
@@ -41,14 +41,14 @@ export async function POST(req: Request) {
     try {
       body = (await req.json()) as typeof body;
     } catch {
-      return NextResponse.json({ error: "Profile ID and email are required." }, { status: 400 });
+      return NextResponse.json({ error: "Profile ID and your mobile number or e-mail are required." }, { status: 400 });
     }
     const { profileCode, email } = body;
     if (typeof profileCode !== "string" || typeof email !== "string") {
-      return NextResponse.json({ error: "Profile ID and email are required." }, { status: 400 });
+      return NextResponse.json({ error: "Profile ID and your mobile number or e-mail are required." }, { status: 400 });
     }
 
-    const NO_MATCH = { error: "We could not find a profile matching that Profile ID and email." };
+    const NO_MATCH = { error: "We could not find a profile matching that Profile ID and mobile number or e-mail." };
     const profile = await findProfileForLogin(profileCode, email);
     if (!profile || (await isLoginRestricted(profile.id))) {
       // STEP 24 — a failed sign-in attempt. Attributed to the profile when the code exists (so repeated guessing against ONE account is
@@ -63,8 +63,14 @@ export async function POST(req: Request) {
     if (await otpLoginRequired()) {
       const perProfile = await rateLimitPersistent(`applicant-login-otp:sub:${profile.id}`, 5, 60 * 60_000);
       if (!perProfile.allowed) return tooManyRequests(3600);
-      const { destinationMasked } = await sendOtp(profile.id, "EMAIL", profile.contact.email, "LOGIN");
-      return NextResponse.json({ otpRequired: true, destinationMasked });
+      try {
+        // The code goes by WhatsApp, else SMS, else e-mail (whichever a real provider can deliver); the screen is told which, so it can say where to look.
+        const { channel, destinationMasked } = await sendContactCode(profile.id, "LOGIN");
+        return NextResponse.json({ otpRequired: true, destinationMasked, channel });
+      } catch (error) {
+        if (error instanceof NoCodeChannelError) return NextResponse.json({ error: "We cannot send a sign-in code right now. Please try again later or contact support." }, { status: 503 });
+        throw error;
+      }
     }
 
     await startApplicantSession(req, profile.id);

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizePhoneE164 } from "@/lib/marketing/normalize";
 import type { CommunicationMessageType, CommunicationPurpose, CommunicationSuppression, Locale, NotificationChannel, NotificationType } from "@prisma/client";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
 import { isFeatureEnabled } from "@/lib/ops/feature-flags";
@@ -135,7 +136,7 @@ interface RecipientRecord {
   softDeleted: boolean;
   country: string;
   preferredLanguage: Locale;
-  contact: { mobileNumber: string; whatsappNumber: string | null; email: string } | null;
+  contact: { mobileNumber: string; whatsappNumber: string | null; email: string | null } | null;
   verification: { phoneVerifiedAt: Date | null; emailVerifiedAt: Date | null } | null;
 }
 
@@ -161,9 +162,11 @@ const SECURITY_CRITICAL: CommunicationMessageType[] = ["SECURITY", "VERIFICATION
 
 export function destinationFor(channel: NotificationChannel, contact: RecipientRecord["contact"]): string | null {
   if (!contact) return null;
-  if (channel === "EMAIL") return contact.email || null;
-  if (channel === "SMS") return contact.mobileNumber || null;
-  if (channel === "WHATSAPP") return contact.whatsappNumber || null; // never falls back to the mobile number: WhatsApp needs the recipient's own WhatsApp number
+  // Numbers are people's own, typed in national form (03001234567) or international form; the providers need international form (+923001234567).
+  // A number that cannot be made international has no destination, so nothing is sent to a guess.
+  if (channel === "EMAIL") return contact.email?.trim() || null;
+  if (channel === "SMS") return normalizePhoneE164(contact.mobileNumber);
+  if (channel === "WHATSAPP") return normalizePhoneE164(contact.whatsappNumber); // never falls back to the mobile number: WhatsApp needs the recipient's own WhatsApp number
   return null;
 }
 
