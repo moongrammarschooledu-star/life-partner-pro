@@ -168,6 +168,15 @@ const en = {
   errorEmail: "Please enter a valid email address.",
   errorConsent: "You must agree before submitting",
   checkFields: "Please check the highlighted fields before continuing.",
+  day: "Day",
+  month: "Month",
+  year: "Year",
+  skipOptional: "Skip the optional steps and go to review",
+  skipOptionalHint: "Lifestyle, partner requirements and photo are optional. You can add them later.",
+  emailOptionalHint: "No e-mail? Leave it empty. Our team will contact you on your mobile or WhatsApp.",
+  helpTitle: "Finding the form difficult?",
+  helpBody: "Send us your details on WhatsApp and our team will create your profile for you.",
+  helpButton: "Register on WhatsApp",
 } as const;
 
 export type StringKey = keyof typeof en;
@@ -334,6 +343,15 @@ const ur: Record<StringKey, string> = {
   errorEmail: "براہ کرم درست ای میل ایڈریس درج کریں۔",
   errorConsent: "جمع کروانے سے پہلے آپ کو رضامند ہونا ہوگا",
   checkFields: "براہ کرم جاری رکھنے سے پہلے نشان زدہ خانوں کو چیک کریں۔",
+  day: "دن",
+  month: "مہینہ",
+  year: "سال",
+  skipOptional: "اختیاری مراحل چھوڑ کر جائزے پر جائیں",
+  skipOptionalHint: "طرزِ زندگی، شریکِ حیات کی ضروریات اور تصویر اختیاری ہیں۔ آپ انہیں بعد میں بھی شامل کر سکتے ہیں۔",
+  emailOptionalHint: "ای میل نہیں ہے؟ خالی چھوڑ دیں۔ ہماری ٹیم آپ کے موبائل یا واٹس ایپ پر رابطہ کرے گی۔",
+  helpTitle: "فارم بھرنا مشکل لگ رہا ہے؟",
+  helpBody: "اپنی تفصیل ہمیں واٹس ایپ پر بھیج دیں، ہماری ٹیم آپ کی پروفائل خود بنا دے گی۔",
+  helpButton: "واٹس ایپ پر رجسٹر کریں",
 };
 
 export const DICTIONARIES: Record<Locale, Record<StringKey, string>> = { en, ur };

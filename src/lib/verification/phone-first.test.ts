@@ -142,3 +142,16 @@ describe("e-mail is optional", () => {
     expect(emailRequirementMet(null, "a@x.com")).toBe(false);
   });
 });
+
+describe("e-mail optional at registration", () => {
+  it("is allowed by its own switch, or by phone sign-in being on, and refused when both are off", async () => {
+    const { emailOptionalAtRegistration } = await import("./contact-code");
+    expect(await emailOptionalAtRegistration()).toBe(false);
+    flags["registration.email_optional"] = true;
+    expect(await emailOptionalAtRegistration()).toBe(true);
+    flags["registration.email_optional"] = false;
+    flags["auth.phone_login.enabled"] = true;
+    flags["auth.applicant_otp_login.enabled"] = true;
+    expect(await emailOptionalAtRegistration()).toBe(true);
+  });
+});

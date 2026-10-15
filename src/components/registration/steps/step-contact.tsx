@@ -33,10 +33,10 @@ export function StepContact({
             aria-invalid={!!errors.mobileNumber}
           />
         </Field>
-        <Field label={t("whatsappNumber")} htmlFor="whatsappNumber" hint={emailOptional ? "Enter it to receive sign-in codes and updates on WhatsApp. If you leave it empty we use SMS." : undefined}>
+        <Field label={t("whatsappNumber")} htmlFor="whatsappNumber" hint="Our team will message you here. Leave it empty if it is the same as your mobile number.">
           <Input id="whatsappNumber" value={data.whatsappNumber} onChange={(e) => onChange("whatsappNumber", e.target.value)} placeholder="+92 300 1234567" />
         </Field>
-        <Field label={emailOptional ? `${t("email")} (optional)` : t("email")} error={errors.email} htmlFor="email">
+        <Field label={emailOptional ? `${t("email")} (optional)` : t("email")} error={errors.email} htmlFor="email" hint={emailOptional ? t("emailOptionalHint") : undefined}>
           <Input
             id="email"
             type="email"

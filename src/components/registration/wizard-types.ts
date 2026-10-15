@@ -103,7 +103,7 @@ export const initialWizardData: WizardData = {
     heightCm: "",
     city: "",
     area: "",
-    country: "",
+    country: "Pakistan",
     nationality: "",
   },
   contact: { mobileNumber: "", whatsappNumber: "", email: "", preferredContactMethod: "WHATSAPP" },
