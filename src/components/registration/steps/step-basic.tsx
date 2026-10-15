@@ -5,6 +5,7 @@ import type { WizardData } from "@/components/registration/wizard-types";
 import { useRegistrationLocale } from "@/components/registration/locale-context";
 import { calculateAge } from "@/lib/utils";
 import { COUNTRIES, citiesFor } from "@/lib/geo-data";
+import { DobSelect } from "@/components/registration/steps/dob-select";
 import { HeightSelect } from "@/components/registration/steps/height-select";
 import { OptionalSection } from "@/components/registration/steps/optional-section";
 
@@ -43,7 +44,7 @@ export function StepBasic({
         </Select>
       </Field>
       <Field label={t("dateOfBirth")} error={errors.dateOfBirth} htmlFor="dob">
-        <Input id="dob" type="date" max={new Date().toISOString().slice(0, 10)} value={data.dateOfBirth} onChange={(e) => onChange("dateOfBirth", e.target.value)} />
+        <DobSelect id="dob" value={data.dateOfBirth} onChange={(iso) => onChange("dateOfBirth", iso)} error={!!errors.dateOfBirth} />
       </Field>
       <Field label={t("age")} htmlFor="age" hint={t("ageAuto")}>
         <Input id="age" value={age ?? ""} readOnly disabled className="bg-surface-muted" />

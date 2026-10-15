@@ -31,6 +31,13 @@ export async function phoneLoginEnabled(): Promise<boolean> {
   return (await isFeatureEnabled(PHONE_LOGIN_FLAG)) && (await isFeatureEnabled(OTP_LOGIN_FLAG));
 }
 
+export const EMAIL_OPTIONAL_FLAG = "registration.email_optional";
+
+/** Whether a new applicant may register without an e-mail address (its own switch, or phone sign-in being on). */
+export async function emailOptionalAtRegistration(): Promise<boolean> {
+  return (await isFeatureEnabled(EMAIL_OPTIONAL_FLAG)) || (await phoneLoginEnabled());
+}
+
 /** True only when a real (non-sandbox) provider would carry a message to this destination on this channel. */
 export async function channelIsReal(channel: "SMS" | "WHATSAPP", destination: string, env: Record<string, string | undefined> = process.env): Promise<boolean> {
   if (channel === "WHATSAPP" && !env.WHATSAPP_OTP_TEMPLATE_NAME?.trim()) return false; // a code can only go by WhatsApp through an approved template

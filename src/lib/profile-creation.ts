@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { phoneLoginEnabled } from "@/lib/verification/contact-code";
+import { emailOptionalAtRegistration } from "@/lib/verification/contact-code";
 import { nextProfileCode } from "@/lib/profile-code";
 import { parseDateOnly } from "@/lib/utils";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
@@ -45,8 +45,8 @@ export async function createProfileFromRegistration(
   // Duplicate check (spec §31) — never reveal anything about the matched
   // profile, only that one might already exist.
   const email = value.contact.email?.trim() || null;
-  // An e-mail address is only optional once phone sign-in is on; until then the code can only go to an address, so one is still required.
-  if (!email && !(await phoneLoginEnabled())) throw new ProfileCreationError(400, "Please enter a valid email address.");
+  // An e-mail address is optional only while the "registration.email_optional" switch (or phone sign-in) is on.
+  if (!email && !(await emailOptionalAtRegistration())) throw new ProfileCreationError(400, "Please enter a valid email address.");
   const existingContact = await prisma.contactInfo.findFirst({
     where: {
       OR: [{ mobileNumber: value.contact.mobileNumber }, ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])],

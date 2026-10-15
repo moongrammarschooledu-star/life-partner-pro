@@ -31,6 +31,9 @@ export const FEATURE_FLAG_DEFS: FeatureFlagDef[] = [
   { key: "auth.applicant_otp_login.enabled", description: "Applicant sign-in requires a one-time code e-mailed to the profile's address (turn OFF only if e-mail delivery is down)", sensitive: true },
   // STEP 38 - phone-first sign-in. OFF until an SMS gateway and / or WhatsApp is configured and a code has been received on a real phone: with it ON a person can sign in with a
   // mobile number and codes go by WhatsApp, else SMS, else e-mail, and a new applicant may register without an e-mail address (see PHONE_FIRST_OFF_BY_DEFAULT).
+  // An e-mail address is optional when registering (the mobile number is the main contact; the team reaches the person on WhatsApp). ON by default. Without an
+  // e-mail the person has no sign-in code channel, so they cannot sign in online until they add one; turn OFF to require an e-mail again.
+  { key: "registration.email_optional", description: "E-mail address is optional at registration (the team contacts the person by mobile / WhatsApp; without an e-mail they cannot sign in online)", sensitive: false },
   { key: "auth.phone_login.enabled", description: "Phone-first sign-in (also needs the applicant sign-in code switch ON): mobile number as the sign-in identifier, codes by WhatsApp / SMS / e-mail, e-mail optional at registration (turn ON only after a code has been received on a real phone)", sensitive: true },
   { key: "uploads.enabled", description: "File uploads (photos, documents, evidence)", sensitive: true },
   { key: "payments.enabled", description: "Payments master switch", sensitive: true, managedElsewhere: "Finance Center → Rollout" },

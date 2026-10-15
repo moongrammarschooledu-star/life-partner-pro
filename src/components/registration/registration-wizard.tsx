@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Loader2, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, MessageCircle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/registration/step-indicator";
 import { PrivacyNote } from "@/components/registration/privacy-note";
@@ -56,7 +56,7 @@ function timeAgo(ms: number): string {
   return `${Math.round(hours / 24)} day(s) ago`;
 }
 
-function WizardBody({ emailOptional }: { emailOptional: boolean }) {
+function WizardBody({ emailOptional, helpWhatsappUrl }: { emailOptional: boolean; helpWhatsappUrl: string | null }) {
   const router = useRouter();
   const { show } = useToast();
   const { t, locale } = useRegistrationLocale();
@@ -157,6 +157,12 @@ function WizardBody({ emailOptional }: { emailOptional: boolean }) {
     setStep((s) => Math.min(s + 1, STEP_TITLES.length - 1));
   }
 
+  // Lifestyle, Partner Requirements and Photo carry no required field, so a person who only wants to finish can go straight to the review.
+  function skipToReview() {
+    setErrors({});
+    setStep(STEP_TITLES.length - 1);
+  }
+
   function back() {
     setErrors({});
     setStep((s) => Math.max(s - 1, 0));
@@ -238,6 +244,23 @@ function WizardBody({ emailOptional }: { emailOptional: boolean }) {
         </div>
       )}
 
+      {step === 0 && helpWhatsappUrl && (
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">{t("helpTitle")}</p>
+            <p className="text-xs text-muted">{t("helpBody")}</p>
+          </div>
+          <a
+            href={helpWhatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface-muted"
+          >
+            <MessageCircle className="h-4 w-4 text-primary" /> {t("helpButton")}
+          </a>
+        </div>
+      )}
+
       {step === 0 && <PrivacyNote kind="intro" className="mb-6" />}
 
       <StepIndicator current={step} total={STEP_TITLES.length} titles={localizedTitles} />
@@ -257,6 +280,14 @@ function WizardBody({ emailOptional }: { emailOptional: boolean }) {
         {step === 4 && <StepLifestyle data={data.lifestyle} errors={errors} onChange={(f, v) => updateSection("lifestyle", f, v)} />}
         {step === 5 && <StepPreference data={data.preference} errors={errors} onChange={(f, v) => updateSection("preference", f, v)} />}
         {step === 6 && <StepPhoto onChange={setPhotoFile} error={errors.photo} />}
+        {step >= 4 && step <= 6 && (
+          <div className="mt-8 rounded-xl border border-dashed border-border p-4 text-center">
+            <p className="mb-2 text-xs text-muted">{t("skipOptionalHint")}</p>
+            <Button variant="outline" size="sm" onClick={skipToReview}>
+              {t("skipOptional")} <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         {step === 7 && (
           <StepReview
             data={data}
@@ -291,10 +322,10 @@ function WizardBody({ emailOptional }: { emailOptional: boolean }) {
   );
 }
 
-export function RegistrationWizard({ emailOptional = false }: { emailOptional?: boolean }) {
+export function RegistrationWizard({ emailOptional = false, helpWhatsappUrl = null }: { emailOptional?: boolean; helpWhatsappUrl?: string | null }) {
   return (
     <RegistrationLocaleProvider>
-      <WizardBody emailOptional={emailOptional} />
+      <WizardBody emailOptional={emailOptional} helpWhatsappUrl={helpWhatsappUrl} />
     </RegistrationLocaleProvider>
   );
 }
