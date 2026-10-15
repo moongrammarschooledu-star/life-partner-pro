@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatEnumLabel, formatDate, formatDateTime } from "@/lib/utils";
 import { CHECKLIST_CATEGORY_LABEL } from "@/lib/verification/checklist-catalog";
 import { hasAssignedWorkQueue, type AdminRole, type Permission } from "@/lib/permissions";
+import { ContactPanel } from "@/components/admin/profile-detail/contact-panel";
 
 const REJECTION_CATEGORIES = [
   { value: "INFORMATION_INCOMPLETE", label: "Information incomplete" },
@@ -463,6 +464,9 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
 
         {/* RIGHT: Actions */}
         <div className="space-y-4">
+          {/* The same hidden-by-default contact box as the profile page: revealing is audited and the WhatsApp button opens a message to write from your own number. */}
+          {permissions.includes("contact:reveal") && <ContactPanel profileId={profileId} />}
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Staff Assignment</CardTitle>
