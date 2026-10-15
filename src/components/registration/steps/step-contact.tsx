@@ -6,9 +6,11 @@ import { useRegistrationLocale } from "@/components/registration/locale-context"
 export function StepContact({
   data,
   errors,
+  emailOptional = false,
   onChange,
 }: {
   data: WizardData["contact"];
+  emailOptional?: boolean;
   errors: Record<string, string>;
   onChange: <K extends keyof WizardData["contact"]>(field: K, value: WizardData["contact"][K]) => void;
 }) {
@@ -31,10 +33,10 @@ export function StepContact({
             aria-invalid={!!errors.mobileNumber}
           />
         </Field>
-        <Field label={t("whatsappNumber")} htmlFor="whatsappNumber">
+        <Field label={t("whatsappNumber")} htmlFor="whatsappNumber" hint={emailOptional ? "Enter it to receive sign-in codes and updates on WhatsApp. If you leave it empty we use SMS." : undefined}>
           <Input id="whatsappNumber" value={data.whatsappNumber} onChange={(e) => onChange("whatsappNumber", e.target.value)} placeholder="+92 300 1234567" />
         </Field>
-        <Field label={t("email")} error={errors.email} htmlFor="email">
+        <Field label={emailOptional ? `${t("email")} (optional)` : t("email")} error={errors.email} htmlFor="email">
           <Input
             id="email"
             type="email"

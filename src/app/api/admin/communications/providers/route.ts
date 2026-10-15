@@ -13,7 +13,7 @@ export async function GET() {
     await requireAdmin("communications:providers:view");
     const [providers, health] = await Promise.all([listProviders(), getProviderHealth()]);
     const builtins = EXTERNAL.map((channel) => {
-      const key = channel === "EMAIL" ? "EMAIL_SMTP" : channel === "SMS" ? "SMS_TWILIO" : "WHATSAPP_META";
+      const key = channel === "EMAIL" ? "EMAIL_SMTP" : channel === "SMS" ? (buildAdapter("SMS_GATEWAY", "SMS")?.isConfigured() ? "SMS_GATEWAY" : "SMS_TWILIO") : "WHATSAPP_META";
       const adapter = buildAdapter(key, channel);
       return { channel, adapter: key, configured: adapter?.isConfigured() ?? false, effective: adapter?.isConfigured() ? key : "SANDBOX" };
     });

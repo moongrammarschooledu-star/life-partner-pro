@@ -12,6 +12,7 @@ export interface OutboundMessage {
   subject?: string;
   html?: string;
   purpose?: string; // used only to decide log redaction (OTP)
+  otpCode?: string; // a one-time code, given separately ONLY for providers that must send it inside an approved template (WhatsApp); never logged or stored
   correlationId?: string;
   language?: string;
   sender?: string | null; // from-address / from-number / phone-number-id label
@@ -66,7 +67,7 @@ export interface ProviderHealth {
 }
 
 export interface CommunicationProvider {
-  readonly adapterKey: string; // EMAIL_SMTP | SMS_TWILIO | WHATSAPP_META | SANDBOX | INAPP
+  readonly adapterKey: string; // EMAIL_SMTP | SMS_TWILIO | SMS_GATEWAY | WHATSAPP_META | SANDBOX | INAPP
   readonly channel: NotificationChannel;
   // True only when this adapter would talk to a real external service (env credentials present).
   isConfigured(): boolean;

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { emailRequirementMet } from "@/lib/verification/email-requirement";
 import { computeConfidence, type VerificationConfidenceLevel } from "@/lib/verification/confidence";
 import type { SecurityFlagSeverity } from "@prisma/client";
 
@@ -49,15 +50,16 @@ export function deriveRiskBand(input: RiskAssessmentInput): RiskAssessment {
 }
 
 export async function computeRiskAssessment(profileId: string): Promise<RiskAssessment> {
-  const [openFlags, openDuplicateReviews, verification] = await Promise.all([
+  const [openFlags, openDuplicateReviews, verification, contactRow] = await Promise.all([
     prisma.securityFlag.findMany({ where: { profileId, status: { in: ["OPEN", "INVESTIGATING"] } }, select: { severity: true } }),
     prisma.duplicateCandidate.count({ where: { profileId, status: { in: ["POTENTIAL_DUPLICATE", "DUPLICATE_REVIEW_REQUIRED"] } } }),
     prisma.profileVerification.findUnique({ where: { profileId }, include: { items: true } }),
+    prisma.contactInfo.findUnique({ where: { profileId }, select: { email: true } }),
   ]);
 
   const confidence = computeConfidence({
     phoneVerified: !!verification?.phoneVerifiedAt,
-    emailVerified: !!verification?.emailVerifiedAt,
+    emailVerified: emailRequirementMet(verification?.emailVerifiedAt, contactRow?.email),
     checklistCompletionRatio: verification?.items.length ? verification.items.filter((i) => i.status === "COMPLETED").length / verification.items.length : 0,
     adminReviewCompleted: verification?.status === "VERIFIED",
     documentVerificationEnabled: false,

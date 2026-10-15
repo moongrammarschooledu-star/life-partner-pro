@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { phoneLoginEnabled } from "@/lib/verification/contact-code";
 import { nextProfileCode } from "@/lib/profile-code";
 import { parseDateOnly } from "@/lib/utils";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
@@ -43,9 +44,12 @@ export async function createProfileFromRegistration(
 ) {
   // Duplicate check (spec §31) — never reveal anything about the matched
   // profile, only that one might already exist.
+  const email = value.contact.email?.trim() || null;
+  // An e-mail address is only optional once phone sign-in is on; until then the code can only go to an address, so one is still required.
+  if (!email && !(await phoneLoginEnabled())) throw new ProfileCreationError(400, "Please enter a valid email address.");
   const existingContact = await prisma.contactInfo.findFirst({
     where: {
-      OR: [{ mobileNumber: value.contact.mobileNumber }, { email: { equals: value.contact.email, mode: "insensitive" } }],
+      OR: [{ mobileNumber: value.contact.mobileNumber }, ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : [])],
     },
     include: { profile: { select: { status: true, softDeleted: true } } },
   });
@@ -84,7 +88,7 @@ export async function createProfileFromRegistration(
     country: value.basic.country,
     nationality: value.basic.nationality,
     area: value.basic.area,
-    contact: { mobileNumber: value.contact.mobileNumber, email: value.contact.email, whatsappNumber: value.contact.whatsappNumber },
+    contact: { mobileNumber: value.contact.mobileNumber, email, whatsappNumber: value.contact.whatsappNumber },
     phoneVerified: false,
     emailVerified: false,
     education: { level: value.educationProfession.educationLevel, degree: value.educationProfession.degree, institution: value.educationProfession.institution },
@@ -142,7 +146,7 @@ export async function createProfileFromRegistration(
         create: {
           mobileNumber: value.contact.mobileNumber,
           whatsappNumber: value.contact.whatsappNumber || null,
-          email: value.contact.email,
+          email,
           preferredContactMethod: value.contact.preferredContactMethod,
         },
       },

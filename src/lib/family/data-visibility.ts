@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { emailRequirementMet } from "@/lib/verification/email-requirement";
 import { buildProposalDetailForProfile, projectMeetingSummary, type ProposalDetail } from "@/lib/visibility/proposal-visibility";
 import { buildSelfProfileView } from "@/lib/visibility/user-data-visibility";
 import { getFamilyMembership, hasFamilyPermission, getSharedRecord, isAccessExpired } from "@/lib/family/access-control";
@@ -193,6 +194,7 @@ export async function getVisibleVerificationStatus(familyMemberId: string): Prom
 
   const verification = await prisma.profileVerification.findUnique({ where: { profileId: membership.applicantId }, include: { items: true } });
   if (!verification) return { status: "NOT_VERIFIED", level: 0 };
+  const applicantContact = await prisma.contactInfo.findUnique({ where: { profileId: membership.applicantId }, select: { email: true } });
 
   const openFlag = await prisma.securityFlag.findFirst({
     where: { profileId: membership.applicantId, status: { in: ["OPEN", "INVESTIGATING"] }, severity: { in: ["HIGH", "CRITICAL"] } },
@@ -200,7 +202,7 @@ export async function getVisibleVerificationStatus(familyMemberId: string): Prom
 
   const level = computeVerificationLevel({
     phoneVerified: !!verification.phoneVerifiedAt,
-    emailVerified: !!verification.emailVerifiedAt,
+    emailVerified: emailRequirementMet(verification.emailVerifiedAt, applicantContact?.email),
     adminReviewCompleted: verification.status === "VERIFIED",
     identityVerified: verification.status === "VERIFIED" && !!verification.providerReference,
     hasOpenHighOrCriticalFlag: !!openFlag,

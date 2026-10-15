@@ -66,7 +66,7 @@ async function assertResourceAccess(admin: SessionAdmin, resourceType: string | 
     const otherId = profile ? (profile === proposal.profileAId ? proposal.profileBId : proposal.profileAId) : null;
     if (otherId) {
       const c = await prisma.contactInfo.findUnique({ where: { profileId: otherId }, select: { mobileNumber: true, whatsappNumber: true, email: true } });
-      if (c) protectedStrings.push(c.mobileNumber, c.whatsappNumber ?? "", c.email);
+      if (c) protectedStrings.push(c.mobileNumber, c.whatsappNumber ?? "", c.email ?? "");
     }
   } else if (resourceType === "CASE" && resourceId) {
     const c = await prisma.case.findUnique({ where: { id: resourceId }, select: { id: true, reportedAdminId: true, reporterProfileId: true } });

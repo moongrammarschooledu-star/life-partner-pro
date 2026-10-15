@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { NotificationChannel } from "@prisma/client";
 import { maskEmail, maskPhone } from "@/lib/verification/otp";
+import { normalizePhoneE164 } from "@/lib/marketing/normalize";
 import { eligibleFailoverChain, resolveProviderChain } from "@/lib/communications/providers/registry";
 import { recordProviderOutcome } from "@/lib/communications/provider-health";
 
@@ -17,6 +18,7 @@ export interface OneTimeCodeRequest {
   to: string;
   subject?: string;
   body: string;
+  code?: string; // see NotificationPayload.code
   profileId?: string; // when known, a body-less delivery-status row is written for the applicant's communication history
 }
 
@@ -27,13 +29,16 @@ export class OtpDeliveryError extends Error {
   }
 }
 
-export async function sendOneTimeCode(req: OneTimeCodeRequest): Promise<{ providerKey: string; providerMessageId?: string }> {
+export async function sendOneTimeCode(raw: OneTimeCodeRequest): Promise<{ providerKey: string; providerMessageId?: string }> {
+  // People type their own number in national form (03001234567); providers need international form (+923001234567). A number that cannot be made
+  // international is refused here, so a code is never sent to a guess.
+  const req = raw.channel === "EMAIL" ? raw : { ...raw, to: normalizePhoneE164(raw.to) ?? raw.to };
   const chain = await eligibleFailoverChain(await resolveProviderChain({ channel: req.channel, destination: req.to }));
   let lastError = "delivery failed";
   for (const candidate of chain) {
     const check = candidate.adapter.validateRecipient(req.to);
     if (!check.valid) throw new OtpDeliveryError(`Invalid ${req.channel === "EMAIL" ? "e-mail address" : "phone number"}.`);
-    const result = await candidate.adapter.sendOTP({ to: check.normalized ?? req.to, body: req.body, subject: req.subject, purpose: "OTP" });
+    const result = await candidate.adapter.sendOTP({ to: check.normalized ?? req.to, body: req.body, subject: req.subject, purpose: "OTP", otpCode: req.code });
     await recordProviderOutcome(candidate.providerKey, { ok: result.ok, error: result.error }).catch(() => {});
     if (result.ok) {
       if (req.profileId) await recordStatusRow(req, candidate.providerKey, result.providerMessageId).catch(() => {});

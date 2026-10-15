@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { emailRequirementMet } from "@/lib/verification/email-requirement";
 import { prisma } from "@/lib/prisma";
 import { requireApplicantProfileId } from "@/lib/require-applicant";
 import { CHECKLIST_CATALOG } from "@/lib/verification/checklist-catalog";
@@ -30,7 +31,7 @@ export async function GET() {
 
   const verification = profile.verification;
   const phoneVerified = !!verification?.phoneVerifiedAt;
-  const emailVerified = !!verification?.emailVerifiedAt;
+  const emailVerified = emailRequirementMet(verification?.emailVerifiedAt, profile.contact?.email);
 
   const { percent, categories } = computeProfileCompleteness({
     fullName: profile.fullName,

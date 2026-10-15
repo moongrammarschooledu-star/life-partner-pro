@@ -6,6 +6,11 @@ Rule for contributors: every pull request that changes behaviour adds a line und
 
 ## Unreleased
 
+### Added (STEP 38: phone-first sign-in and codes)
+- Sign-in with Profile ID + mobile number (e-mail still works) and one-time codes by WhatsApp, else SMS, else e-mail. Behind the flag `auth.phone_login.enabled` (default OFF; needs the applicant sign-in code switch too), so nothing changes until providers are proven. Only real providers count; a sandbox never "sends"; a failing channel falls through to the next; no channel means an honest error.
+- A configurable HTTP SMS gateway adapter for local providers (`SMS_GATEWAY_*`), and WhatsApp codes through an approved authentication template (`WHATSAPP_OTP_TEMPLATE_*`).
+- E-mail is optional at registration once the flag is on (`ContactInfo.email` is now nullable; migration `20261015100000_contact_email_optional`); verification level, completeness, risk and duplicate checks treat a missing e-mail as not applicable. Setup guide: `docs/PHONE_SIGN_IN_SETUP.md`.
+
 ### Added (STEP 37: mobile apps, push notifications, deep links)
 - Android and iPhone apps as a native shell (Capacitor 7) around the website, in `mobile/`: the same sign-in, API and permissions, no second backend. Hardened Android project (no backup, no plain-text traffic, one exported component, exact App Links, shrunk release build, signing only from the build environment) and iOS project (push and Universal Links entitlements, permission strings, no arbitrary loads).
 - Registered devices (`MobileDevice`): "Your devices & notifications" in Account Settings and the family Security page; remove a device to sign it out and delete its push token.

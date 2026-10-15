@@ -45,7 +45,8 @@ export const contactInfoSchema = z.object({
     .max(20)
     .regex(/^[+0-9][0-9\s-]{6,19}$/, "Please enter a valid mobile number."),
   whatsappNumber: z.string().trim().max(20).optional().or(z.literal("")),
-  email: z.string().trim().email("Please enter a valid email address."),
+  // Optional in the schema; whether it may be left empty is decided by the phone sign-in switch (the wizard and createProfileFromRegistration both check it).
+  email: z.string().trim().email("Please enter a valid email address.").or(z.literal("")).optional(),
   preferredContactMethod: z.enum(["PHONE", "WHATSAPP", "EMAIL"]),
 });
 

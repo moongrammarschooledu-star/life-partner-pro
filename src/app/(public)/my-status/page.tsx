@@ -35,8 +35,9 @@ export default function MyStatusPage() {
   const [profileCode, setProfileCode] = useState("");
   const [email, setEmail] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
-  // STEP 33 — sign-in is two steps: Profile ID + email, then the one-time code e-mailed to that address.
+  // Sign-in is two steps: Profile ID + mobile number (or e-mail), then the one-time code sent to the number / address on the profile.
   const [otpSentTo, setOtpSentTo] = useState<string | null>(null);
+  const [otpChannel, setOtpChannel] = useState<"WHATSAPP" | "SMS" | "EMAIL">("EMAIL");
   const [code, setCode] = useState("");
 
   function load() {
@@ -65,7 +66,8 @@ export default function MyStatusPage() {
         return;
       }
       if (json.otpRequired) {
-        setOtpSentTo(json.destinationMasked ?? "your email");
+        setOtpSentTo(json.destinationMasked ?? "your contact");
+        setOtpChannel(json.channel === "WHATSAPP" || json.channel === "SMS" ? json.channel : "EMAIL");
         setCode("");
         return;
       }
@@ -106,8 +108,8 @@ export default function MyStatusPage() {
   if (!data && otpSentTo) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
-        <h1 className="font-heading text-2xl font-semibold">Check your email</h1>
-        <p className="mt-2 text-sm text-muted">We sent a sign-in code to {otpSentTo}. Enter it below. The code expires in a few minutes; if it does not arrive, check your spam folder or go back and ask for a new one.</p>
+        <h1 className="font-heading text-2xl font-semibold">{otpChannel === "EMAIL" ? "Check your email" : otpChannel === "WHATSAPP" ? "Check WhatsApp" : "Check your messages"}</h1>
+        <p className="mt-2 text-sm text-muted">We sent a sign-in code {otpChannel === "WHATSAPP" ? "on WhatsApp" : otpChannel === "SMS" ? "by SMS" : ""} to {otpSentTo}. Enter it below. The code expires in a few minutes; {otpChannel === "EMAIL" ? "if it does not arrive, check your spam folder or " : "if it does not arrive, "}go back and ask for a new one.</p>
         <Card className="mt-6">
           <CardContent className="space-y-4">
             <Field label="Sign-in code" htmlFor="otpCode">
@@ -129,14 +131,14 @@ export default function MyStatusPage() {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
         <h1 className="font-heading text-2xl font-semibold">My Profile Status</h1>
-        <p className="mt-2 text-sm text-muted">Enter your Profile ID and the email you registered with. We will email you a sign-in code to confirm it is you.</p>
+        <p className="mt-2 text-sm text-muted">Enter your Profile ID and the mobile number (or e-mail) you registered with. We will send you a sign-in code to confirm it is you.</p>
         <Card className="mt-6">
           <CardContent className="space-y-4">
             <Field label="Profile ID" htmlFor="profileCode">
               <Input id="profileCode" value={profileCode} onChange={(e) => setProfileCode(e.target.value)} placeholder="LPP-000123" />
             </Field>
-            <Field label="Registered Email" htmlFor="email">
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Field label="Registered mobile number or e-mail" htmlFor="email">
+              <Input id="email" inputMode="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="+92 300 1234567" />
             </Field>
             <Button onClick={lookup} disabled={lookingUp || !profileCode || !email}>
               {lookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Send me a sign-in code

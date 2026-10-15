@@ -8,7 +8,7 @@ export interface DuplicateCandidateProfile {
   fullName: string;
   dateOfBirth: string; // ISO date, compared by date-only
   mobileNumber: string;
-  email: string;
+  email: string | null;
 }
 
 export type DuplicateSignal = "MOBILE" | "EMAIL" | "NAME_AND_DOB";
@@ -40,7 +40,7 @@ export function findDuplicateSignals(profile: DuplicateCandidateProfile, candida
     if (candidate.id === profile.id) continue;
     const signals: DuplicateSignal[] = [];
     if (normalizePhone(candidate.mobileNumber) === normalizePhone(profile.mobileNumber)) signals.push("MOBILE");
-    if (normalizeEmail(candidate.email) === normalizeEmail(profile.email)) signals.push("EMAIL");
+    if (profile.email && candidate.email && normalizeEmail(candidate.email) === normalizeEmail(profile.email)) signals.push("EMAIL"); // an absent address never matches another absent one
     if (normalizeName(candidate.fullName) === normalizeName(profile.fullName) && sameDate(candidate.dateOfBirth, profile.dateOfBirth)) {
       signals.push("NAME_AND_DOB");
     }

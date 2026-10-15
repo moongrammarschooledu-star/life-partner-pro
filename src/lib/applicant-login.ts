@@ -6,6 +6,8 @@ import { createProfileSession } from "@/lib/profile-session";
 import { publishSecurityEvent } from "@/lib/security/event-bus";
 import { isFeatureEnabled } from "@/lib/ops/feature-flags";
 import { hasActiveRestriction } from "@/lib/profile-restrictions";
+import { normalizePhoneE164 } from "@/lib/marketing/normalize";
+import { phoneLoginEnabled } from "@/lib/verification/contact-code";
 
 // Shared by the two steps of an applicant sign-in (STEP 33):
 //   1. POST /api/my-status         Profile ID + e-mail address  -> (flag ON) a one-time code is e-mailed, nothing is signed in
@@ -26,18 +28,33 @@ export interface LoginProfile {
   verified: boolean;
   profileCompletion: number;
   createdAt: Date;
-  contact: { email: string };
+  contact: { email: string | null; mobileNumber: string; whatsappNumber: string | null };
 }
 
-// Finds the profile only when BOTH identifiers match; every other outcome is the same "no match" so nothing reveals which part was wrong.
+/**
+ * Does what the person typed (an e-mail address, or a mobile / WhatsApp number in national or international form) belong to this contact record?
+ * A phone number is accepted only when phone sign-in is on, so with the switch off nothing changes.
+ */
+export function identifierMatchesContact(value: string, contact: { email: string | null; mobileNumber: string; whatsappNumber: string | null }, phoneAllowed: boolean): boolean {
+  const v = value.trim();
+  if (!v || v.length > 254) return false;
+  if (v.includes("@")) return !!contact.email && contact.email.trim().toLowerCase() === v.toLowerCase();
+  if (!phoneAllowed) return false;
+  const typed = normalizePhoneE164(v);
+  if (!typed) return false;
+  return normalizePhoneE164(contact.mobileNumber) === typed || normalizePhoneE164(contact.whatsappNumber) === typed;
+}
+
+// Finds the profile only when BOTH identifiers match (the Profile ID and an e-mail address or phone number on the profile); every other outcome is the same
+// "no match" so nothing reveals which part was wrong.
 export async function findProfileForLogin(profileCode: unknown, email: unknown): Promise<LoginProfile | null> {
   if (typeof profileCode !== "string" || typeof email !== "string" || profileCode.length > 40 || email.length > 254) return null;
   const profile = await prisma.profile.findUnique({
     where: { profileCode: profileCode.trim().toUpperCase() },
-    select: { id: true, profileCode: true, status: true, verified: true, profileCompletion: true, createdAt: true, softDeleted: true, contact: { select: { email: true } } },
+    select: { id: true, profileCode: true, status: true, verified: true, profileCompletion: true, createdAt: true, softDeleted: true, contact: { select: { email: true, mobileNumber: true, whatsappNumber: true } } },
   });
   if (!profile || profile.softDeleted || !profile.contact) return null;
-  if (profile.contact.email.toLowerCase() !== email.trim().toLowerCase()) return null;
+  if (!identifierMatchesContact(email, profile.contact, await phoneLoginEnabled())) return null;
   return { ...profile, contact: profile.contact };
 }
 

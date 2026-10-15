@@ -41,7 +41,7 @@ export async function otherPartyContact(profileId: string, proposalId: string | 
     const otherId = proposal.profileAId === profileId ? proposal.profileBId : proposal.profileAId;
     if (!otherId || otherId === profileId) return [];
     const c = await prisma.contactInfo.findUnique({ where: { profileId: otherId }, select: { mobileNumber: true, whatsappNumber: true, email: true } });
-    return c ? [c.mobileNumber, c.whatsappNumber ?? "", c.email].filter(Boolean) : [];
+    return c ? [c.mobileNumber, c.whatsappNumber ?? "", c.email ?? ""].filter(Boolean) : [];
   } catch {
     return [];
   }

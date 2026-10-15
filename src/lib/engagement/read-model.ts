@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { emailRequirementMet } from "@/lib/verification/email-requirement";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import type { EngagementSnapshot } from "@/lib/engagement/types";
 
@@ -34,7 +35,7 @@ export async function loadEngagementSnapshot(profileId: string, now: Date = new 
   const { categories } = computeProfileCompleteness({
     fullName: profile.fullName, gender: profile.gender, dateOfBirth: profile.dateOfBirth, maritalStatus: profile.maritalStatus, heightCm: profile.heightCm,
     city: profile.city, country: profile.country, nationality: profile.nationality, area: profile.area, contact: profile.contact,
-    phoneVerified: !!profile.verification?.phoneVerifiedAt, emailVerified: !!profile.verification?.emailVerifiedAt, education: profile.education,
+    phoneVerified: !!profile.verification?.phoneVerifiedAt, emailVerified: emailRequirementMet(profile.verification?.emailVerifiedAt, profile.contact?.email), education: profile.education,
     profession: profile.profession, family: profile.family, lifestyle: profile.lifestyle, preference: profile.preference, hasPhoto: profile.photos.length > 0,
   });
 
