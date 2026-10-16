@@ -396,6 +396,12 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
                 )}
               </CardHeader>
               <CardContent className="space-y-2">
+                {group.key === "contact" && (
+                  <p className="rounded-lg bg-surface-muted p-2.5 text-xs text-muted">
+                    The person confirms these with a code. If a code cannot reach them (text messages are not set up yet, and a WhatsApp number has no code), reveal the contact box on the right, confirm
+                    with them by phone or WhatsApp, then tap OK: it counts as verified.
+                  </p>
+                )}
                 {group.key === "photo" && data.photoId && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={`/api/admin/profiles/${profileId}/photo/${data.photoId}`} alt="Profile photo to review" className="mx-auto max-h-72 rounded-lg border border-border object-contain" />
