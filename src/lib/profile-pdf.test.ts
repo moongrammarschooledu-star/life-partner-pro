@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { buildProfilePdf, profileSections, type ProfileDetailView } from "./profile-pdf";
+import { buildProfilePdf, profileSections, shareableSections, type ProfileDetailView } from "./profile-pdf";
 
 // The printable profile sheet: the right rows, none of the private ones, and a valid PDF even for names the built-in font cannot draw.
 
@@ -102,5 +102,28 @@ describe("profile sheet PDF", () => {
   it("copes with a very long unbroken word", async () => {
     const bytes = await buildProfilePdf({ ...base, sections: [{ title: "About", rows: [["About", "x".repeat(600)]] }] });
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("shareable profile sheet", () => {
+  it("is the safe summary only: no name, photo, area, income, family details, contact or about text", () => {
+    const rich = dto({ contact: { mobileNumber: "03001234567", email: "x@y.com" }, notes: [{ text: "secret note" }] });
+    const sections = shareableSections(rich);
+    expect(sections.map((s) => s.title)).toEqual(["Profile summary"]);
+    const rows = sections[0].rows;
+    expect(rows).toContainEqual(["Age", "27 years"]);
+    expect(rows).toContainEqual(["City", "Lahore"]);
+    expect(rows).toContainEqual(["Education", "Masters"]);
+    expect(rows).toContainEqual(["Religion", "Islam"]);
+    const text = JSON.stringify(sections);
+    for (const forbidden of ["Test Person", "Model Town", "90000", "Retired", "Friendly and family oriented", "03001234567", "x@y.com", "secret note", "Hobbies", "Partner"]) expect(text).not.toContain(forbidden);
+  });
+
+  it("leaves out religion and family type when the downloading admin may not see them", () => {
+    const limited = dto({ family: null, lifestyle: { religion: null, sect: null, languages: "Urdu" } });
+    const labels = shareableSections(limited)[0].rows.map(([l]) => l);
+    expect(labels).not.toContain("Religion");
+    expect(labels).not.toContain("Sect");
+    expect(labels).not.toContain("Family type");
   });
 });

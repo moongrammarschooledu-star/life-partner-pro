@@ -6,7 +6,7 @@ import { assertProfileAssignmentAccess } from "@/lib/profile-assignment-access";
 import { profileDetailInclude, toDetailDto } from "@/lib/serializers";
 import { readPhoto } from "@/lib/storage";
 import { writeAudit } from "@/lib/audit";
-import { buildProfilePdf, profileSections } from "@/lib/profile-pdf";
+import { buildProfilePdf, profileSections, shareableSections } from "@/lib/profile-pdf";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/public-site/config";
 import { calculateAge, formatEnumLabel } from "@/lib/utils";
 
@@ -23,11 +23,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!profile.verified) throw new ApiError(409, "Only a verified profile can be downloaded as a PDF.");
 
     const dto = toDetailDto(profile, admin.id, admin.permissions);
+    // ?variant=shareable: the sheet that may go to the other side of a match: no name, no photo, no contact, only the safe summary (see shareableSections).
+    const shareable = new URL(req.url).searchParams.get("variant") === "shareable";
 
     // The main photo, decrypted on the server. A photo that cannot be read leaves the sheet without one instead of failing the download.
     let photo: { bytes: Uint8Array; kind: "jpg" | "png" } | null = null;
     const primary = profile.photos.find((p) => p.isPrimary) ?? profile.photos[0];
-    if (primary) {
+    if (primary && !shareable) {
       try {
         const bytes = await readPhoto(primary.storageKey, primary.ivBase64, primary.authTagBase64);
         photo = { bytes, kind: primary.mimeType === "image/png" ? "png" : "jpg" };
@@ -50,21 +52,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       tagline: SITE_TAGLINE,
       generatedAt: new Date(),
       profileCode: profile.profileCode,
-      fullName: profile.fullName,
+      fullName: shareable ? `Profile ${profile.profileCode}` : profile.fullName,
       headline: [formatEnumLabel(profile.gender), `${calculateAge(profile.dateOfBirth)} years`, profile.city].filter(Boolean).join("  |  "),
       verified: true,
-      sections: profileSections(dto),
+      sections: shareable ? shareableSections(dto) : profileSections(dto),
       logoPng,
       photo,
-      footer: `Confidential. Prepared by ${SITE_NAME} for matchmaking only. Contact details are not included. Please do not share or publish this sheet without the person's consent.`,
+      footer: shareable
+        ? `Prepared by ${SITE_NAME} for matchmaking only. The name, photo and contact details are withheld until both families agree. Please do not forward or publish this sheet.`
+        : `Confidential. Prepared by ${SITE_NAME} for matchmaking only. Contact details are not included. Please do not share or publish this sheet without the person's consent.`,
     });
 
-    await writeAudit({ action: "SENSITIVE_DATA_EXPORTED", adminId: admin.id, targetProfileId: id, meta: { kind: "PROFILE_PDF", profileCode: profile.profileCode } });
+    await writeAudit({ action: "SENSITIVE_DATA_EXPORTED", adminId: admin.id, targetProfileId: id, meta: { kind: "PROFILE_PDF", variant: shareable ? "shareable" : "full", profileCode: profile.profileCode } });
 
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${profile.profileCode}-profile.pdf"`,
+        "Content-Disposition": `attachment; filename="${profile.profileCode}-${shareable ? "shareable" : "profile"}.pdf"`,
         "Cache-Control": "no-store",
       },
     });

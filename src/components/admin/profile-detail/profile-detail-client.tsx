@@ -104,9 +104,18 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
             </Button>
             {profile.verified && (
               // A printable sheet (logo, photo, features) of a verified profile; no contact details on it. Each download is audited.
-              <a href={`/api/admin/profiles/${profile.id}/pdf`} className={buttonClass({ variant: "outline", size: "sm" })}>
-                <FileDown className="h-4 w-4" /> Download PDF
-              </a>
+              <>
+                <a href={`/api/admin/profiles/${profile.id}/pdf`} className={buttonClass({ variant: "outline", size: "sm" })}>
+                  <FileDown className="h-4 w-4" /> Download PDF
+                </a>
+                <a
+                  href={`/api/admin/profiles/${profile.id}/pdf?variant=shareable`}
+                  className={buttonClass({ variant: "outline", size: "sm" })}
+                  title="Without the name, photo or contact details: the sheet that can be sent to the other side of a match"
+                >
+                  <FileDown className="h-4 w-4" /> Shareable PDF
+                </a>
+              </>
             )}
             <Button variant="outline" size="sm" onClick={() => setAddFollowUpOpen(true)}>
               <CalendarPlus className="h-4 w-4" /> Add Follow-up

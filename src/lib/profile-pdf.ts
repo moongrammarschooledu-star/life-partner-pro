@@ -136,6 +136,32 @@ export function profileSections(p: ProfileDetailView): PdfSection[] {
   ].filter((s) => s.rows.length > 0);
 }
 
+// The SHAREABLE sheet is what may be handed to the other side of a match before anyone has agreed to anything. It is the same safe summary the platform already shows a
+// customer about the other party in "My Proposals" (age, marital status, city, country, education, profession, family type), plus height, religion and sect. It has no name (the
+// Profile ID stands in), no photo, no area, no income, no family details, no contact details, no notes and no "about me" text, which can give a person away.
+export function shareableSections(p: ProfileDetailView): PdfSection[] {
+  const rows = (entries: Array<[string, string | number | null | undefined]>): Array<[string, string]> =>
+    entries.filter((e): e is [string, string | number] => present(e[1])).map(([l, v]) => [l, String(v)]);
+
+  return [
+    {
+      title: "Profile summary",
+      rows: rows([
+        ["Age", `${p.age} years`],
+        ["Marital status", [formatEnumLabel(p.maritalStatus), p.hasChildren ? "with children" : ""].filter(Boolean).join(", ")],
+        ["Height", heightText(p.heightCm)],
+        ["City", p.city],
+        ["Country", p.country],
+        ["Education", p.education?.level],
+        ["Profession", p.profession?.profession],
+        ["Family type", p.family ? formatEnumLabel(p.family.familyType) : null],
+        ["Religion", p.lifestyle?.religion],
+        ["Sect", p.lifestyle?.sect],
+      ]),
+    },
+  ].filter((s) => s.rows.length > 0);
+}
+
 /** The text with every character the built-in font cannot draw replaced by "?" (and line breaks kept as breaks). */
 function safeText(font: PDFFont, text: string): string {
   const allowed = new Set(font.getCharacterSet());
