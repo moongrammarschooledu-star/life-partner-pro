@@ -14,7 +14,7 @@ import { PUBLIC_ROUTES, PRIVATE_PATH_PREFIXES, findPublicRoute, isApplicantAppPa
 import { pageMetadata, contentMetadata } from "@/lib/public-site/seo";
 import { organizationLd, websiteLd, webPageLd, breadcrumbLd, faqLd, articleLd, serializeJsonLd } from "@/lib/public-site/structured-data";
 import { FAQ_CATEGORIES, allFaqItems } from "@/lib/public-site/faq";
-import { installPromptVisible, installMode, detectInstallEnvironment, INSTALL_MIN_PAGEVIEWS, INSTALL_MANUAL_DELAY_MS } from "@/lib/public-site/install-policy";
+import { installPromptVisible, installMode, installInstruction, detectInstallEnvironment, INSTALL_MIN_PAGEVIEWS, INSTALL_MANUAL_DELAY_MS } from "@/lib/public-site/install-policy";
 import { billingPeriodLabel, priceLabel } from "@/lib/public-site/pricing-display";
 import { legalPagesReviewed, governingLawText } from "@/lib/public-site/legal";
 import { contactSchema } from "@/lib/public-site/contact";
@@ -280,6 +280,19 @@ describe("install mode by browser", () => {
   });
   it("shows nothing on a desktop browser that has no install path", () => {
     expect(mode(ua.chromeDesktop)).toBe("none");
+  });
+  it("treats an iPhone web view (no Safari token) as an in-app browser, but not Safari, Chrome or Firefox on iPhone", () => {
+    const whatsappIphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21F90";
+    expect(mode(whatsappIphone)).toBe("inapp");
+    expect(mode(ua.safariIphone)).toBe("ios");
+    expect(mode(ua.chromeIphone)).toBe("ios");
+  });
+  it("says what to do in each mode, and the menu advice covers a link opened from WhatsApp in Chrome", () => {
+    expect(installInstruction("manual")).toMatch(/Open in Chrome/);
+    expect(installInstruction("manual")).toMatch(/Install app/);
+    expect(installInstruction("inapp")).toMatch(/Open in browser/);
+    expect(installInstruction("ios")).toMatch(/Add to Home Screen/);
+    expect(installInstruction("none")).toMatch(/Chrome or Edge/);
   });
 });
 

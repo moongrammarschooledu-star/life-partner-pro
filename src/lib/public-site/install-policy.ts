@@ -34,7 +34,25 @@ const IN_APP = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Barcelona|musical_ly|BytedanceW
 export function detectInstallEnvironment(userAgent: string): InstallEnvironment {
   const ios = /iPad|iPhone|iPod/.test(userAgent);
   const android = /Android/i.test(userAgent);
-  return { ios, android, inApp: IN_APP.test(userAgent) };
+  // An iPhone in-app browser (Facebook, Instagram, WhatsApp, Telegram...) is a plain web view: unlike Safari, Chrome and Firefox on iPhone, its user agent carries no "Safari/" token.
+  const iosWebView = ios && !/Safari\//.test(userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(userAgent);
+  return { ios, android, inApp: IN_APP.test(userAgent) || iosWebView };
+}
+
+/** The one-line instruction for each way of installing (the Install button itself needs no text). */
+export function installInstruction(mode: InstallMode): string {
+  switch (mode) {
+    case "native":
+      return "Add it to your home screen for quick access. Nothing private is stored for offline use.";
+    case "inapp":
+      return "To install the app, open this page in your phone's browser: tap the menu (\u22EE or \u2026) at the top and choose \u201COpen in browser\u201D, \u201COpen in Chrome\u201D or \u201COpen in Safari\u201D.";
+    case "ios":
+      return "On iPhone: tap the Share button, then \u201CAdd to Home Screen\u201D.";
+    case "manual":
+      return "Tap the browser menu (\u22EE). If you see \u201COpen in Chrome\u201D, choose it first. Then tap \u201CInstall app\u201D or \u201CAdd to Home screen\u201D.";
+    default:
+      return "In Chrome or Edge, open the browser menu and choose \u201CInstall app\u201D (or \u201CAdd to Home screen\u201D on a phone).";
+  }
 }
 
 export function installMode(input: { canPrompt: boolean; env: InstallEnvironment; waitedMs: number }): InstallMode {
