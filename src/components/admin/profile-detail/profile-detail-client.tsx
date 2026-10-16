@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, ShieldCheck, Sparkles, CalendarPlus, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck, Sparkles, CalendarPlus, Pencil, FileDown } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs } from "@/components/ui/tabs";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -102,6 +102,12 @@ export function ProfileDetailClient({ profileId }: { profileId: string }) {
             <Button variant="outline" size="sm" onClick={() => setTab("edit")}>
               <Pencil className="h-4 w-4" /> Edit Profile
             </Button>
+            {profile.verified && (
+              // A printable sheet (logo, photo, features) of a verified profile; no contact details on it. Each download is audited.
+              <a href={`/api/admin/profiles/${profile.id}/pdf`} className={buttonClass({ variant: "outline", size: "sm" })}>
+                <FileDown className="h-4 w-4" /> Download PDF
+              </a>
+            )}
             <Button variant="outline" size="sm" onClick={() => setAddFollowUpOpen(true)}>
               <CalendarPlus className="h-4 w-4" /> Add Follow-up
             </Button>
