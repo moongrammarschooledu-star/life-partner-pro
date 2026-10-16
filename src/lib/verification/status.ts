@@ -5,7 +5,7 @@ import { notifyProfileVerificationChanged, notifyProfileSuspended } from "@/lib/
 import { syncCrmStageOnVerification, syncCrmStageFromProfileStatus } from "@/lib/crm/profile-status-sync";
 import { CHECKLIST_KEYS } from "@/lib/verification/checklist-catalog";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
-import { engagementOnVerification, engagementOnCompleteness } from "@/lib/engagement/lifecycle-hooks";
+import { engagementOnVerification, engagementOnCompleteness, engagementOnProfileStatus } from "@/lib/engagement/lifecycle-hooks";
 import type { VerificationStatus } from "@prisma/client";
 
 // Profile.profileCompletion is set once at registration and otherwise
@@ -102,6 +102,27 @@ interface SetStatusOptions {
   requestedInfoItems?: string[];
 }
 
+// A newly VERIFIED profile moves on from its registration status, so a profile that has been checked can be told apart from one that has just arrived.
+//   - NEW / UNDER_REVIEW / VERIFIED -> ACTIVE, when the three required consents (privacy, matchmaking, terms) are recorded - the same rule the manual status change applies;
+//   - without those consents it becomes VERIFIED instead of ACTIVE (it still stops looking "new").
+// A profile that is already further along (matching, proposals, finalised, married...) or rejected / archived / suspended is never touched. Never throws: a failure here
+// must not undo the verification that has just been recorded. The "profile approved" notice is not sent as well: the verification-approved notice has just gone out.
+export async function moveOnAfterVerification(profileId: string): Promise<void> {
+  try {
+    const profile = await prisma.profile.findUnique({ where: { id: profileId }, select: { status: true, softDeleted: true } });
+    if (!profile || profile.softDeleted || !["NEW", "UNDER_REVIEW", "VERIFIED"].includes(profile.status)) return;
+    const consent = await prisma.consentRecord.findUnique({ where: { profileId } });
+    const hasRequiredConsent = !!consent?.privacyConsent && !!consent?.matchmakingConsent && !!consent?.termsAccepted;
+    const next = hasRequiredConsent ? "ACTIVE" : "VERIFIED";
+    if (profile.status === next) return;
+    await prisma.profile.update({ where: { id: profileId }, data: { status: next } });
+    await writeAudit({ action: "PROFILE_STATUS_CHANGED", targetProfileId: profileId, meta: { status: next, reason: "verification approved" } });
+    await engagementOnProfileStatus(profileId, next);
+  } catch (error) {
+    console.error("moveOnAfterVerification failed", error);
+  }
+}
+
 // Central transition point for ProfileVerification.status — every admin
 // action and self-service OTP/email confirmation routes through this so
 // Profile.verified (read unchanged everywhere else in the app: matching,
@@ -178,6 +199,7 @@ export async function setVerificationStatus(profileId: string, newStatus: Verifi
   }
 
   if (newStatus === "VERIFIED") {
+    await moveOnAfterVerification(profileId);
     await syncCrmStageOnVerification(profileId);
     await (await import("@/lib/marketing/lead-progress")).onProfileVerified(profileId); // STEP 29 — marketing attribution timeline (never throws)
   }
