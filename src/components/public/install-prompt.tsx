@@ -8,6 +8,7 @@ import {
   INSTALL_DISMISS_DAYS,
   INSTALL_MANUAL_DELAY_MS,
   detectInstallEnvironment,
+  installInstruction,
   installMode,
   installPromptVisible,
   type InstallEnvironment,
@@ -117,14 +118,7 @@ export function InstallPrompt() {
       <Download className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
       <div className="flex-1 text-sm">
         <p className="font-medium">Install Life Partner Pro</p>
-        {mode === "native" && <p className="mt-1 text-muted">Add it to your home screen for quick access. Nothing private is stored for offline use.</p>}
-        {mode === "inapp" && (
-          <p className="mt-1 text-muted">
-            To install the app, open this page in your phone&apos;s browser: tap the menu (&#8942; or &hellip;) at the top and choose &ldquo;Open in browser&rdquo; or &ldquo;Open in Chrome / Safari&rdquo;.
-          </p>
-        )}
-        {mode === "ios" && <p className="mt-1 text-muted">On iPhone: tap the Share button, then &ldquo;Add to Home Screen&rdquo;.</p>}
-        {mode === "manual" && <p className="mt-1 text-muted">Open your browser menu (&#8942;) and tap &ldquo;Install app&rdquo; or &ldquo;Add to Home screen&rdquo;.</p>}
+        <p className="mt-1 text-muted">{installInstruction(mode)}</p>
         <div className="mt-3 flex gap-2">
           {mode === "native" && <Button size="sm" onClick={install}>Install</Button>}
           <Button size="sm" variant="outline" onClick={dismiss}>Not now</Button>

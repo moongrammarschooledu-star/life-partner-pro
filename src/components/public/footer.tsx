@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/public-site/config";
+import { InstallLink } from "@/components/public/install-link";
 
 const COLUMNS: Array<{ title: string; links: Array<{ href: string; label: string }> }> = [
   {
@@ -69,6 +70,7 @@ export function PublicFooter() {
                 ))}
               </div>
             ))}
+            <InstallLink />
           </nav>
         </div>
         <p className="mt-8 text-xs text-muted">
