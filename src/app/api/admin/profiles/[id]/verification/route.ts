@@ -6,6 +6,7 @@ import { profileDetailInclude, toDetailDto } from "@/lib/serializers";
 import { CHECKLIST_CATALOG } from "@/lib/verification/checklist-catalog";
 import { computeProfileCompleteness } from "@/lib/verification/completeness";
 import { computeConfidence } from "@/lib/verification/confidence";
+import { checklistValues } from "@/lib/verification/checklist-values";
 
 // Full detail for the 3-pane Admin Verification Review page (spec §14):
 // profile summary, checklist, documents, open flags, and history.
@@ -92,8 +93,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       hasOpenHighOrCriticalFlag: openHighOrCriticalFlag,
     });
 
+    const detail = toDetailDto(profile, admin.id, admin.permissions);
+    // What the reviewer needs to see beside each item (see checklist-values.ts); never the contact numbers themselves.
+    const values = checklistValues(detail, {
+      phoneVerifiedAt: verification!.phoneVerifiedAt,
+      emailVerifiedAt: verification!.emailVerifiedAt,
+      whatsappVerifiedAt: verification!.whatsappVerifiedAt,
+      hasWhatsapp,
+      hasEmail,
+      photoCount: profile.photos.length,
+    });
+
     return NextResponse.json({
-      profile: toDetailDto(profile, admin.id, admin.permissions),
+      profile: detail,
+      photoId: (profile.photos.find((p) => p.isPrimary) ?? profile.photos[0])?.id ?? null,
       profileStatus: profile.status,
       registeredAt: profile.createdAt,
       verification: {
@@ -121,6 +134,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           status: item?.status ?? "PENDING",
           note: item?.note ?? null,
           documentId: item?.documentId ?? null,
+          value: values[entry.key] ?? null,
         };
       }),
       documents: documents.map((d) => ({
