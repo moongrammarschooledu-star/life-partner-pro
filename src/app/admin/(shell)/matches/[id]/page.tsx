@@ -2,9 +2,9 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, AlertTriangle, CheckCircle2, XCircle, ThumbsUp, ThumbsDown, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, CheckCircle2, XCircle, ThumbsUp, ThumbsDown, RefreshCw, FileDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/form";
 import { MatchScore } from "@/components/ui/match-score";
 import { useToast } from "@/components/ui/toast";
@@ -181,6 +181,18 @@ export default function MatchAnalysisPage({ params }: { params: Promise<{ id: st
           {data.profileA.fullName} <span className="text-xs">vs</span> {data.profileB.fullName} — a Compatibility Suggestion for admin
           review, never a guaranteed match.
         </p>
+        {data.profileA.verified && data.profileB.verified && (
+          // The comparison as a sheet for ONE of the two people: both sides only as the safe summary (no names, photos, income or contact details). Each download is audited.
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted">Shareable comparison (PDF), for:</span>
+            <a href={`/api/admin/matches/${data.id}/pdf?for=A`} className={buttonClass({ variant: "outline", size: "sm" })}>
+              <FileDown className="h-4 w-4" /> {data.profileA.profileCode}
+            </a>
+            <a href={`/api/admin/matches/${data.id}/pdf?for=B`} className={buttonClass({ variant: "outline", size: "sm" })}>
+              <FileDown className="h-4 w-4" /> {data.profileB.profileCode}
+            </a>
+          </div>
+        )}
       </div>
 
       {excludedByHardRequirement && (
