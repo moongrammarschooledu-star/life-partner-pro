@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, ShieldCheck, ShieldQuestion, FileText, Flag as FlagIcon, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
+import { ArrowLeft, FileDown, Loader2, ShieldCheck, ShieldQuestion, FileText, Flag as FlagIcon, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea, Input } from "@/components/ui/form";
@@ -275,9 +275,16 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
         <Link href="/admin/verification" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Back to Verification Center
         </Link>
-        <Link href={`/admin/verification/${profileId}/evidence`} className="text-sm font-medium text-primary hover:underline">
-          Open Evidence Center
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          {data.verification.status === "VERIFIED" && (
+            <a href={`/api/admin/profiles/${profileId}/pdf`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+              <FileDown className="h-4 w-4" /> Download PDF
+            </a>
+          )}
+          <Link href={`/admin/verification/${profileId}/evidence`} className="text-sm font-medium text-primary hover:underline">
+            Open Evidence Center
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr_300px]">
