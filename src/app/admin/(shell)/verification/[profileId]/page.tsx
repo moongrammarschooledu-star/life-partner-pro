@@ -313,9 +313,14 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
         </Link>
         <div className="flex flex-wrap items-center gap-4">
           {data.verification.status === "VERIFIED" && (
-            <a href={`/api/admin/profiles/${profileId}/pdf`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-              <FileDown className="h-4 w-4" /> Download PDF
-            </a>
+            <>
+              <a href={`/api/admin/profiles/${profileId}/pdf`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                <FileDown className="h-4 w-4" /> Download PDF
+              </a>
+              <a href={`/api/admin/profiles/${profileId}/pdf?variant=shareable`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                <FileDown className="h-4 w-4" /> Shareable PDF
+              </a>
+            </>
           )}
           <Link href={`/admin/verification/${profileId}/evidence`} className="text-sm font-medium text-primary hover:underline">
             Open Evidence Center
