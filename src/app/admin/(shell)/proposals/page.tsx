@@ -42,7 +42,7 @@ interface Filters {
 
 const emptyFilters: Filters = { city: "", minScore: "", createdFrom: "", createdTo: "", responseStatus: "", meetingStatus: "" };
 
-export default function ProposalsPage() {
+function ProposalsList() {
   const searchParams = useSearchParams();
   // Seeds from drill-down links (e.g. Reports & Analytics' funnel/KPI cards
   // linking to ?statusGroup=mutual_interest, ?city=Lahore) — only read once
@@ -195,4 +195,12 @@ export default function ProposalsPage() {
       )}
     </div>
   );
+}
+
+// The filters are seeded from the address (the menu's "New Profiles" / "Verified Profiles" and the report drill-down links) when the page is built. Moving between two
+// links of the SAME page only changes the address, so without this the page kept its old filters and looked stuck until the person left and came back. Keying the list
+// on the query makes it start afresh whenever the link changes.
+export default function ProposalsPage() {
+  const searchParams = useSearchParams();
+  return <ProposalsList key={searchParams.toString()} />;
 }

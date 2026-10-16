@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { buttonClass } from "@/components/ui/button";
 import type { ProfileListDto } from "@/lib/serializers";
 
-export default function ProfilesPage() {
+function ProfilesList() {
   const searchParams = useSearchParams();
   // Seeds from preset drill-down links — the nav's "New Profiles" /
   // "Verified Profiles" (?status=NEW, ?verified=true) and Reports &
@@ -91,4 +91,12 @@ export default function ProfilesPage() {
       )}
     </div>
   );
+}
+
+// The filters are seeded from the address (the menu's "New Profiles" / "Verified Profiles" and the report drill-down links) when the page is built. Moving between two
+// links of the SAME page only changes the address, so without this the page kept its old filters and looked stuck until the person left and came back. Keying the list
+// on the query makes it start afresh whenever the link changes.
+export default function ProfilesPage() {
+  const searchParams = useSearchParams();
+  return <ProfilesList key={searchParams.toString()} />;
 }
