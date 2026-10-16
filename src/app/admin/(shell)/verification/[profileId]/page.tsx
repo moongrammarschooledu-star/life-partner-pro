@@ -42,6 +42,8 @@ interface ChecklistItem {
   status: "PENDING" | "COMPLETED" | "FAILED" | "NOT_APPLICABLE";
   note: string | null;
   documentId: string | null;
+  /** What the person entered (or whether they confirmed it), so the item can be checked at a glance. */
+  value: string | null;
 }
 interface DocumentItem {
   id: string;
@@ -94,6 +96,7 @@ interface Detail {
     lastReviewedByName: string | null;
   };
   checklist: ChecklistItem[];
+  photoId: string | null;
   documents: DocumentItem[];
   flags: FlagItem[];
   notes: NoteItem[];
@@ -136,6 +139,7 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
 
   const [busy, setBusy] = useState(false);
   const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [remarks, setRemarks] = useState<Record<string, string>>({}); // remark being typed per checklist item
 
   function load() {
     fetch(`/api/admin/profiles/${profileId}/verification`)
@@ -184,17 +188,49 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
     }
   }
 
-  async function updateChecklistItem(itemKey: string, status: string) {
+  async function updateChecklistItem(itemKey: string, status: string, note?: string) {
     try {
       const res = await fetch(`/api/admin/profiles/${profileId}/verification/checklist`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemKey, status }),
+        body: JSON.stringify(note === undefined ? { itemKey, status } : { itemKey, status, note }),
       });
       if (!res.ok) throw new Error();
       load();
     } catch {
       show("Could not update checklist item.", "error");
+    }
+  }
+
+  // One tap on the decision that is already chosen takes it back to Pending.
+  function decide(item: ChecklistItem, status: ChecklistItem["status"]) {
+    updateChecklistItem(item.key, item.status === status ? "PENDING" : status);
+  }
+
+  // Saves a remark when the reviewer leaves the box (only if it changed).
+  function saveRemark(item: ChecklistItem) {
+    const text = (remarks[item.key] ?? item.note ?? "").trim();
+    if (text === (item.note ?? "")) return;
+    updateChecklistItem(item.key, item.status, text);
+  }
+
+  // Ticks every item of a section that is still Pending (not for the contact items, which the person confirms by code).
+  async function tickAll(items: ChecklistItem[]) {
+    const pending = items.filter((i) => i.status === "PENDING");
+    if (pending.length === 0) return;
+    try {
+      for (const item of pending) {
+        const res = await fetch(`/api/admin/profiles/${profileId}/verification/checklist`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemKey: item.key, status: "COMPLETED" }),
+        });
+        if (!res.ok) throw new Error();
+      }
+      load();
+    } catch {
+      show("Could not tick all the items.", "error");
+      load();
     }
   }
 
@@ -351,29 +387,59 @@ export default function VerificationReviewPage({ params }: { params: Promise<{ p
         <div className="space-y-4">
           {grouped.map((group) => (
             <Card key={group.key}>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle className="text-base">{group.label}</CardTitle>
+                {group.key !== "contact" && group.items.some((i) => i.status === "PENDING") && (
+                  <Button size="sm" variant="outline" onClick={() => tickAll(group.items)}>
+                    <CheckCircle2 className="h-4 w-4" /> Tick all
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-2">
+                {group.key === "photo" && data.photoId && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`/api/admin/profiles/${profileId}/photo/${data.photoId}`} alt="Profile photo to review" className="mx-auto max-h-72 rounded-lg border border-border object-contain" />
+                )}
                 {group.items.map((item) => {
                   const Icon = ITEM_STATUS_ICON[item.status];
                   return (
-                    <div key={item.key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-2.5 text-sm">
-                      <span className="flex items-center gap-1.5">
-                        <Icon className={`h-4 w-4 shrink-0 ${item.status === "COMPLETED" ? "text-success" : item.status === "FAILED" ? "text-danger" : "text-muted"}`} />
-                        {item.label}
-                        {item.documentId && (
-                          <Link href={`/api/admin/verification-documents/${item.documentId}`} target="_blank" className="text-xs text-primary hover:underline">
-                            <FileText className="inline h-3.5 w-3.5" /> View Document
-                          </Link>
-                        )}
-                      </span>
-                      <Select value={item.status} onChange={(e) => updateChecklistItem(item.key, e.target.value)} className="h-8 w-auto text-xs">
-                        <option value="PENDING">Pending</option>
-                        <option value="COMPLETED">Completed</option>
-                        <option value="FAILED">Failed</option>
-                        <option value="NOT_APPLICABLE">Not Applicable</option>
-                      </Select>
+                    <div
+                      key={item.key}
+                      className={`rounded-lg border p-3 text-sm ${item.status === "COMPLETED" ? "border-success/40 bg-success/5" : item.status === "FAILED" ? "border-danger/40 bg-danger/5" : "border-border"}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                            <Icon className={`h-4 w-4 shrink-0 ${item.status === "COMPLETED" ? "text-success" : item.status === "FAILED" ? "text-danger" : "text-muted"}`} />
+                            {item.label}
+                            {item.documentId && (
+                              <Link href={`/api/admin/verification-documents/${item.documentId}`} target="_blank" className="text-xs font-normal text-primary hover:underline">
+                                <FileText className="inline h-3.5 w-3.5" /> View Document
+                              </Link>
+                            )}
+                          </p>
+                          {item.value && <p className="mt-1.5 whitespace-pre-line break-words rounded-md bg-surface-muted px-2.5 py-2">{item.value}</p>}
+                        </div>
+                        <div className="flex shrink-0 gap-1" role="group" aria-label={`Decision for ${item.label}`}>
+                          <Button size="sm" variant={item.status === "COMPLETED" ? "primary" : "outline"} onClick={() => decide(item, "COMPLETED")} aria-pressed={item.status === "COMPLETED"} title="Looks correct">
+                            <CheckCircle2 className="h-4 w-4" /> OK
+                          </Button>
+                          <Button size="sm" variant={item.status === "FAILED" ? "danger" : "outline"} onClick={() => decide(item, "FAILED")} aria-pressed={item.status === "FAILED"} title="There is a problem">
+                            <XCircle className="h-4 w-4" /> Problem
+                          </Button>
+                          <Button size="sm" variant={item.status === "NOT_APPLICABLE" ? "primary" : "outline"} onClick={() => decide(item, "NOT_APPLICABLE")} aria-pressed={item.status === "NOT_APPLICABLE"} title="Does not apply">
+                            N/A
+                          </Button>
+                        </div>
+                      </div>
+                      <Input
+                        className="mt-2 h-8 text-xs"
+                        placeholder="Remark (optional)"
+                        value={remarks[item.key] ?? item.note ?? ""}
+                        onChange={(e) => setRemarks((r) => ({ ...r, [item.key]: e.target.value }))}
+                        onBlur={() => saveRemark(item)}
+                        aria-label={`Remark for ${item.label}`}
+                      />
                     </div>
                   );
                 })}
