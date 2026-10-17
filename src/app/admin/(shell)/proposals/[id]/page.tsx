@@ -29,6 +29,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { formatEnumLabel, formatDate, formatDateTime, formatCurrency, formatHeight } from "@/lib/utils";
 import { CompatibilityBreakdownList } from "@/components/admin/compatibility-breakdown";
+import { ProposalComparisonShare } from "@/components/admin/proposal-comparison-share";
 import { SELECTABLE_STATUSES, ADMIN_STATUS_LABEL, isLegacyStatus } from "@/lib/proposal-status-labels";
 import type { ProfileDetailDto } from "@/lib/serializers";
 import type { CompatibilityRow } from "@/components/admin/compatibility-breakdown";
@@ -580,6 +581,13 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           </CardContent>
         </Card>
       </div>
+
+      <ProposalComparisonShare
+        proposalId={proposal.id}
+        a={{ id: proposal.profileA.id, fullName: proposal.profileA.fullName, profileCode: proposal.profileA.profileCode }}
+        b={{ id: proposal.profileB.id, fullName: proposal.profileB.fullName, profileCode: proposal.profileB.profileCode }}
+        matchScore={proposal.matchScore}
+      />
 
       {proposal.breakdown && (
         <Card>
