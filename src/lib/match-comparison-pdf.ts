@@ -16,6 +16,23 @@ export interface ComparisonRow {
 
 const safeRows = (p: ProfileDetailView): Array<[string, string]> => shareableSections(p)[0]?.rows ?? [];
 
+/** The same comparison as rows for a screen: each shared detail with the value for each side, from the same safe summary the sheet uses (never area, income, family or contact). */
+export function comparisonTable(input: { you: ProfileDetailView; other: ProfileDetailView; total: number; tierLabel: string; breakdown: ComparisonRow[] }) {
+  const yours = new Map(safeRows(input.you));
+  const theirs = new Map(safeRows(input.other));
+  const labels = [...new Set([...yours.keys(), ...theirs.keys()])];
+  return {
+    overall: `${Math.round(input.total)}% - ${input.tierLabel}`,
+    categories: input.breakdown
+      .filter((row) => row.category !== "income")
+      .map((row) => ({ label: row.label, text: row.status === "unknown" ? row.reason : `${Math.round(row.score * 100)}% - ${row.reason}`, status: row.status })),
+    sides: [
+      { label: "Name", you: input.you.fullName, other: input.other.fullName },
+      ...labels.map((label) => ({ label, you: yours.get(label) ?? "-", other: theirs.get(label) ?? "-" })),
+    ],
+  };
+}
+
 export function comparisonSections(input: { you: ProfileDetailView; other: ProfileDetailView; total: number; tierLabel: string; breakdown: ComparisonRow[] }): PdfSection[] {
   const yours = new Map(safeRows(input.you));
   const theirs = new Map(safeRows(input.other));

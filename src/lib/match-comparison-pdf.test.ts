@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { buildProfilePdf, type ProfileDetailView } from "./profile-pdf";
-import { comparisonSections, type ComparisonRow } from "./match-comparison-pdf";
+import { comparisonSections, comparisonTable, type ComparisonRow } from "./match-comparison-pdf";
 
 // The comparison sheet handed to one of the two people: both names and the safe summary for both sides; the income comparison, photo, contact and every private detail left out.
 
@@ -60,6 +60,16 @@ describe("match comparison sections", () => {
 
   it("carries no area, income, family detail, about text or contact detail for either side", () => {
     for (const forbidden of ["Secret Area", "250000", "90000", "Secret Father", "private about", "03001234567", "x@y.com"]) expect(text).not.toContain(forbidden);
+  });
+
+  it("gives the same safe summary as rows for the proposal page", () => {
+    const table = comparisonTable({ you, other, total: 75, tierLabel: "Good Match", breakdown });
+    expect(table.overall).toBe("75% - Good Match");
+    expect(table.categories.map((c) => c.label)).toEqual(["Age", "Location", "Education"]); // income left out
+    expect(table.sides[0]).toEqual({ label: "Name", you: "Private Name", other: "Other Private" });
+    expect(table.sides).toContainEqual({ label: "City", you: "Islamabad", other: "Jhang" });
+    const tableText = JSON.stringify(table);
+    for (const forbidden of ["Secret Area", "250000", "90000", "Secret Father", "private about", "03001234567", "x@y.com"]) expect(tableText).not.toContain(forbidden);
   });
 
   it("renders as a valid PDF", async () => {
