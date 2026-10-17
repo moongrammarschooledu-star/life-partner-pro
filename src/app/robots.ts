@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { marketingBaseUrl } from "@/lib/marketing/hosts";
 import { PRIVATE_PATH_PREFIXES } from "@/lib/public-site/routes";
+import { BULK_CRAWLER_AGENTS } from "@/lib/security/scraper-guard";
 
 // Private and signed-in areas are never crawlable (the list lives next to the route registry). Public utility pages (sign-in, report a
 // concern, ...) and landing pages are NOT blocked here: a blocked path cannot be fetched, so its own noindex tag could never be read.
@@ -8,7 +9,11 @@ import { PRIVATE_PATH_PREFIXES } from "@/lib/public-site/routes";
 export default function robots(): MetadataRoute.Robots {
   const base = marketingBaseUrl();
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: [...PRIVATE_PATH_PREFIXES] }],
+    rules: [
+      { userAgent: "*", allow: "/", disallow: [...PRIVATE_PATH_PREFIXES] },
+      // Bulk and AI-training crawlers are told to stay away entirely (the proxy also refuses the ones that ignore this).
+      { userAgent: [...BULK_CRAWLER_AGENTS], disallow: "/" },
+    ],
     ...(base ? { sitemap: `${base}/sitemap.xml`, host: base } : {}),
   };
 }

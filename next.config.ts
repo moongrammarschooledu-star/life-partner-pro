@@ -57,6 +57,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       ...noindexHeaders,
+      // Data endpoints can only be read by this site's own pages, never embedded or read by another origin's page.
+      { source: "/api/:path*", headers: [{ key: "Cross-Origin-Resource-Policy", value: "same-origin" }] },
       // The service worker must never be served from a cache, so a fixed worker reaches every device on the next visit.
       {
         source: "/sw.js",

@@ -76,6 +76,9 @@ export function PublicFooter() {
         <p className="mt-8 text-xs text-muted">
           &copy; {new Date().getFullYear()} {SITE_NAME}. Using the platform does not guarantee a match or a marriage; it provides a guided, consent-based process.
         </p>
+        <p className="mt-2 text-xs text-muted">
+          All content, design and member information on this site is protected. Copying, scraping or reusing it without written permission is prohibited and may be acted on legally.
+        </p>
       </div>
     </footer>
   );

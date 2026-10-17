@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/auth.config";
 import { isBlockedByReadOnly, isExemptFromMaintenance } from "@/lib/ops/system-state";
+import { isBlockedScraper, scraperGuardApplies } from "@/lib/security/scraper-guard";
 
 // Renamed from middleware.ts (deprecated in Next 16; Proxy runs on Node.js).
 //
@@ -81,6 +82,11 @@ export default async function proxy(req: NextRequest, evt: Parameters<typeof adm
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
     return adminAuth(req, evt);
+  }
+
+  // Website copiers and bulk crawlers get a plain refusal on public pages (see scraper-guard.ts for what is and is not covered).
+  if (scraperGuardApplies(pathname, req.method) && isBlockedScraper(req.headers.get("user-agent"))) {
+    return new NextResponse("Automated copying of this site is not permitted.", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
   }
 
   if (!isExemptFromMaintenance(pathname)) {
